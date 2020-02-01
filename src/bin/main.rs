@@ -1,123 +1,54 @@
-use std::ops::{Add, Mul, MulAssign, AddAssign};
-
-#[derive(Copy, Clone)]
-struct Complex {
-    pub real: f64,
-    pub complex: f64
-}
-
-impl Complex {
-    pub fn new(real: f64, complex: f64) -> Self {
-        Complex {
-            real,
-            complex
-        }
-    }
-
-    pub fn length(&self) -> f64 {
-        (self.real * self.real + self.complex * self.complex).sqrt()
-    }
-
-    pub fn length_squared(&self) -> f64 {
-        self.real * self.real + self.complex * self.complex
-    }
-
-    pub fn square(&mut self) {
-        self.real = self.real.powf(2.0);
-        self.complex = self.complex.powf(2.0);
-    }
-}
-
-impl Add<Complex> for Complex {
-    type Output = Complex;
-
-    fn add(self, other: Complex) -> Complex {
-        Complex {
-            real: self.real + other.real,
-            complex: self.complex + other.complex
-        }
-    }
-}
-
-impl Mul<Complex> for Complex {
-    type Output = Complex;
-
-    fn mul(self, other: Complex) -> Complex {
-        Complex {
-            real: self.real * other.real - self.complex * other.complex,
-            complex: self.real * other.complex + self.complex * other.real
-        }
-    }
-}
-
-impl AddAssign<Complex> for Complex {
-    fn add_assign(&mut self, other: Complex) {
-        self.real += other.real;
-        self.complex += other.complex
-    }
-}
-
-impl Mul<Complex> for f64 {
-    type Output = Complex;
-
-    fn mul(self, other: Complex) -> Complex {
-        Complex {
-            real: self * other.real,
-            complex: self * other.complex
-        }
-    }
-}
-
-struct Sample {
-    z: Complex,
-    c: Complex,
-    iterations: usize,
-    max_iterations: usize
-}
-
-impl Sample {
-    pub fn new(c: Complex, max_iterations: usize) -> Self {
-        Sample {
-            z: c,
-            c,
-            iterations: 0,
-            max_iterations
-        }
-    }
-}
-
-impl Iterator for Sample {
-    type Item = Complex;
-
-    fn next(&mut self) -> Option<Complex> {
-        if self.z.length_squared() > 4.0 || self.iterations > self.max_iterations {
-            None
-        } else {
-            self.z.square();
-            self.z += self.c;
-            self.iterations += 1;
-            Some(self.z)
-        }
-    }
-}
+use std::time::Instant;
+use rayon::prelude::*;
 
 fn main() {
-    let width: usize = 50;
-    let height: usize = 25;
+    let width: usize = 1920;
+    let height: usize = 1080;
 
-    let top_left = Complex::new(-1.0, 1.0);
-    let bottom_right = Complex::new(1.0, -1.0);
+    let x_range = (-2.5f32, 1.0f32);
+    let y_range = (-1.0, 1.0);
 
-    let mut iterations_buffer = Vec::new();
+    let x_res = (x_range.1 - x_range.0) / width as f32;
+    let y_res = (y_range.1 - y_range.0) / height as f32;
 
-    for j in 0..height {
-        for i in 0..width {
-            let c = top_left + (i as f64 / width as f64) * Complex::new(2.0, 0.0) + (j as f64 / height as f64) * Complex::new(0.0, 2.0);
-            let iterations = Sample::new(c, 255).count();
+    let max_iterations = 1024;
 
-            iterations_buffer.push(iterations as u8);
-        }
-    }
 
-    image::save_buffer("output.png", &iterations_buffer, width as u32, height as u32, image::Gray(8)).unwrap();
+    let time = Instant::now();
+    let pixels = (0..height)
+        .into_par_iter()
+        .map(|y_pixel| {
+            let mut iterations_buffer = Vec::with_capacity(width);
+
+            for x_pixel in 0..width {
+                let x0 = x_pixel as f32 * x_res + x_range.0;
+                let y0 = y_pixel as f32 * y_res - y_range.1;
+                let mut x = x0;
+                let mut y = y0;
+                let mut xx = 0.0;
+                let mut yy = 0.0;
+                let mut xy = 0.0;
+                let mut ab = 0.0;
+                let mut iterations = 0;
+
+                while ab < 4.0 && iterations < max_iterations {
+                    xx = x * x;
+                    yy = y * y;
+                    xy = 2.0 * x * y;
+                    iterations += 1;
+                    ab = xx + yy;
+                    x = xx - yy + x0;
+                    y = xy + y0;
+                }
+                iterations_buffer.push((iterations as f32 / max_iterations as f32 * 255.99) as u8);
+            }
+
+            iterations_buffer
+        })
+        .flatten()
+        .collect::<Vec<u8>>();
+
+    println!("Rendering took {}ms", time.elapsed().as_millis());
+
+    image::save_buffer("output.png", &pixels, width as u32, height as u32, image::Gray(8)).unwrap();
 }
