@@ -4,15 +4,13 @@ use packed_simd::*;
 use std::f32::consts::LN_2;
 
 fn main() {
-    let width: usize = 1920;
-    let height: usize = 1080;
+    let width: usize = 1920 * 16;
+    let height: usize = 1080 * 16;
 
     let aspect = height as f32 / width as f32;
 
-//    let center = (-0.743314, 0.131612);
-//    let zoom = 80.0;
-    let center = (-0.75, 0.0);
-    let zoom = 0.25;
+    let center = (-0.743314, 0.131612);
+    let zoom = 80.0;
 
     let x_range = (center.0 - 0.5 / zoom, center.0 + 0.5 / zoom);
     let y_range = (center.1 - 0.5 / zoom * aspect, center.1 + 0.5 / zoom * aspect);
@@ -20,7 +18,7 @@ fn main() {
     let x_res = (x_range.1 - x_range.0) / width as f32;
     let y_res = (y_range.1 - y_range.0) / height as f32;
 
-    let max_iterations = 1024;
+    let max_iterations = 8192;
 
     let block_size = f32x16::lanes();
     let width_in_blocks = width / block_size;
@@ -90,21 +88,48 @@ fn main() {
         element.write_to_slice_unaligned(&mut iterations[(16 * i)..(16 * (i + 1))]);
     }
 
-    let colors = iterations
-        .into_iter()
-        .map(|item| {
-            if item >= max_iterations as f32 {
-                vec![0u8, 0u8, 0u8]
-            } else {
-                let test = ((item * 4.0) % 255.0) as u8;
-                vec![test, test, test]
-            }
-        })
-        .flatten()
-        .collect::<Vec<u8>>();
-
-    println!("Rendering: {}ms", time.elapsed().as_millis());
+    println!("Calculating: {}ms", time.elapsed().as_millis());
     let time = Instant::now();
+
+    // 2nd pass
+    let mut iteration_counts = vec![0usize; max_iterations + 1];
+
+    for iteration in &iterations {
+        iteration_counts[iteration.floor() as usize] += 1
+    }
+
+    // 3rd pass
+
+    // modify here to convert to cumulative
+    for i in 1..iteration_counts.len() {
+        iteration_counts[i] += iteration_counts[i - 1];
+    }
+
+    let mut total = iteration_counts[max_iterations - 1];
+
+    let mut colors = vec![0u8; width * height * 3];
+
+    for i in 0..(width * height) {
+        if iterations[i].floor() >= max_iterations as f32 {
+            colors[3 * i] = 0u8;
+            colors[3 * i + 1] = 0u8;
+            colors[3 * i + 2] = 0u8;
+        } else {
+            let test = iteration_counts[iterations[i].floor() as usize] as f64 / total as f64;
+            let test2 = iteration_counts[iterations[i].floor() as usize + 1] as f64 / total as f64;
+
+            let hue = test + (test2 - test) * iterations[i].fract() as f64;
+
+            let test = (hue * 255.99) as u8;
+            colors[3 * i] = test;
+            colors[3 * i + 1] = test;
+            colors[3 * i + 2] = test;
+        }
+    }
+
+    println!("Colouring: {}ms", time.elapsed().as_millis());
+    let time = Instant::now();
+
     image::save_buffer("output.png", &colors, width as u32, height as u32, image::RGB(8)).unwrap();
     println!("Saving: {}ms", time.elapsed().as_millis());
 }
