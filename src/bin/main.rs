@@ -6,8 +6,13 @@ fn main() {
     let width: usize = 1920;
     let height: usize = 1080;
 
-    let x_range = (-2.5, 1.0);
-    let y_range = (-1.0, 1.0);
+    let aspect = height as f32 / width as f32;
+
+    let center = (-0.745314, 0.131612);
+    let zoom = 80.0;
+
+    let x_range = (center.0 - 0.5 / zoom, center.0 + 0.5 / zoom);
+    let y_range = (center.1 - 0.5 / zoom * aspect, center.1 + 0.5 / zoom * aspect);
 
     let x_res = (x_range.1 - x_range.0) / width as f32;
     let y_res = (y_range.1 - y_range.0) / height as f32;
@@ -16,6 +21,8 @@ fn main() {
 
     let block_size = f32x16::lanes();
     let width_in_blocks = width / block_size;
+
+    let mut iterations = vec![0u32; width * height];
 
     let time = Instant::now();
     let pixels = (0..height)
@@ -69,21 +76,19 @@ fn main() {
         .flatten()
         .collect::<Vec<u32x16>>();
 
-    println!("Rendering took {}ms", time.elapsed().as_millis());
-    let time = Instant::now();
-
-
-
-    let mut buffer = Vec::new();
-
-    for element in pixels {
-        let mut part = vec![0u32; 16];
-        element.write_to_slice_unaligned(&mut part);
-        for element in part {
-            buffer.push((element as f64 / max_iterations as f64 * 255.99) as u8)
-        }
+    for (i, element) in pixels.into_iter().enumerate() {
+        element.write_to_slice_unaligned(&mut iterations[(16 * i)..(16 * (i + 1))]);
     }
 
-    image::save_buffer("output.png", &buffer, width as u32, height as u32, image::Gray(8)).unwrap();
-    println!("Saving took {}ms", time.elapsed().as_millis());
+    let colors = iterations
+        .into_iter()
+        .map(|item| {
+            ((item as f32 / max_iterations as f32) * 255.99) as u8
+        })
+        .collect::<Vec<u8>>();
+
+    println!("Rendering: {}ms", time.elapsed().as_millis());
+    let time = Instant::now();
+    image::save_buffer("output.png", &colors, width as u32, height as u32, image::Gray(8)).unwrap();
+    println!("Saving: {}ms", time.elapsed().as_millis());
 }
