@@ -1,99 +1,98 @@
-use rug::Float;
 use crate::renderer::FloatVector;
 
 #[derive(Copy, Clone)]
-pub struct ComplexF64 {
-    pub real: f64,
-    pub imaginary: f64
+pub struct Complexf32 {
+    pub real: f32,
+    pub imaginary: f32
 }
 
-impl ComplexF64 {
-    pub fn new(real: f64, imaginary: f64) -> Self {
-        ComplexF64 {
+impl Complexf32 {
+    pub fn new(real: f32, imaginary: f32) -> Self {
+        Complexf32 {
             real,
             imaginary
         }
     }
 
-    pub fn norm(&self) -> f64 {
+    pub fn norm(&self) -> f32 {
         self.real * self.real + self.imaginary * self.imaginary
     }
 
-    pub fn square(&self) -> ComplexF64 {
-        ComplexF64 {
+    pub fn square(&self) -> Complexf32 {
+        Complexf32 {
             real: self.real * self.real - self.imaginary * self.imaginary,
             imaginary: 2.0 * self.real * self.imaginary
         }
     }
 }
 
-impl std::ops::Add<ComplexF64> for ComplexF64 {
-    type Output = ComplexF64;
+impl std::ops::Add<Complexf32> for Complexf32 {
+    type Output = Complexf32;
 
-    fn add(self, other: ComplexF64) -> ComplexF64 {
-        ComplexF64 {
+    fn add(self, other: Complexf32) -> Complexf32 {
+        Complexf32 {
             real: self.real + other.real,
             imaginary: self.imaginary + other.imaginary
         }
     }
 }
 
-impl std::ops::Mul<ComplexF64> for ComplexF64 {
-    type Output = ComplexF64;
+impl std::ops::Mul<Complexf32> for Complexf32 {
+    type Output = Complexf32;
 
-    fn mul(self, other: ComplexF64) -> ComplexF64 {
-        ComplexF64 {
+    fn mul(self, other: Complexf32) -> Complexf32 {
+        Complexf32 {
             real: self.real * other.real - self.imaginary * other.imaginary,
             imaginary: self.real * other.imaginary + self.imaginary * other.real
         }
     }
 }
 
-impl std::ops::Mul<f64> for ComplexF64 {
-    type Output = ComplexF64;
+impl std::ops::Mul<f32> for Complexf32 {
+    type Output = Complexf32;
 
-    fn mul(self, other: f64) -> ComplexF64 {
-        ComplexF64 {
+    fn mul(self, other: f32) -> Complexf32 {
+        Complexf32 {
             real: self.real * other,
             imaginary: self.imaginary * other
         }
     }
 }
 
-impl std::ops::Mul<ComplexF64> for f64 {
-    type Output = ComplexF64;
+impl std::ops::Mul<Complexf32> for f32 {
+    type Output = Complexf32;
 
-    fn mul(self, other: ComplexF64) -> ComplexF64 {
-        ComplexF64 {
+    fn mul(self, other: Complexf32) -> Complexf32 {
+        Complexf32 {
             real: self * other.real,
             imaginary: self * other.imaginary
         }
     }
 }
 
-impl std::ops::Sub<ComplexF64> for ComplexF64 {
-    type Output = ComplexF64;
+impl std::ops::Sub<Complexf32> for Complexf32 {
+    type Output = Complexf32;
 
-    fn sub(self, other: ComplexF64) -> ComplexF64 {
-        ComplexF64 {
+    fn sub(self, other: Complexf32) -> Complexf32 {
+        Complexf32 {
             real: self.real - other.real,
             imaginary: self.imaginary - other.imaginary
         }
     }
 }
 
-impl std::ops::MulAssign<ComplexF64> for ComplexF64 {
-    fn mul_assign(&mut self, other: ComplexF64) {
-        *self = ComplexF64 {
+impl std::ops::MulAssign<Complexf32> for Complexf32 {
+    fn mul_assign(&mut self, other: Complexf32) {
+        *self = Complexf32 {
             real: self.real * other.real - self.imaginary * other.imaginary,
             imaginary: self.real * other.imaginary + self.imaginary * other.real
         }
     }
 }
 
-impl std::ops::AddAssign<ComplexF64> for ComplexF64 {
-    fn add_assign(&mut self, other: ComplexF64) {
-        *self = ComplexF64 {
+impl std::ops::AddAssign<Complexf32> for Complexf32 {
+    fn add_assign(&mut self, other: Complexf32) {
+        *self = Complexf32 {
             real: self.real + other.real,
             imaginary: self.imaginary + other.imaginary
         }
@@ -114,14 +113,14 @@ impl ComplexVector {
         }
     }
 
-    pub fn splat(value: ComplexF64) -> Self {
+    pub fn splat(value: Complexf32) -> Self {
         ComplexVector {
             real: FloatVector::splat(value.real),
             imaginary: FloatVector::splat(value.imaginary)
         }
     }
 
-    pub fn norm(&self) -> FloatVector {
+    pub fn norm(&mut self) -> FloatVector {
         self.real * self.real + self.imaginary * self.imaginary
     }
 
@@ -155,10 +154,10 @@ impl std::ops::Mul<ComplexVector> for ComplexVector {
     }
 }
 
-impl std::ops::Mul<f64> for ComplexVector {
+impl std::ops::Mul<f32> for ComplexVector {
     type Output = ComplexVector;
 
-    fn mul(self, other: f64) -> ComplexVector {
+    fn mul(self, other: f32) -> ComplexVector {
         ComplexVector {
             real: self.real * other,
             imaginary: self.imaginary * other
@@ -166,7 +165,7 @@ impl std::ops::Mul<f64> for ComplexVector {
     }
 }
 
-impl std::ops::Mul<ComplexVector> for f64 {
+impl std::ops::Mul<ComplexVector> for f32 {
     type Output = ComplexVector;
 
     fn mul(self, other: ComplexVector) -> ComplexVector {
