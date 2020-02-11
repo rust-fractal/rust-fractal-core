@@ -1,7 +1,5 @@
 use std::time::Instant;
-
 use rust_fractal::renderer::Renderer;
-
 
 fn main() {
     let width: usize = 2000;
@@ -20,5 +18,10 @@ fn main() {
         320
     );
 
+    let time = Instant::now();
     renderer.render();
+    println!("Rendering took: {} ms", time.elapsed().as_millis());
+
+    // simple multithreading takes 13-15 sec f64
+    // single threading takes 84 sec f64
 }
