@@ -246,8 +246,6 @@ impl Renderer {
 
         println!("Packing: {} ms", start.elapsed().as_millis());
         let start = Instant::now();
-        let mut iterations = vec![0.0f64; points_vectors.len()];
-        let mut glitched = vec![false; points_vectors.len()];
 
         let values = points_vectors.into_par_iter()
                          .map(|point_vector| {
@@ -258,7 +256,11 @@ impl Renderer {
                              let mut mask = m64x8::splat(true);
 
                              for iteration in 0..self.maximum_iterations {
-                                 delta_n = ComplexVector::splat(self.x_n_2[iteration]) * delta_n + delta_n * delta_n + point_vector;
+                                 let temp = delta_n;
+                                 delta_n += ComplexVector::splat(self.x_n_2[iteration]);
+                                 delta_n *= temp;
+                                 delta_n += point_vector;
+
                                  z_norm = mask.select((ComplexVector::splat(self.x_n[iteration + 1]) + delta_n).norm(), z_norm);
                                  mask = z_norm.le(f64x8::splat(256.0));
                                  // here keep all glitched points. We keep iterating even if all points are glitched as they might be used in the final image

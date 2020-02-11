@@ -94,8 +94,8 @@ impl std::ops::MulAssign<ComplexF64> for ComplexF64 {
 impl std::ops::AddAssign<ComplexF64> for ComplexF64 {
     fn add_assign(&mut self, other: ComplexF64) {
         *self = ComplexF64 {
-            real: self.real * other.real,
-            imaginary: self.imaginary * other.imaginary
+            real: self.real + other.real,
+            imaginary: self.imaginary + other.imaginary
         }
     }
 }
@@ -128,7 +128,7 @@ impl ComplexVector {
     pub fn square(&self) -> ComplexVector {
         ComplexVector {
             real: self.real * self.real - self.imaginary * self.imaginary,
-            imaginary: 2.0 * self.real * self.imaginary
+            imaginary: FloatVector::splat(2.0) * self.real * self.imaginary
         }
     }
 }
@@ -200,8 +200,8 @@ impl std::ops::MulAssign<ComplexVector> for ComplexVector {
 impl std::ops::AddAssign<ComplexVector> for ComplexVector {
     fn add_assign(&mut self, other: ComplexVector) {
         *self = ComplexVector {
-            real: self.real * other.real,
-            imaginary: self.imaginary * other.imaginary
+            real: self.real + other.real,
+            imaginary: self.imaginary + other.imaginary
         }
     }
 }
