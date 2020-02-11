@@ -49,7 +49,7 @@ impl Renderer {
         let location = Complex::with_val(precision, Complex::parse(location_string).unwrap());
         let aspect = image_width as f32 / image_height as f32;
         let image_width = image_width * supersampling;
-        let image_height = image_width * supersampling;
+        let image_height = image_height * supersampling;
 
         Renderer {
             image_width,
