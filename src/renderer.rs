@@ -104,11 +104,11 @@ impl Renderer {
         let mut total = iteration_counts[self.maximum_iterations - 1];
 
         for i in 0..remaining_points.len() {
-            if iterations[i].1 {
-                image[3 * i] = 255u8;
-                image[3 * i + 1] = 0u8;
-                image[3 * i + 2] = 0u8;
-            } else if iterations[i].0.floor() >= self.maximum_iterations as f64 {
+//            if iterations[i].1 {
+//                image[3 * i] = 255u8;
+//                image[3 * i + 1] = 0u8;
+//                image[3 * i + 2] = 0u8;
+            /*} else */if iterations[i].0.floor() >= self.maximum_iterations as f64 {
                 image[3 * i] = 0u8;
                 image[3 * i + 1] = 0u8;
                 image[3 * i + 2] = 0u8;
@@ -287,6 +287,5 @@ impl Renderer {
                          .collect::<Vec<(f64, bool)>>();
         println!("Iterating: {} ms", start.elapsed().as_millis());
         values
-
     }
 }
