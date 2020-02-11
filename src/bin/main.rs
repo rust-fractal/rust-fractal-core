@@ -2,25 +2,27 @@ use std::time::Instant;
 use rust_fractal::renderer::Renderer;
 
 fn main() {
-    let width: usize = 800;
-    let height: usize = 800;
+    let width: usize = 2000;
+    let height: usize = 2000;
 
     let center = (
-        "-0.749999987350877481864108888020013802837969258626230419972587823828734338471228477079750588709551510361714463695461745528645748607681279674273355384334270208362211787387351792878073779449767292692440",
-        "0.001000038688236832013124581230049849132759425863378894883003211011278068229551274712347955044740933397589760194545872789087012331273586364914484522575986336846199522726507205442204060303594956029930");
-    let zoom = 3.6000000000000036E191;
+        "0.0",
+        "0.0");
+    let zoom = 10.0;
 
     let mut renderer = Renderer::new(
         width,
         height,
         zoom,
-        5000000,
+        1000,
         center.0,
         center.1,
-        1000
+        50
     );
+
+    println!("Mandelbrot Renderer");
 
     let time = Instant::now();
     renderer.render();
-    println!("Rendering took: {} ms", time.elapsed().as_millis());
+    println!("{:<10}{:>6} ms", "TOTAL", time.elapsed().as_millis());
 }
