@@ -39,13 +39,17 @@ pub struct Renderer {
     x_n_2: Vec<Complexf32>,
     tolerance_check: Vec<f32>,
     start_delta: Complexf32,
-    resolution: f32
+    resolution: f32,
+    supersampling: usize,
 }
 
 impl Renderer {
-    pub fn new(image_width: usize, image_height: usize, zoom: f32, maximum_iterations: usize, center_real: &str, center_complex: &str, precision: u32) -> Self {
+    pub fn new(image_width: usize, image_height: usize, zoom: f32, maximum_iterations: usize, center_real: &str, center_complex: &str, precision: u32, supersampling: usize) -> Self {
         let location_string = "(".to_owned() + center_real + "," + center_complex + ")";
         let location = Complex::with_val(precision, Complex::parse(location_string).unwrap());
+        let aspect = image_width as f32 / image_height as f32;
+        let image_width = image_width * supersampling;
+        let image_height = image_width * supersampling;
 
         Renderer {
             image_width,
@@ -56,8 +60,9 @@ impl Renderer {
             x_n: Vec::new(),
             x_n_2: Vec::new(),
             tolerance_check: Vec::new(),
-            start_delta: Complexf32::new((4.0 / image_width as f32 - 2.0) / zoom, (4.0 / image_height as f32 - 2.0) / zoom),
-            resolution: (-2.0 * (4.0 / image_width as f32 - 2.0) / zoom) / image_width as f32
+            start_delta: Complexf32::new((4.0 / image_width as f32 - 2.0) / zoom * aspect, (4.0 / image_height as f32 - 2.0) / zoom),
+            resolution: (-2.0 * (4.0 / image_height as f32 - 2.0) / zoom) / image_height as f32,
+            supersampling
         }
     }
 
@@ -99,11 +104,11 @@ impl Renderer {
         let total = iteration_counts[self.maximum_iterations - 1];
 
         for i in 0..remaining_points.len() {
-            if iterations[i].1 {
+            /*if iterations[i].1 {
                 image[3 * i] = 255u8;
                 image[3 * i + 1] = 0u8;
                 image[3 * i + 2] = 0u8;
-            } else if iterations[i].0.floor() >= self.maximum_iterations as f32 {
+            } else */if iterations[i].0.floor() >= self.maximum_iterations as f32 {
                 image[3 * i] = 0u8;
                 image[3 * i + 1] = 0u8;
                 image[3 * i + 2] = 0u8;
@@ -123,6 +128,9 @@ impl Renderer {
         let start = Instant::now();
 
         image::save_buffer("output.png", &image, self.image_width as u32, self.image_height as u32, image::RGB(8)).unwrap();
+
+
+
         println!("{:<10}{:>6} ms", "Saving", start.elapsed().as_millis());
     }
 
