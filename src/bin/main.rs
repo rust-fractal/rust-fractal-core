@@ -2,6 +2,8 @@ use std::time::Instant;
 use rust_fractal::renderer::Renderer;
 
 fn main() {
+    // use f32 to zoom = 1x10-308, then f64 to 3.65x10-4951 possibly?
+
     let width: usize = 2000;
     let height: usize = 2000;
 
