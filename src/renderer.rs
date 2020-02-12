@@ -103,6 +103,50 @@ impl Renderer {
 
         let total = iteration_counts[self.maximum_iterations - 1];
 
+        let mut colours = Vec::new();
+
+        for i in 0..8192 {
+            let value = i as f32 / 8192 as f32;
+
+            let mut red;
+            let mut green;
+            let mut blue;
+
+            if value < 0.16 {
+                let factor = (value - 0.0) / (0.16 - 0.0);
+
+                red = 0.0 + factor * (32.0 - 0.0);
+                green = 7.0 + factor * (107.0 - 7.0);
+                blue = 100.0 + factor * (203.0 - 100.0);
+            } else if value < 0.42 {
+                let factor = (value - 0.16) / (0.42 - 0.16);
+
+                red = 32.0 + factor * (237.0 - 32.0);
+                green = 107.0 + factor * (255.0 - 107.0);
+                blue = 203.0 + factor * (255.0 - 203.0);
+            } else if value < 0.6425 {
+                let factor = (value - 0.42) / (0.6425 - 0.42);
+
+                red = 237.0 + factor * (255.0 - 237.0);
+                green = 255.0 + factor * (170.0 - 255.0);
+                blue = 255.0 + factor * (0.0 - 255.0);
+            } else if value < 0.8575 {
+                let factor = (value - 0.6425) / (0.8575 - 0.6425);
+
+                red = 255.0 + factor * (0.0 - 255.0);
+                green = 170.0 + factor * (2.0 - 170.0);
+                blue = 0.0 + factor * (0.0 - 0.0);
+            } else {
+                let factor = (value - 0.8575) / (1.0 - 0.8575);
+
+                red = 0.0 + factor * (0.0 - 0.0);
+                green = 2.0 + factor * (7.0 - 2.0);
+                blue = 0.0 + factor * (100.0 - 0.0);
+            }
+
+            colours.push((red, green, blue))
+        }
+
         for i in 0..remaining_points.len() {
             /*if iterations[i].1 {
                 image[3 * i] = 255u8;
@@ -113,15 +157,23 @@ impl Renderer {
                 image[3 * i + 1] = 0u8;
                 image[3 * i + 2] = 0u8;
             } else {
-                let test = iteration_counts[iterations[i].0.floor() as usize] as f32 / total as f32;
-                let test2 = iteration_counts[iterations[i].0.floor() as usize + 1] as f32 / total as f32;
+                let v1 = iteration_counts[iterations[i].0.floor() as usize] as f32 / total as f32;
+                let v2 = iteration_counts[iterations[i].0.floor() as usize + 1] as f32 / total as f32;
 
-                let hue = test + (test2 - test) * iterations[i].0.fract() as f32;
+                // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
+                let hue = (v1 + (v2 - v1) * iterations[i].0.fract() as f32) * 8192.0;
+                let hue = ((iterations[i].0 + 20.0).sqrt() * 1600.0) % 8192.0;
 
-                let test = (hue * 255.99) as u8;
-                image[3 * i] = test;
-                image[3 * i + 1] = test;
-                image[3 * i + 2] = test;
+                let colour = colours[(hue.floor() as usize) % 8192];
+                let colour2 = colours[(hue.floor() as usize + 1) % 8192];
+
+                let red = (colour.0 + ((colour2.0 - colour.0) * hue.fract())) as u8;
+                let green = (colour.1 + ((colour2.1 - colour.1) * hue.fract())) as u8;
+                let blue = (colour.2 + ((colour2.2 - colour.2) * hue.fract())) as u8;
+
+                image[3 * i] = red;
+                image[3 * i + 1] = green;
+                image[3 * i + 2] = blue;
             }
         }
         println!("{:<10}{:>6} ms", "Colouring", start.elapsed().as_millis());
