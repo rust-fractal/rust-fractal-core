@@ -23,9 +23,9 @@ pub struct PointVector {
 
 impl Point {
     // start_delta is the delta from reference of point (0, 0) in the image
-    pub fn new(image_x: usize, image_y: usize, image_width: usize, resolution: f32, start_delta: Complexf32) -> Self {
+    pub fn new(image_x: usize, image_y: usize, image_width: usize, resolution: f32, top_left_delta: Complexf32) -> Self {
         Point {
-            delta: Complexf32::new(image_x as f32 * resolution + start_delta.real, image_y as f32 * resolution + start_delta.imaginary),
+            delta: Complexf32::new(image_x as f32 * resolution + top_left_delta.real, image_y as f32 * resolution + top_left_delta.imaginary),
             index: image_y * image_width + image_x,
             iterations: 0.0,
             glitched: false
@@ -60,6 +60,7 @@ impl Renderer {
         let image_height = image_height;
 
         // The height is kept to be the correct size (in terms of the zoom) and the width is scaled to counter for the aspect ratio
+        // reference delta can be changes, but may need to be updated
         Renderer {
             image_width,
             image_height,
@@ -89,14 +90,19 @@ impl Renderer {
             }
         }
 
+        println!("Top left delta: {}, {}", self.top_left_delta.real, self.top_left_delta.imaginary);
+
         // This is meant to include the glitch tolerance as well
-        while remaining_points.len() > (0.4 * self.image_width as f32 * self.image_height as f32) as usize {
+        while remaining_points.len() > (0.001 * self.image_width as f32 * self.image_height as f32) as usize {
+            println!("Reference: \n{}", self.reference);
+            println!("Reference Delta: {} {}", self.reference_delta.real, self.reference_delta.imaginary);
+
             self.reference_points += 1;
             self.calculate_reference();
-            self.calculate_perturbations_parallel_vectorised(&remaining_points, &mut glitched_points, &mut finished_points);
+            self.calculate_perturbations_parallel(&remaining_points, &mut glitched_points, &mut finished_points);
 
-            println!("{}", glitched_points.len());
-            println!("{}", remaining_points.len());
+            println!("glitched {}", glitched_points.len());
+            println!("total {}", remaining_points.len());
 
 
             remaining_points = glitched_points.clone();
@@ -104,14 +110,23 @@ impl Renderer {
 
             // move to new reference location
 
-            let temp = remaining_points.choose(&mut rand::thread_rng()).unwrap().delta;
-            self.reference_delta = temp;
-            *self.reference.mut_real() = self.origin.real().clone() + temp.real;
-            *self.reference.mut_imag() = self.origin.imag().clone() - temp.imaginary;
+            if remaining_points.len() > 0 {
+                let temp = remaining_points.choose(&mut rand::thread_rng()).unwrap().delta;
+
+                // point delta - reference delta
+
+                self.reference_delta = temp;
+                *self.reference.mut_real() = self.origin.real().clone() + self.reference_delta.real;
+                *self.reference.mut_imag() = self.origin.imag().clone() + self.reference_delta.imaginary;
+            }
+
         }
 
-        // maybe not needed
-        finished_points.append(&mut remaining_points);
+        // there are glitched points left
+        if remaining_points.len() > 0 {
+            println!("glitched points in image: {}", remaining_points.len());
+            finished_points.append(&mut remaining_points);
+        }
 
         // go through points - complex, index
 
@@ -217,13 +232,13 @@ impl Renderer {
     }
 
     pub fn calculate_reference(&mut self) {
-        println!("Location: \n{}", self.reference);
         let start = Instant::now();
         let glitch_tolerance = 1e-3;
 
         // Clear both buffers for new values
         self.x_n.clear();
         self.x_n_2.clear();
+        self.tolerance_check.clear();
 
         let mut z = self.reference.clone();
 
@@ -269,17 +284,17 @@ impl Renderer {
         test
     }
 
-    pub fn calculate_perturbations_parallel(&mut self, points: &Vec<Point>) -> Vec<(f32, bool)> {
+    pub fn calculate_perturbations_parallel(&mut self, remaining_points: &Vec<Point>, glitched_points: &mut Vec<Point>, finished_points: &mut Vec<Point>) {
         let start = Instant::now();
-        let test = points.into_par_iter()
+        let values = remaining_points.into_par_iter()
                          .map(|point| {
-                             let mut delta_n = point.delta;
+                             let mut delta_n = point.delta - self.reference_delta;
                              let mut iteration = 0;
                              let mut glitched = false;
                              let mut z_norm = 0.0;
 
                              while z_norm < 256.0 && iteration < self.maximum_iterations {
-                                 delta_n = self.x_n_2[iteration] * delta_n + delta_n * delta_n + point.delta;
+                                 delta_n = self.x_n_2[iteration] * delta_n + delta_n * delta_n + (point.delta - self.reference_delta);
 
                                  iteration += 1;
                                  z_norm = (self.x_n[iteration] + delta_n).norm();
@@ -294,16 +309,34 @@ impl Renderer {
                              if iteration >= self.maximum_iterations || glitched {
                                  (iteration as f32, glitched)
                              } else {
-                                 (iteration as f32 + 1.0 - (z_norm.log2() / 2.0).log2(), glitched)
+                                 (iteration as f32 + 2.0 - (z_norm.log2() / 2.0).log2(), glitched)
                              }
                          })
                          .collect::<Vec<(f32, bool)>>();
 
+        for index in 0..remaining_points.len() {
+            // check to see if a point is glitched
+            if values[index].1 {
+                glitched_points.push(Point {
+                    delta: remaining_points[index].delta,
+                    index: remaining_points[index].index,
+                    iterations: values[index].0,
+                    glitched: true
+                });
+            } else {
+                finished_points.push(Point {
+                    delta: remaining_points[index].delta,
+                    index: remaining_points[index].index,
+                    iterations: values[index].0,
+                    glitched: false
+                });
+            }
+        }
+
         println!("{:<10}{:>6} ms", "Iterating", start.elapsed().as_millis());
-        test
     }
 
-    pub fn calculate_perturbations_parallel_vectorised(&mut self, remaining_points: &Vec<Point>, glitched_points: &mut Vec<Point>, finished_points: &mut Vec<Point>) -> Vec<(f32, bool)> {
+    pub fn calculate_perturbations_parallel_vectorised(&mut self, remaining_points: &Vec<Point>, glitched_points: &mut Vec<Point>, finished_points: &mut Vec<Point>) {
         // here we pack the points into vectorised points
         // possibly only works on image sizes that are multiples of the vector lanes
         // TODO investigate adding this earlier so that the vector of points never needs to be constructed
@@ -315,7 +348,7 @@ impl Renderer {
                 let delta_real = (0..8)
                     .map(|j| {
                         if i + j >= remaining_points.len() {
-                            0.0
+                            100.0
                         } else {
                             remaining_points[i + j].delta.real - self.reference_delta.real
                         }
@@ -325,7 +358,7 @@ impl Renderer {
                 let delta_imag = (0..8)
                     .map(|j| {
                         if i + j >= remaining_points.len() {
-                            0.0
+                            100.0
                         } else {
                             remaining_points[i + j].delta.imaginary - self.reference_delta.imaginary
                         }
@@ -356,14 +389,13 @@ impl Renderer {
                                  delta_n += point_vector;
 
                                  // this line takes up more than 50% of the time
-
                                  let new_z_norm = (ComplexVector::splat(self.x_n[iteration + 1]) + delta_n).norm();
                                  z_norm = mask.select(new_z_norm, z_norm);
                                  mask = z_norm.le(f32x8::splat(256.0));
                                  // here keep all glitched points. We keep iterating even if all points are glitched as they might be used in the final image
 
                                  // approximately 200ms / 2800ms
-                                 glitched = glitched.select(m32x8::splat(true), z_norm.le(f32x8::splat(self.tolerance_check[iteration + 1])));
+                                 glitched = glitched.select(m32x8::splat(true), z_norm.le(f32x8::splat(self.tolerance_check[iteration])));
 
                                  if mask.none() {
                                      break;
@@ -405,8 +437,6 @@ impl Renderer {
                 });
             }
         }
-
-        values
 
         // this takes ~2800ms at f64x8
         // 2600ms f64x4
