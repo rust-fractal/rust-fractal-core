@@ -3,12 +3,15 @@ use rayon::prelude::*;
 use packed_simd::*;
 use crate::complex::{Complexf32, ComplexVector};
 use std::time::Instant;
+use rand::seq::SliceRandom;
 
 pub type FloatVector = f32x8;
 
+#[derive(Copy, Clone)]
 pub struct Point {
     pub delta: Complexf32,
     pub index: usize,
+    pub iterations: f32,
     pub glitched: bool
 }
 
@@ -24,68 +27,91 @@ impl Point {
         Point {
             delta: Complexf32::new(image_x as f32 * resolution + start_delta.real, image_y as f32 * resolution + start_delta.imaginary),
             index: image_y * image_width + image_x,
+            iterations: 0.0,
             glitched: false
         }
     }
 }
 
+// TODO add a colouring method enum
 pub struct Renderer {
     image_width: usize,
     image_height: usize,
     maximum_iterations: usize,
     reference_points: usize,
+    origin: Complex,
     reference: Complex,
     x_n: Vec<Complexf32>,
     x_n_2: Vec<Complexf32>,
     tolerance_check: Vec<f32>,
-    start_delta: Complexf32,
+    top_left_delta: Complexf32,
+    reference_delta: Complexf32,
     resolution: f32,
-    supersampling: usize,
 }
 
 impl Renderer {
-    pub fn new(image_width: usize, image_height: usize, zoom: f32, maximum_iterations: usize, center_real: &str, center_complex: &str, precision: u32, supersampling: usize) -> Self {
-        let location_string = "(".to_owned() + center_real + "," + center_complex + ")";
-        let location = Complex::with_val(precision, Complex::parse(location_string).unwrap());
-        let aspect = image_width as f32 / image_height as f32;
-        let image_width = image_width * supersampling;
-        let image_height = image_height * supersampling;
+    pub fn new(image_width: usize, image_height: usize, zoom: f32, maximum_iterations: usize, center_real: &str, center_complex: &str, precision: u32) -> Self {
+        let location = Complex::with_val(
+            precision,
+            Complex::parse("(".to_owned() + center_real + "," + center_complex + ")").expect("Location is not valid!"));
 
+        let aspect = image_width as f32 / image_height as f32;
+        let image_width = image_width;
+        let image_height = image_height;
+
+        // The height is kept to be the correct size (in terms of the zoom) and the width is scaled to counter for the aspect ratio
         Renderer {
             image_width,
             image_height,
             maximum_iterations,
             reference_points: 0,
+            origin: location.clone(),
             reference: location,
             x_n: Vec::new(),
             x_n_2: Vec::new(),
             tolerance_check: Vec::new(),
-            start_delta: Complexf32::new((4.0 / image_width as f32 - 2.0) / zoom * aspect, (4.0 / image_height as f32 - 2.0) / zoom),
+            top_left_delta: Complexf32::new((4.0 / image_width as f32 - 2.0) / zoom * aspect, (4.0 / image_height as f32 - 2.0) / zoom),
+            reference_delta: Complexf32::new(0.0, 0.0),
             resolution: (-2.0 * (4.0 / image_height as f32 - 2.0) / zoom) / image_height as f32,
-            supersampling
         }
     }
 
     pub fn render(&mut self) {
-        let mut image = vec![0u8; self.image_width * self.image_height * 3];
-
         let mut remaining_points = Vec::with_capacity(self.image_width * self.image_height);
+        let mut glitched_points = Vec::with_capacity(self.image_width * self.image_height);
+        let mut finished_points = Vec::with_capacity(self.image_width * self.image_height);
+
 //        let mut glitched_points = Vec::new();
 
         for image_y in 0..self.image_height {
             for image_x in 0..self.image_width {
-                remaining_points.push(Point::new(image_x, image_y, self.image_width, self.resolution, self.start_delta));
+                remaining_points.push(Point::new(image_x, image_y, self.image_width, self.resolution, self.top_left_delta));
             }
         }
 
         // This is meant to include the glitch tolerance as well
-//        while remaining_points.len() > 1000 {
+        while remaining_points.len() > (0.4 * self.image_width as f32 * self.image_height as f32) as usize {
             self.reference_points += 1;
             self.calculate_reference();
-            let iterations = self.calculate_perturbations_parallel_vectorised(&mut remaining_points);
+            self.calculate_perturbations_parallel_vectorised(&remaining_points, &mut glitched_points, &mut finished_points);
+
+            println!("{}", glitched_points.len());
+            println!("{}", remaining_points.len());
 
 
-//        }
+            remaining_points = glitched_points.clone();
+            glitched_points.clear();
+
+            // move to new reference location
+
+            let temp = remaining_points.choose(&mut rand::thread_rng()).unwrap().delta;
+            self.reference_delta = temp;
+            *self.reference.mut_real() = self.origin.real().clone() + temp.real;
+            *self.reference.mut_imag() = self.origin.imag().clone() - temp.imaginary;
+        }
+
+        // maybe not needed
+        finished_points.append(&mut remaining_points);
 
         // go through points - complex, index
 
@@ -93,24 +119,24 @@ impl Renderer {
         let start = Instant::now();
         let mut iteration_counts = vec![0usize; self.maximum_iterations + 1];
 
-        for iteration in &iterations {
-            iteration_counts[iteration.0.floor() as usize] += 1
+        for point in &finished_points {
+            iteration_counts[point.iterations.floor() as usize] += 1
         }
 
         for i in 1..iteration_counts.len() {
             iteration_counts[i] += iteration_counts[i - 1];
         }
 
-        let total = iteration_counts[self.maximum_iterations - 1];
+//        let total = iteration_counts[self.maximum_iterations - 1];
 
         let mut colours = Vec::new();
 
         for i in 0..8192 {
             let value = i as f32 / 8192 as f32;
 
-            let mut red;
-            let mut green;
-            let mut blue;
+            let red;
+            let green;
+            let blue;
 
             if value < 0.16 {
                 let factor = (value - 0.0) / (0.16 - 0.0);
@@ -147,22 +173,28 @@ impl Renderer {
             colours.push((red, green, blue))
         }
 
-        for i in 0..remaining_points.len() {
-            /*if iterations[i].1 {
-                image[3 * i] = 255u8;
-                image[3 * i + 1] = 0u8;
-                image[3 * i + 2] = 0u8;
-            } else */if iterations[i].0.floor() >= self.maximum_iterations as f32 {
-                image[3 * i] = 0u8;
-                image[3 * i + 1] = 0u8;
-                image[3 * i + 2] = 0u8;
+        let mut image = vec![0u8; self.image_width * self.image_height * 3];
+
+        let show_glitches = true;
+
+        for point in finished_points {
+            let index = point.index;
+
+            if point.glitched && show_glitches {
+                image[3 * index] = 255u8;
+                image[3 * index + 1] = 0u8;
+                image[3 * index + 2] = 0u8;
+            } else if point.iterations.floor() >= self.maximum_iterations as f32 {
+                image[3 * index] = 0u8;
+                image[3 * index + 1] = 0u8;
+                image[3 * index + 2] = 0u8;
             } else {
-                let v1 = iteration_counts[iterations[i].0.floor() as usize] as f32 / total as f32;
-                let v2 = iteration_counts[iterations[i].0.floor() as usize + 1] as f32 / total as f32;
+//                let v1 = iteration_counts[iterations[i].0.floor() as usize] as f32 / total as f32;
+//                let v2 = iteration_counts[iterations[i].0.floor() as usize + 1] as f32 / total as f32;
 
                 // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
-                let hue = (v1 + (v2 - v1) * iterations[i].0.fract() as f32) * 8192.0;
-                let hue = ((iterations[i].0 + 20.0).sqrt() * 1600.0) % 8192.0;
+//                let hue = (v1 + (v2 - v1) * iterations[i].0.fract() as f32) * 8192.0;
+                let hue = ((point.iterations + 1.0).sqrt() * 1600.0) % 8192.0;
 
                 let colour = colours[(hue.floor() as usize) % 8192];
                 let colour2 = colours[(hue.floor() as usize + 1) % 8192];
@@ -171,17 +203,15 @@ impl Renderer {
                 let green = (colour.1 + ((colour2.1 - colour.1) * hue.fract())) as u8;
                 let blue = (colour.2 + ((colour2.2 - colour.2) * hue.fract())) as u8;
 
-                image[3 * i] = red;
-                image[3 * i + 1] = green;
-                image[3 * i + 2] = blue;
+                image[3 * index] = red;
+                image[3 * index + 1] = green;
+                image[3 * index + 2] = blue;
             }
         }
         println!("{:<10}{:>6} ms", "Colouring", start.elapsed().as_millis());
         let start = Instant::now();
 
         image::save_buffer("output.png", &image, self.image_width as u32, self.image_height as u32, image::RGB(8)).unwrap();
-
-
 
         println!("{:<10}{:>6} ms", "Saving", start.elapsed().as_millis());
     }
@@ -207,7 +237,7 @@ impl Renderer {
         println!("{:<10}{:>6} ms", "Reference", start.elapsed().as_millis());
     }
 
-    pub fn calculate_perturbations_single(&mut self, points: &mut Vec<Point>) -> Vec<(f32, bool)> {
+    pub fn calculate_perturbations_single(&mut self, points: &Vec<Point>) -> Vec<(f32, bool)> {
         let test = points.into_iter()
             .map(|point| {
                 let mut delta_n = point.delta;
@@ -239,7 +269,7 @@ impl Renderer {
         test
     }
 
-    pub fn calculate_perturbations_parallel(&mut self, points: &mut Vec<Point>) -> Vec<(f32, bool)> {
+    pub fn calculate_perturbations_parallel(&mut self, points: &Vec<Point>) -> Vec<(f32, bool)> {
         let start = Instant::now();
         let test = points.into_par_iter()
                          .map(|point| {
@@ -273,25 +303,32 @@ impl Renderer {
         test
     }
 
-    pub fn calculate_perturbations_parallel_vectorised(&mut self, points: &mut Vec<Point>) -> Vec<(f32, bool)> {
+    pub fn calculate_perturbations_parallel_vectorised(&mut self, remaining_points: &Vec<Point>, glitched_points: &mut Vec<Point>, finished_points: &mut Vec<Point>) -> Vec<(f32, bool)> {
         // here we pack the points into vectorised points
         // possibly only works on image sizes that are multiples of the vector lanes
         // TODO investigate adding this earlier so that the vector of points never needs to be constructed
 
         let start = Instant::now();
-        let points_vectors = (0..points.len())
+        let points_vectors = (0..remaining_points.len())
             .step_by(8)
             .map(|i| {
-
                 let delta_real = (0..8)
                     .map(|j| {
-                        points[i + j].delta.real
+                        if i + j >= remaining_points.len() {
+                            0.0
+                        } else {
+                            remaining_points[i + j].delta.real - self.reference_delta.real
+                        }
                     })
                     .collect::<Vec<f32>>();
 
                 let delta_imag = (0..8)
                     .map(|j| {
-                        points[i + j].delta.imaginary
+                        if i + j >= remaining_points.len() {
+                            0.0
+                        } else {
+                            remaining_points[i + j].delta.imaginary - self.reference_delta.imaginary
+                        }
                     })
                     .collect::<Vec<f32>>();
 
@@ -347,7 +384,28 @@ impl Renderer {
                          })
                          .flatten()
                          .collect::<Vec<(f32, bool)>>();
+
         println!("{:<10}{:>6} ms", "Iterating", start.elapsed().as_millis());
+
+        for index in 0..remaining_points.len() {
+            // check to see if a point is glitched
+            if values[index].1 {
+                glitched_points.push(Point {
+                    delta: remaining_points[index].delta,
+                    index: remaining_points[index].index,
+                    iterations: values[index].0,
+                    glitched: true
+                });
+            } else {
+                finished_points.push(Point {
+                    delta: remaining_points[index].delta,
+                    index: remaining_points[index].index,
+                    iterations: values[index].0,
+                    glitched: false
+                });
+            }
+        }
+
         values
 
         // this takes ~2800ms at f64x8
