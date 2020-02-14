@@ -57,7 +57,7 @@ impl Renderer {
             resolution: (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64,
             glitch_tolerance,
             display_glitches,
-            colouring_method: ColourMethod::Histogram
+            colouring_method: ColourMethod::Iteration
         }
     }
 
