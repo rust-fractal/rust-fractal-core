@@ -16,7 +16,7 @@ fn main() {
 
     let mut renderer = Renderer::new(
         1000,
-        400,
+        1000,
         zoom,
         100000,
         center.0,
