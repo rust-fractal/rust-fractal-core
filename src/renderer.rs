@@ -57,7 +57,7 @@ impl Renderer {
             resolution: (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64,
             glitch_tolerance,
             display_glitches,
-            colouring_method: ColourMethod::Histogram
+            colouring_method: ColourMethod::Iteration
         }
     }
 
@@ -79,6 +79,9 @@ impl Renderer {
         // Start solving the points by iteratively moving around the reference point
         while points_remaining.len() as f64 > (self.glitch_tolerance * (self.image_width * self.image_height) as f64) {
             if self.reference_points != 0 {
+                // At the moment this just randomly chooses a point in the glitched points.
+                // A slightly better method might be to group all of the glitched points and then choose the center of the largest group
+                // and continue with this - this may be more effective at reducing the glitch count fast.
                 let temp = points_remaining.choose(&mut rand::thread_rng()).unwrap().delta;
                 self.reference_delta = temp;
                 *self.reference.mut_real() = self.origin.real().clone() + self.reference_delta.re;
@@ -87,7 +90,7 @@ impl Renderer {
 
             self.reference_points += 1;
             self.calculate_reference();
-            self.calculate_perturbations_parallel(&points_remaining, &mut points_glitched, &mut points_complete);
+            self.calculate_perturbations_parallel_vectorised(&points_remaining, &mut points_glitched, &mut points_complete);
 
             println!("{:<12}{:>7}", "Reference:", self.reference_points);
             println!("{:<12}{:>7}", "Glitched:", points_glitched.len());
@@ -115,7 +118,7 @@ impl Renderer {
 
     pub fn calculate_reference(&mut self) {
         let start = Instant::now();
-        let glitch_tolerance = 1e-3;
+        let glitch_tolerance = 1e-6;
 
         // Clear both buffers for new values
         self.x_n.clear();
@@ -233,9 +236,9 @@ impl Renderer {
                          .map(|point_vector| {
                              let mut delta_n = point_vector;
                              let mut iterations = FloatVector::splat(0.0);
-                             let mut glitched = MaskVector::splat(false);
                              let mut z_norm = FloatVector::splat(0.0);
-                             let mut mask = MaskVector::splat(false);
+                             let mut glitched = MaskVector::splat(false);
+                             let mut escaped = MaskVector::splat(false);
 
                              for iteration in 0..self.maximum_iterations {
                                  let temp = delta_n;
@@ -245,22 +248,25 @@ impl Renderer {
 
                                  // this line takes up more than 50% of the time
                                  let new_z_norm = (ComplexVector::<FloatVector>::splat(self.x_n[iteration + 1]) + delta_n).norm_sqr();
-                                 z_norm = mask.select(z_norm, new_z_norm);
-                                 mask = z_norm.ge(FloatVector::splat(256.0));
+                                 z_norm = escaped.select(z_norm, new_z_norm);
+                                 escaped = z_norm.ge(FloatVector::splat(256.0));
                                  // here keep all glitched points. We keep iterating even if all points are glitched as they might be used in the final image
 
                                  // approximately 200ms / 2800ms
+                                 // could use or here
                                  glitched = glitched.select(MaskVector::splat(true), z_norm.le(FloatVector::splat(self.tolerance_check[iteration + 1])));
 
-                                 if (mask | glitched).all() {
+                                 if (escaped | glitched).all() {
                                      break;
                                  }
 
-                                 iterations += mask.select(FloatVector::splat(0.0), FloatVector::splat(1.0));
+                                 iterations += escaped.select(FloatVector::splat(0.0), FloatVector::splat(1.0));
                              }
 
                              let nu = FloatVector::splat(2.0) - (z_norm.ln() / (FloatVector::splat(2.0) * FloatVector::LN_2)).ln() / FloatVector::LN_2;
-                             let out = iterations + mask.select(nu, FloatVector::splat(0.0));
+
+                             // if a pixel has escaped it is fine to run the smooth colouring algorithm
+                             let out = iterations + escaped.select(nu, FloatVector::splat(0.0));
 
                              let mut test = Vec::new();
 
