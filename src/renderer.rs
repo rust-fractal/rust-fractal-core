@@ -57,7 +57,7 @@ impl Renderer {
             resolution: (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64,
             glitch_tolerance,
             display_glitches,
-            colouring_method: ColourMethod::Iteration
+            colouring_method: ColourMethod::Histogram
         }
     }
 
@@ -189,109 +189,109 @@ impl Renderer {
         println!("{:<10}{:>6} ms", "Iterating", start.elapsed().as_millis());
     }
 
-//    pub fn calculate_perturbations_parallel_vectorised(&mut self, remaining_points: &Vec<Point>, glitched_points: &mut Vec<Point>, finished_points: &mut Vec<Point>) {
-//        // here we pack the points into vectorised points
-//        // possibly only works on image sizes that are multiples of the vector lanes
-//        // investigate adding this earlier so that the vector of points never needs to be constructed
-//
-//        type FloatVector = f64x4;
-//        type MaskVector = m64x4;
-//        let lanes = FloatVector::lanes();
-//
-//        let start = Instant::now();
-//        let points_vectors = (0..remaining_points.len())
-//            .step_by(lanes)
-//            .map(|i| {
-//                let delta_re = (0..lanes)
-//                    .map(|j| {
-//                        if i + j >= remaining_points.len() {
-//                            100.0
-//                        } else {
-//                            remaining_points[i + j].delta.re - self.reference_delta.re
-//                        }
-//                    })
-//                    .collect::<Vec<f64>>();
-//
-//                let delta_im = (0..lanes)
-//                    .map(|j| {
-//                        if i + j >= remaining_points.len() {
-//                            100.0
-//                        } else {
-//                            remaining_points[i + j].delta.im - self.reference_delta.im
-//                        }
-//                    })
-//                    .collect::<Vec<f64>>();
-//
-//                ComplexVector::<FloatVector>::new(delta_re.as_slice(), delta_im.as_slice())
-//            })
-//            .collect::<Vec<ComplexVector<FloatVector>>>();
-//
-//        println!("{:<10}{:>6} ms", "Packing", start.elapsed().as_millis());
-//        let start = Instant::now();
-//
-//        let values = points_vectors.into_par_iter()
-//                         .map(|point_vector| {
-//                             let mut delta_n = point_vector;
-//                             let mut iterations = FloatVector::splat(0.0);
-//                             let mut glitched = MaskVector::splat(false);
-//                             let mut z_norm = FloatVector::splat(0.0);
-//                             let mut mask = MaskVector::splat(false);
-//
-//                             for iteration in 0..self.maximum_iterations {
-//                                 let temp = delta_n;
-//                                 delta_n += ComplexVector::<FloatVector>::splat(self.x_n_2[iteration]);
-//                                 delta_n *= temp;
-//                                 delta_n += point_vector;
-//
-//                                 // this line takes up more than 50% of the time
-//                                 let new_z_norm = (ComplexVector::<FloatVector>::splat(self.x_n[iteration + 1]) + delta_n).norm_sqr();
-//                                 z_norm = mask.select(z_norm, new_z_norm);
-//                                 mask = z_norm.ge(FloatVector::splat(256.0));
-//                                 // here keep all glitched points. We keep iterating even if all points are glitched as they might be used in the final image
-//
-//                                 // approximately 200ms / 2800ms
-//                                 glitched = glitched.select(MaskVector::splat(true), z_norm.le(FloatVector::splat(self.tolerance_check[iteration])));
-//
-//                                 if (mask | glitched).all() {
-//                                     break;
-//                                 }
-//
-//                                 iterations += mask.select(FloatVector::splat(0.0), FloatVector::splat(1.0));
-//                             }
-//
-//                             let nu = FloatVector::splat(2.0) - (z_norm.ln() / (FloatVector::splat(2.0) * FloatVector::LN_2)).ln() / FloatVector::LN_2;
-//                             let out = iterations + mask.select(nu, FloatVector::splat(0.0));
-//
-//                             let mut test = Vec::new();
-//
-//                             for i in 0..lanes {
-//                                 test.push((out.extract(i) as f64, glitched.extract(i)))
-//                             }
-//                             test
-//                         })
-//                         .flatten()
-//                         .collect::<Vec<(f64, bool)>>();
-//
-//        println!("{:<10}{:>6} ms", "Iterating", start.elapsed().as_millis());
-//
-//        for index in 0..remaining_points.len() {
-//            // check to see if a point is glitched
-//            if values[index].1 {
-//                glitched_points.push(Point {
-//                    delta: remaining_points[index].delta,
-//                    index: remaining_points[index].index,
-//                    iterations: values[index].0,
-//                    glitched: true
-//                });
-//            } else {
-//                finished_points.push(Point {
-//                    delta: remaining_points[index].delta,
-//                    index: remaining_points[index].index,
-//                    iterations: values[index].0,
-//                    glitched: false
-//                });
-//            }
-//        }
+    pub fn calculate_perturbations_parallel_vectorised(&mut self, remaining_points: &Vec<Point>, glitched_points: &mut Vec<Point>, finished_points: &mut Vec<Point>) {
+        // here we pack the points into vectorised points
+        // possibly only works on image sizes that are multiples of the vector lanes
+        // investigate adding this earlier so that the vector of points never needs to be constructed
+
+        type FloatVector = f64x4;
+        type MaskVector = m64x4;
+        let lanes = FloatVector::lanes();
+
+        let start = Instant::now();
+        let points_vectors = (0..remaining_points.len())
+            .step_by(lanes)
+            .map(|i| {
+                let delta_re = (0..lanes)
+                    .map(|j| {
+                        if i + j >= remaining_points.len() {
+                            100.0
+                        } else {
+                            remaining_points[i + j].delta.re - self.reference_delta.re
+                        }
+                    })
+                    .collect::<Vec<f64>>();
+
+                let delta_im = (0..lanes)
+                    .map(|j| {
+                        if i + j >= remaining_points.len() {
+                            100.0
+                        } else {
+                            remaining_points[i + j].delta.im - self.reference_delta.im
+                        }
+                    })
+                    .collect::<Vec<f64>>();
+
+                ComplexVector::<FloatVector>::new(delta_re.as_slice(), delta_im.as_slice())
+            })
+            .collect::<Vec<ComplexVector<FloatVector>>>();
+
+        println!("{:<10}{:>6} ms", "Packing", start.elapsed().as_millis());
+        let start = Instant::now();
+
+        let values = points_vectors.into_par_iter()
+                         .map(|point_vector| {
+                             let mut delta_n = point_vector;
+                             let mut iterations = FloatVector::splat(0.0);
+                             let mut glitched = MaskVector::splat(false);
+                             let mut z_norm = FloatVector::splat(0.0);
+                             let mut mask = MaskVector::splat(false);
+
+                             for iteration in 0..self.maximum_iterations {
+                                 let temp = delta_n;
+                                 delta_n += ComplexVector::<FloatVector>::splat(self.x_n_2[iteration]);
+                                 delta_n *= temp;
+                                 delta_n += point_vector;
+
+                                 // this line takes up more than 50% of the time
+                                 let new_z_norm = (ComplexVector::<FloatVector>::splat(self.x_n[iteration + 1]) + delta_n).norm_sqr();
+                                 z_norm = mask.select(z_norm, new_z_norm);
+                                 mask = z_norm.ge(FloatVector::splat(256.0));
+                                 // here keep all glitched points. We keep iterating even if all points are glitched as they might be used in the final image
+
+                                 // approximately 200ms / 2800ms
+                                 glitched = glitched.select(MaskVector::splat(true), z_norm.le(FloatVector::splat(self.tolerance_check[iteration + 1])));
+
+                                 if (mask | glitched).all() {
+                                     break;
+                                 }
+
+                                 iterations += mask.select(FloatVector::splat(0.0), FloatVector::splat(1.0));
+                             }
+
+                             let nu = FloatVector::splat(2.0) - (z_norm.ln() / (FloatVector::splat(2.0) * FloatVector::LN_2)).ln() / FloatVector::LN_2;
+                             let out = iterations + mask.select(nu, FloatVector::splat(0.0));
+
+                             let mut test = Vec::new();
+
+                             for i in 0..lanes {
+                                 test.push((out.extract(i) as f64, glitched.extract(i)))
+                             }
+                             test
+                         })
+                         .flatten()
+                         .collect::<Vec<(f64, bool)>>();
+
+        println!("{:<10}{:>6} ms", "Iterating", start.elapsed().as_millis());
+
+        for index in 0..remaining_points.len() {
+            // check to see if a point is glitched
+            if values[index].1 {
+                glitched_points.push(Point {
+                    delta: remaining_points[index].delta,
+                    index: remaining_points[index].index,
+                    iterations: values[index].0,
+                    glitched: true
+                });
+            } else {
+                finished_points.push(Point {
+                    delta: remaining_points[index].delta,
+                    index: remaining_points[index].index,
+                    iterations: values[index].0,
+                    glitched: false
+                });
+            }
+        }
 
         // this takes ~2800ms at f64x8
         // 2600ms f64x4
@@ -299,5 +299,5 @@ impl Renderer {
         // 1560ms f32x8
         // 1780ms f32x16
         // this is at 2000x2000 location 0, 0 and zoom 10
-//    }
+    }
 }
