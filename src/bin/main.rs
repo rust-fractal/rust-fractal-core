@@ -2,24 +2,23 @@ use std::time::Instant;
 use rust_fractal::renderer::Renderer;
 
 fn main() {
-    // use f32 to zoom = 1x10-308, then f64 to 3.65x10-4951 possibly?
-
-    let width: usize = 1000;
-    let height: usize = 1000;
+    // f32 max is 1x10-32, use f64 to zoom = 1x10-308, then f128 to 3.65x10-4951 possibly?
 
     let center = (
-        "-0.4032037107646445210993574275561294",
-        "-0.5943378885148266682959301608267696");
-    let zoom = 2.1474836480000001E9;
+        "-0.6453593405513405298032904276942",
+        "-0.4761981646219887966000672580610");
+    let zoom = 2.0971520000000017E6;
 
     let mut renderer = Renderer::new(
-        width,
-        height,
+        1600,
+        1600,
         zoom,
-        2500,
+        1000,
         center.0,
         center.1,
         250,
+        0.001,
+        false
     );
 
     println!("Mandelbrot Renderer");

@@ -1,2 +1,3 @@
 pub mod renderer;
-pub mod complex;
+pub mod util;
+pub mod colouring;
