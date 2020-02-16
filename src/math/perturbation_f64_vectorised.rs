@@ -3,9 +3,10 @@ use crate::util::point::Point;
 use rayon::prelude::*;
 use crate::util::complex_vector::ComplexVector;
 use packed_simd::*;
+use crate::util::ComplexFixed;
 
 impl ImageRenderer {
-    pub fn calculate_perturbations_f64_vectorised(&self, points_remaining: &mut Vec<Point>, points_complete: &mut Vec<Point>) {
+    pub fn calculate_perturbations_f64_vectorised(&self, points_remaining: &mut Vec<Point<ComplexFixed<f64>>>, points_complete: &mut Vec<Point<ComplexFixed<f64>>>) {
         // here we pack the points into vectorised points
         // possibly only works on image sizes that are multiples of the vector lanes
         // investigate adding this earlier so that the vector of points never needs to be constructed
@@ -17,15 +18,15 @@ impl ImageRenderer {
                                      .map(|chunk| {
                                          Vec::from(chunk)
                                      })
-                                     .collect::<Vec<Vec<Point>>>()
+                                     .collect::<Vec<Vec<Point<ComplexFixed<f64>>>>>()
                                      .into_par_iter()
                                      .map(|chunk| {
                                          let mut points_re = vec![100.0; 4];
                                          let mut points_im = vec![100.0; 4];
 
                                          for i in 0..chunk.len() {
-                                             points_re[i] = chunk[i].delta.re - self.reference_delta.re;
-                                             points_im[i] = chunk[i].delta.im - self.reference_delta.im;
+                                             points_re[i] = chunk[i].delta.re - self.reference_delta_f64.re;
+                                             points_im[i] = chunk[i].delta.im - self.reference_delta_f64.im;
                                          }
 
                                          let delta_0 = ComplexVector::<f64x4>::new(points_re.as_slice(), points_im.as_slice());
@@ -37,15 +38,15 @@ impl ImageRenderer {
 
                                          for iteration in 0..self.maximum_iterations {
                                              let temp = delta_n;
-                                             delta_n += ComplexVector::<f64x4 >::splat( self.x_n_2[iteration]);
+                                             delta_n += ComplexVector::<f64x4 >::splat( self.x_n_2_f64[iteration]);
                                              delta_n *= temp;
                                              delta_n += delta_0;
 
-                                             let new_z_norm = (ComplexVector::< f64x4 >::splat( self.x_n[iteration + 1]) + delta_n).norm_sqr();
+                                             let new_z_norm = (ComplexVector::< f64x4 >::splat( self.x_n_f64[iteration + 1]) + delta_n).norm_sqr();
                                              z_norm = escaped.select(z_norm, new_z_norm);
                                              escaped = z_norm.ge(f64x4::splat(256.0));
 
-                                             glitched = glitched.select(m64x4::splat(true), z_norm.le(f64x4::splat( self.tolerance_check[iteration + 1])));
+                                             glitched = glitched.select(m64x4::splat(true), z_norm.le(f64x4::splat( self.tolerance_check_f64[iteration + 1])));
 
                                              if (escaped | glitched).all() {
                                                  break;
@@ -73,7 +74,7 @@ impl ImageRenderer {
                                          test
                                      })
                                      .flatten()
-                                     .collect::<Vec<Point>>();
+                                     .collect::<Vec<Point<ComplexFixed<f64>>>>();
 
         for i in 0..points_remaining.len() {
             // check to see if a point is glitched

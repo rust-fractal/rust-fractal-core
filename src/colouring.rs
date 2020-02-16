@@ -7,7 +7,7 @@ pub enum ColourMethod {
 }
 
 impl ColourMethod {
-    pub fn run(&self, points: &Vec<Point>, image: &mut Vec<u8>, maximum_iterations: usize, display_glitches: bool) {
+    pub fn run<T>(&self, points: &Vec<Point<T>>, image: &mut Vec<u8>, maximum_iterations: usize, display_glitches: bool) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
