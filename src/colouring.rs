@@ -113,8 +113,18 @@ impl ColourMethod {
             ColourMethod::Histogram => {
                 let mut iteration_counts = vec![0usize; maximum_iterations + 1];
 
+                let mut smoothed_iterations = Vec::new();
+
                 for point in points {
-                    iteration_counts[point.iterations as usize] += 1
+                    smoothed_iterations.push(if (point.iterations as f32 + point.smooth) >= 0.0 {
+                        point.iterations as f32 + point.smooth
+                    } else {
+                        0.0
+                    });
+                }
+
+                for iteration in smoothed_iterations {
+                    iteration_counts[iteration as usize] += 1
                 }
 
                 for i in 1..iteration_counts.len() {
@@ -135,11 +145,17 @@ impl ColourMethod {
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
                     } else {
-                        let v1 = iteration_counts[point.iterations] as f32 / total as f32;
-                        let v2 = iteration_counts[point.iterations + 1] as f32 / total as f32;
+                        let temp = if (point.iterations as f32 + point.smooth) >= 0.0 {
+                            point.iterations as f32 + point.smooth
+                        } else {
+                            0.0
+                        };
+
+                        let v1 = iteration_counts[temp as usize] as f32 / total as f32;
+                        let v2 = iteration_counts[temp as usize + 1] as f32 / total as f32;
 
                         // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
-                        let hue = v1 + (v2 - v1) * point.smooth.fract() * 8192.0;
+                        let hue = (v1 + (v2 - v1) * temp.fract()) * 8192.0;
 
                         let colour = colours[(hue.floor() as usize) % 8192];
                         let colour2 = colours[(hue.floor() as usize + 1) % 8192];
