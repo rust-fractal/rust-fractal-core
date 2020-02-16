@@ -1,5 +1,5 @@
 use std::time::Instant;
-use rust_fractal::renderer::Renderer;
+use rust_fractal::renderer::ImageRenderer;
 
 fn main() {
     // f32 max is 1x10-32, use f64 to zoom = 1x10-308, then f128 to 3.65x10-4951 possibly?
@@ -19,9 +19,9 @@ fn main() {
 //        "0.001000038688236832013124581230049849132759425863378894883003211011278068229551274712347955044740933397589760194545872789087012331273586364914484522575986336846199522726507205442204060303594956029930");
 //    let zoom = 1.7E191;
 
-    let mut renderer = Renderer::new(
-        200,
-        200,
+    let mut renderer = ImageRenderer::new(
+        500,
+        500,
         zoom,
         100000,
         center.0,
