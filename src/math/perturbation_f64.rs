@@ -1,9 +1,8 @@
-use crate::util::ComplexFixed;
-use crate::renderer::Renderer;
+use crate::renderer::ImageRenderer;
 use crate::util::point::Point;
 use rayon::prelude::*;
 
-impl Renderer {
+impl ImageRenderer {
     // This function will run the perturbation algorithm on all of the deltas in the locations,
     pub fn calculate_perturbations_f64(&self, points_remaining: &mut Vec<Point>, points_complete: &mut Vec<Point>) {
         *points_remaining = points_remaining.into_par_iter()
