@@ -47,7 +47,8 @@ impl ImageRenderer {
         let image_height = image_height;
         let zoom = initial_zoom;
 
-        let delta_type = if zoom < 1e30 {
+        // Set just below the limit to allow all functions to work right
+        let delta_type = if zoom < 1e35 {
             println!("Using f32 backend");
             DeltaType::Float32
         } else {
