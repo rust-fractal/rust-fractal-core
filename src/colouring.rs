@@ -12,7 +12,7 @@ impl ColourMethod {
         let mut colours = Vec::new();
 
         for i in 0..8192 {
-            let value = i as f64 / 8192 as f64;
+            let value = i as f32 / 8192 as f32;
 
             let red;
             let green;
@@ -62,12 +62,12 @@ impl ColourMethod {
                         image[3 * index] = 255u8;
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
-                    } else if point.iterations.floor() >= maximum_iterations as f64 {
+                    } else if point.iterations >= maximum_iterations {
                         image[3 * index] = 0u8;
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
                     } else {
-                        let hue = 7.0 * point.iterations % 8192.0;
+                        let hue = 7.0 * (point.iterations as f32 + point.smooth) % 8192.0;
 
                         let colour = colours[(hue.floor() as usize) % 8192];
                         let colour2 = colours[(hue.floor() as usize + 1) % 8192];
@@ -90,12 +90,12 @@ impl ColourMethod {
                         image[3 * index] = 255u8;
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
-                    } else if point.iterations.floor() >= maximum_iterations as f64 {
+                    } else if point.iterations >= maximum_iterations {
                         image[3 * index] = 0u8;
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
                     } else {
-                        let hue = 1600.0 * point.iterations.sqrt() % 8192.0;
+                        let hue = 1600.0 * (point.iterations as f32 + point.smooth).sqrt() % 8192.0;
 
                         let colour = colours[(hue.floor() as usize) % 8192];
                         let colour2 = colours[(hue.floor() as usize + 1) % 8192];
@@ -114,7 +114,7 @@ impl ColourMethod {
                 let mut iteration_counts = vec![0usize; maximum_iterations + 1];
 
                 for point in points {
-                    iteration_counts[point.iterations.floor() as usize] += 1
+                    iteration_counts[point.iterations as usize] += 1
                 }
 
                 for i in 1..iteration_counts.len() {
@@ -130,16 +130,16 @@ impl ColourMethod {
                         image[3 * index] = 255u8;
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
-                    } else if point.iterations.floor() >= maximum_iterations as f64 {
+                    } else if point.iterations >= maximum_iterations {
                         image[3 * index] = 0u8;
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
                     } else {
-                        let v1 = iteration_counts[point.iterations.floor() as usize] as f64 / total as f64;
-                        let v2 = iteration_counts[point.iterations.floor() as usize + 1] as f64 / total as f64;
+                        let v1 = iteration_counts[point.iterations] as f32 / total as f32;
+                        let v2 = iteration_counts[point.iterations + 1] as f32 / total as f32;
 
                         // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
-                        let hue = (v1 + (v2 - v1) * point.iterations.fract() as f64) * 8192.0;
+                        let hue = v1 + (v2 - v1) * point.smooth.fract() * 8192.0;
 
                         let colour = colours[(hue.floor() as usize) % 8192];
                         let colour2 = colours[(hue.floor() as usize + 1) % 8192];
