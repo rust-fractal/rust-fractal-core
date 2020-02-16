@@ -21,8 +21,8 @@ impl ImageRenderer {
                                      .collect::<Vec<Vec<Point<ComplexFixed<f64>>>>>()
                                      .into_par_iter()
                                      .map(|chunk| {
-                                         let mut points_re = vec![100.0; 4];
-                                         let mut points_im = vec![100.0; 4];
+                                         let mut points_re = vec![100.0; lanes];
+                                         let mut points_im = vec![100.0; lanes];
 
                                          for i in 0..chunk.len() {
                                              points_re[i] = chunk[i].delta.re - self.reference_delta_f64.re;
@@ -38,15 +38,15 @@ impl ImageRenderer {
 
                                          for iteration in 0..self.maximum_iterations {
                                              let temp = delta_n;
-                                             delta_n += ComplexVector::<f64x4 >::splat( self.x_n_2_f64[iteration]);
+                                             delta_n += ComplexVector::<f64x4>::splat( self.x_n_2_f64[iteration]);
                                              delta_n *= temp;
                                              delta_n += delta_0;
 
-                                             let new_z_norm = (ComplexVector::< f64x4 >::splat( self.x_n_f64[iteration + 1]) + delta_n).norm_sqr();
+                                             let new_z_norm = (ComplexVector::<f64x4>::splat( self.x_n_f64[iteration + 1]) + delta_n).norm_sqr();
                                              z_norm = escaped.select(z_norm, new_z_norm);
                                              escaped = z_norm.ge(f64x4::splat(256.0));
 
-                                             glitched = glitched.select(m64x4::splat(true), z_norm.le(f64x4::splat( self.tolerance_check_f64[iteration + 1])));
+                                             glitched = glitched.select(m64x4::splat(true), z_norm.lt(f64x4::splat(self.tolerance_check_f64[iteration + 1])));
 
                                              if (escaped | glitched).all() {
                                                  break;

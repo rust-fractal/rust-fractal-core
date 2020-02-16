@@ -47,6 +47,14 @@ impl ImageRenderer {
         let image_height = image_height;
         let zoom = initial_zoom;
 
+        let delta_type = if zoom < 1e30 {
+            println!("Using f32 backend");
+            DeltaType::Float32
+        } else {
+            println!("Using f64 backend");
+            DeltaType::Float64
+        };
+
         // The height is kept to be the correct size (in terms of the zoom) and the width is scaled to counter for the aspect ratio
         // reference delta can be changes, but may need to be updated
         ImageRenderer {
@@ -70,7 +78,7 @@ impl ImageRenderer {
             display_glitches,
             colouring_method: ColourMethod::Iteration,
             progress: ProgressBar::new((image_width * image_height) as u64),
-            delta_type: DeltaType::Float64
+            delta_type
         }
     }
 
@@ -111,7 +119,7 @@ impl ImageRenderer {
 
                     self.reference_points += 1;
                     self.calculate_reference();
-                    self.calculate_perturbations_f32(&mut points_remaining_f32, &mut points_complete_f32);
+                    self.calculate_perturbations_f32_vectorised(&mut points_remaining_f32, &mut points_complete_f32);
                     self.progress.set(points_complete_f32.len() as u64);
                 }
 
