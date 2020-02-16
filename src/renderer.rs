@@ -193,21 +193,25 @@ impl ImageRenderer {
 
         let mut z = self.reference.clone();
 
-        for _ in 0..=self.maximum_iterations {
-            match &self.delta_type {
-                DeltaType::Float32 => {
+        match &self.delta_type {
+            DeltaType::Float32 => {
+                for _ in 0..=self.maximum_iterations {
                     self.x_n_f32.push(ComplexFixed::new(z.real().to_f32(), z.imag().to_f32()));
                     self.x_n_2_f32.push(ComplexFixed::new(2.0, 0.0) * self.x_n_f32.last().unwrap().clone());
                     self.tolerance_check_f32.push(glitch_tolerance * self.x_n_f32.last().unwrap().norm_sqr());
-                },
-                DeltaType::Float64 => {
+
+                    z = z.square() + &self.reference
+                }
+            },
+            DeltaType::Float64 => {
+                for _ in 0..=self.maximum_iterations {
                     self.x_n_f64.push(ComplexFixed::new(z.real().to_f64(), z.imag().to_f64()));
                     self.x_n_2_f64.push(ComplexFixed::new(2.0, 0.0) * self.x_n_f64.last().unwrap().clone());
                     self.tolerance_check_f64.push(glitch_tolerance as f64 * self.x_n_f64.last().unwrap().norm_sqr());
+
+                    z = z.square() + &self.reference
                 }
             }
-
-            z = z.square() + &self.reference
         }
 //        println!("{:<10}{:>6} ms", "Reference", start.elapsed().as_millis());
     }
