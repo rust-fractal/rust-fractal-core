@@ -24,8 +24,8 @@ fn main() {
 //    let zoom = 1.2980742146337048E25;
 
     let mut renderer = ImageRenderer::new(
-        1000,
-        1000,
+        2000,
+        800,
         zoom,
         100000,
         center.0,

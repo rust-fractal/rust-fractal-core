@@ -4,7 +4,6 @@ use rayon::prelude::*;
 use crate::util::complex_vector::ComplexVector;
 use packed_simd::*;
 use crate::util::ComplexFixed;
-use std::time::Instant;
 
 impl ImageRenderer {
     pub fn calculate_perturbations_f64_vectorised(&self, points_remaining: &mut Vec<Point<ComplexFixed<f64>>>, points_complete: &mut Vec<Point<ComplexFixed<f64>>>) {
