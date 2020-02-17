@@ -48,11 +48,12 @@ impl ImageRenderer {
         let zoom = initial_zoom;
 
         // Set just below the limit to allow all functions to work right
-        let delta_type = if zoom < 1e35 {
-            println!("Using f32 backend");
+        // Currently for some reason the f64 is faster than the f32 version
+        let delta_type = if zoom < 1e-2 {
+            println!("Delta: f32");
             DeltaType::Float32
         } else {
-            println!("Using f64 backend");
+            println!("Delta: f64");
             DeltaType::Float64
         };
 
@@ -106,6 +107,9 @@ impl ImageRenderer {
                     }
                 }
 
+                let mut reference_time = 0;
+                let mut iteration_time = 0;
+
                 // Start solving the points by iteratively moving around the reference point
                 while (points_remaining_f32.len()) as f32 > (self.glitch_tolerance * (self.image_width * self.image_height) as f32) {
                     if self.reference_points != 0 {
@@ -119,13 +123,19 @@ impl ImageRenderer {
                     }
 
                     self.reference_points += 1;
+                    let start = Instant::now();
                     self.calculate_reference();
+                    reference_time += start.elapsed().as_millis();
+                    let start = Instant::now();
                     self.calculate_perturbations_f32_vectorised(&mut points_remaining_f32, &mut points_complete_f32);
+                    iteration_time += start.elapsed().as_millis();
                     self.progress.set(points_complete_f32.len() as u64);
                 }
 
                 self.progress.finish();
-                println!("\n{:<12}{:>7}", "References:", self.reference_points);
+                println!("\n{:<10}{:>6} ms", "Reference:", reference_time);
+                println!("{:<10}{:>6} ms", "Iteration:", iteration_time);
+                println!("{:<12}{:>7}", "References:", self.reference_points);
                 println!("{:<12}{:>7}", "Glitched:", points_remaining_f32.len());
 
                 // Check if there are any glitched points remaining and add them to the complete points as algorithm has terminated
@@ -149,6 +159,9 @@ impl ImageRenderer {
                     }
                 }
 
+                let mut reference_time = 0;
+                let mut iteration_time = 0;
+
                 // Start solving the points by iteratively moving around the reference point
                 while (points_remaining_f64.len()) as f32 > (self.glitch_tolerance * (self.image_width * self.image_height) as f32) {
                     if self.reference_points != 0 {
@@ -162,13 +175,19 @@ impl ImageRenderer {
                     }
 
                     self.reference_points += 1;
+                    let start = Instant::now();
                     self.calculate_reference();
+                    reference_time += start.elapsed().as_millis();
+                    let start = Instant::now();
                     self.calculate_perturbations_f64_vectorised(&mut points_remaining_f64, &mut points_complete_f64);
+                    iteration_time += start.elapsed().as_millis();
                     self.progress.set(points_complete_f64.len() as u64);
                 }
 
                 self.progress.finish();
-                println!("\n{:<12}{:>7}", "References:", self.reference_points);
+                println!("\n{:<10}{:>6} ms", "Reference:", reference_time);
+                println!("{:<10}{:>6} ms", "Iteration:", iteration_time);
+                println!("{:<12}{:>7}", "References:", self.reference_points);
                 println!("{:<12}{:>7}", "Glitched:", points_remaining_f64.len());
 
                 // Check if there are any glitched points remaining and add them to the complete points as algorithm has terminated
@@ -178,7 +197,7 @@ impl ImageRenderer {
 
                 let start = Instant::now();
                 self.colouring_method.run(&points_complete_f64, &mut image, self.maximum_iterations, self.display_glitches);
-                println!("{:<10}{:>6} ms", "Colouring", start.elapsed().as_millis());
+                println!("{:<10}{:>6} ms", "Colouring:", start.elapsed().as_millis());
             }
         }
 
@@ -186,7 +205,7 @@ impl ImageRenderer {
 
         image::save_buffer("output.png", &image, self.image_width as u32, self.image_height as u32, image::RGB(8)).unwrap();
 
-        println!("{:<10}{:>6} ms", "Saving", start.elapsed().as_millis());
+        println!("{:<10}{:>6} ms", "Saving:", start.elapsed().as_millis());
     }
 
     pub fn calculate_reference(&mut self) {
