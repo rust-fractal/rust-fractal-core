@@ -1,6 +1,5 @@
 use crate::renderer::ImageRenderer;
 use crate::util::point::Point;
-use rayon::prelude::*;
 use crate::util::ComplexFixed;
 
 impl ImageRenderer {
