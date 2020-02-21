@@ -1,4 +1,3 @@
-use packed_simd::*;
 use crate::util::ComplexFixed;
 
 #[derive(Copy, Clone)]
