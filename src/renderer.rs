@@ -75,14 +75,10 @@ impl ImageRenderer {
 
     pub fn render(&mut self) {
         self.progress.set(0);
-        // let mut points_remaining_f32 = Vec::with_capacity(self.image_width * self.image_height);
-        // let mut points_complete_f32 = Vec::with_capacity(self.image_width * self.image_height);
-
         let mut points_remaining_f64 = Vec::with_capacity(self.image_width * self.image_height);
         let mut points_complete_f64 = Vec::with_capacity(self.image_width * self.image_height);
 
         let mut image = vec![0u8; self.image_width * self.image_height * 3];
-
 
         let resolution =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom) / self.image_height as f64;
         let top_left_delta = ComplexFixed::new(
