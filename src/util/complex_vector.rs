@@ -1,4 +1,5 @@
 use crate::util::ComplexFixed;
+use packed_simd::*;
 
 #[derive(Copy, Clone)]
 pub struct ComplexVector<T> {

@@ -33,7 +33,7 @@ impl ImageRenderer {
 
                  for iteration in 0..self.maximum_iterations {
                      let temp = delta_n;
-                     delta_n += ComplexVector::<f64x4>::splat( self.x_n_2_f64[iteration]);
+                     delta_n += ComplexVector::<f64x4>::splat(  self.x_n_f64[iteration] * 2.0);
                      delta_n *= temp;
                      delta_n += delta_0;
 
