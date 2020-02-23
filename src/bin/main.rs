@@ -10,7 +10,7 @@ fn main() {
 
    // let center = (
    //     "0.0",
-   //     "0.0");
+   //     "-0.75");
    // let zoom = 1.0;
 
        let center = (
