@@ -20,7 +20,7 @@ pub struct ImageRenderer {
     zoom: f64,
     pub maximum_iterations: usize,
     reference_points: usize,
-    origin: String,
+    // origin: String,
     reference: String,
     pub x_n_f64: Vec<ComplexFixed<f64>>,
     pub tolerance_check_f64: Vec<f64>,
@@ -29,11 +29,12 @@ pub struct ImageRenderer {
     display_glitches: bool,
     colouring_method: ColourMethod,
     progress: ProgressBar<Stdout>,
-    delta_type: DeltaType
+    delta_type: DeltaType,
+    precision: usize,
 }
 
 impl ImageRenderer {
-    pub fn new(image_width: usize, image_height: usize, initial_zoom: f64, maximum_iterations: usize, center_re: &str, center_complex: &str, precision: u32, glitch_tolerance: f32, display_glitches: bool) -> Self {
+    pub fn new(image_width: usize, image_height: usize, initial_zoom: f64, maximum_iterations: usize, center_re: &str, center_complex: &str, precision: usize, glitch_tolerance: f32, display_glitches: bool) -> Self {
         let location = "(".to_owned() + center_re + "," + center_complex + ")";
 
         let aspect = image_width as f64 / image_height as f64;
@@ -60,7 +61,7 @@ impl ImageRenderer {
             zoom,
             maximum_iterations,
             reference_points: 0,
-            origin: location.clone(),
+            // origin: location.clone(),
             reference: location,
             x_n_f64: Vec::new(),
             tolerance_check_f64: Vec::new(),
@@ -69,7 +70,8 @@ impl ImageRenderer {
             display_glitches,
             colouring_method: ColourMethod::Iteration,
             progress: ProgressBar::new((image_width * image_height) as u64),
-            delta_type
+            delta_type,
+            precision
         }
     }
 
@@ -148,7 +150,7 @@ impl ImageRenderer {
                 self.reference_delta_f64.re.to_string(),
                 self.reference_delta_f64.im.to_string(),
                 self.maximum_iterations.to_string(),
-                1000.to_string()])
+                self.precision.to_string()])
             .output()
             .unwrap().stdout;
 
