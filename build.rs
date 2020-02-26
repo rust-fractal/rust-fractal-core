@@ -11,7 +11,7 @@ fn main() {
         cfg.debug(false);
     }
 
-    let ispc_files = vec!["src/mandelbrot.ispc"];
+    let ispc_files = vec!["src/math/perturbation_f64.ispc"];
 
     for s in &ispc_files[..] {
         cfg.file(*s);

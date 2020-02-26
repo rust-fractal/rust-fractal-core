@@ -67,7 +67,8 @@ impl ColourMethod {
                         image[3 * index + 1] = 0u8;
                         image[3 * index + 2] = 0u8;
                     } else {
-                        let hue = 0.1656 * (point.iterations as f32 + point.smooth) % 8192.0;
+                        // 0.1656
+                        let hue = 30.0 * (point.iterations as f32 + point.smooth) % 8192.0;
 
                         let colour = colours[(hue.floor() as usize) % 8192];
                         let colour2 = colours[(hue.floor() as usize + 1) % 8192];
