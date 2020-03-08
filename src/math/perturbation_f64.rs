@@ -1,6 +1,7 @@
 use crate::renderer::ImageRenderer;
 use crate::util::point::Point;
 use crate::util::ComplexFixed;
+use rayon::prelude::*;
 
 impl ImageRenderer {
     // This function will run the perturbation algorithm on all of the deltas in the locations,
@@ -15,7 +16,7 @@ impl ImageRenderer {
 
                 while z_norm < 256.0 && iteration < self.maximum_iterations {
                     let temp = delta_n;
-                    delta_n += self.x_n_2_f64[iteration];
+                    delta_n += self.x_n_f64[iteration] * 2.0;
                     delta_n *= temp;
                     delta_n += delta_0;
 

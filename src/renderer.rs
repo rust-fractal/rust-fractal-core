@@ -3,10 +3,9 @@ use rand::seq::SliceRandom;
 use pbr::ProgressBar;
 use std::io::Stdout;
 
-use crate::util::ComplexFixed;
+use crate::util::{ComplexFixed, ComplexArbitrary};
 use crate::util::point::Point;
 use crate::colouring::ColourMethod;
-use std::process::Command;
 
 enum DeltaType {
     Float32,
@@ -20,8 +19,8 @@ pub struct ImageRenderer {
     zoom: f64,
     pub maximum_iterations: usize,
     reference_points: usize,
-    // origin: String,
-    reference: String,
+    origin: ComplexArbitrary,
+    reference: ComplexArbitrary,
     pub x_n_f64: Vec<ComplexFixed<f64>>,
     pub tolerance_check_f64: Vec<f64>,
     pub reference_delta_f64: ComplexFixed<f64>,
@@ -35,7 +34,9 @@ pub struct ImageRenderer {
 
 impl ImageRenderer {
     pub fn new(image_width: usize, image_height: usize, initial_zoom: f64, maximum_iterations: usize, center_re: &str, center_complex: &str, precision: usize, glitch_tolerance: f32, display_glitches: bool) -> Self {
-        let location = "(".to_owned() + center_re + "," + center_complex + ")";
+        let location = ComplexArbitrary::with_val(
+            precision as u32,
+            ComplexArbitrary::parse("(".to_owned() + center_re + "," + center_complex + ")").expect("Location is not valid!"));
 
         let aspect = image_width as f64 / image_height as f64;
         let image_width = image_width;
@@ -61,7 +62,7 @@ impl ImageRenderer {
             zoom,
             maximum_iterations,
             reference_points: 0,
-            // origin: location.clone(),
+            origin: location.clone(),
             reference: location,
             x_n_f64: Vec::new(),
             tolerance_check_f64: Vec::new(),
@@ -104,6 +105,8 @@ impl ImageRenderer {
                 // and continue with this - this may be more effective at reducing the glitch count fast.
                 let temp = points_remaining_f64.choose(&mut rand::thread_rng()).unwrap().delta;
                 self.reference_delta_f64 = temp;
+                *self.reference.mut_real() = self.origin.real().clone() + self.reference_delta_f64.re;
+                *self.reference.mut_imag() = self.origin.imag().clone() + self.reference_delta_f64.im;
             }
 
             self.reference_points += 1;
@@ -111,7 +114,7 @@ impl ImageRenderer {
             self.calculate_reference();
             reference_time += start.elapsed().as_millis();
             let start = Instant::now();
-            self.calculate_perturbations_f64_ispc(&mut points_remaining_f64, &mut points_complete_f64);
+            self.calculate_perturbations_f64_vectorised(&mut points_remaining_f64, &mut points_complete_f64);
             iteration_time += start.elapsed().as_millis();
             self.progress.set(points_complete_f64.len() as u64);
         }
@@ -145,21 +148,13 @@ impl ImageRenderer {
         self.x_n_f64.clear();
         self.tolerance_check_f64.clear();
 
-        let output = Command::new("rust-arbitrary")
-            .args(&[self.reference.clone(),
-                self.reference_delta_f64.re.to_string(),
-                self.reference_delta_f64.im.to_string(),
-                self.maximum_iterations.to_string(),
-                self.precision.to_string()])
-            .output()
-            .unwrap().stdout;
+        let mut z = self.reference.clone();
 
-        for i in (0..output.len()).step_by(16) {
-            self.x_n_f64.push(ComplexFixed::new(
-                f64::from_le_bytes([output[i], output[i + 1], output[i + 2], output[i + 3], output[i + 4], output[i + 5], output[i + 6], output[i + 7]]),
-                f64::from_le_bytes([output[i + 8], output[i + 9], output[i + 10], output[i + 11], output[i + 12], output[i + 13], output[i + 14], output[i + 15]])
-            ));
+        for _ in 0..=self.maximum_iterations {
+            self.x_n_f64.push(ComplexFixed::new(z.real().to_f64(), z.imag().to_f64()));
             self.tolerance_check_f64.push(glitch_tolerance as f64 * self.x_n_f64.last().unwrap().norm_sqr());
+
+            z = z.square() + &self.reference
         }
     }
 }
