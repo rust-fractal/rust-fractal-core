@@ -2,10 +2,12 @@ use std::time::Instant;
 use rand::seq::SliceRandom;
 use pbr::ProgressBar;
 use std::io::Stdout;
+use mantexp::mantexp_complex::MantExpComplex;
 
 use crate::util::{ComplexFixed, ComplexArbitrary};
 use crate::util::point::Point;
 use crate::colouring::ColourMethod;
+use mantexp::mantexp::MantExp;
 
 enum DeltaType {
     Float32,
@@ -30,6 +32,9 @@ pub struct ImageRenderer {
     progress: ProgressBar<Stdout>,
     delta_type: DeltaType,
     precision: usize,
+    num_coefficients: usize,
+    coefficients: Vec<Vec<MantExpComplex>>,
+
 }
 
 impl ImageRenderer {
@@ -72,7 +77,9 @@ impl ImageRenderer {
             colouring_method: ColourMethod::Iteration,
             progress: ProgressBar::new((image_width * image_height) as u64),
             delta_type,
-            precision
+            precision,
+            num_coefficients: 3,
+            coefficients: Vec::new()
         }
     }
 
@@ -113,8 +120,45 @@ impl ImageRenderer {
             let start = Instant::now();
             self.calculate_reference();
             reference_time += start.elapsed().as_millis();
+
+            let mut temp_iterations = 0;
+
+            if self.reference_points == 1 && false {
+                let skipped_iterations = self.calculate_series(top_left_delta);
+                println!("Series approximation skipped: {}", skipped_iterations);
+                temp_iterations = skipped_iterations;
+
+                if skipped_iterations != 0 {
+                    for point in &mut points_remaining_f64 {
+                        let mut d0_to_the = Vec::with_capacity(self.num_coefficients + 1);
+                        d0_to_the.push(MantExpComplex::new(
+                            MantExp::new(point.delta.re, 1),
+                            MantExp::new(point.delta.im, 1)));
+
+                        d0_to_the[0].reduce();
+
+                        for i in 1..self.num_coefficients {
+                            d0_to_the.push(d0_to_the[i - 1].clone() * d0_to_the[0].clone());
+                            d0_to_the[i].reduce();
+                            // there is a reduce here?
+                        }
+
+                        let mut delta_sub_n = MantExpComplex::new(
+                            MantExp::new(0.0, 0),
+                            MantExp::new(0.0, 0));
+
+                        for i in 0..self.num_coefficients {
+                            delta_sub_n = delta_sub_n + (self.coefficients[i][skipped_iterations] * d0_to_the[i]);
+                        }
+                        point.delta = delta_sub_n.to_complex();
+                    }
+                }
+            }
+
+            // go through all points and set the delta to the new delta by series approximation
+
             let start = Instant::now();
-            self.calculate_perturbations_f64_vectorised(&mut points_remaining_f64, &mut points_complete_f64);
+            self.calculate_perturbations_f64_vectorised(&mut points_remaining_f64, &mut points_complete_f64, temp_iterations);
             iteration_time += start.elapsed().as_millis();
             self.progress.set(points_complete_f64.len() as u64);
         }
@@ -156,5 +200,81 @@ impl ImageRenderer {
 
             z = z.square() + &self.reference
         }
+    }
+
+    pub fn calculate_series(&mut self, top_left_delta: ComplexFixed<f64>) -> usize {
+        if self.num_coefficients < 2 {
+            return 0;
+        }
+
+        if self.num_coefficients > 5 {
+            self.num_coefficients = 5;
+        }
+
+        let mut d0_to_the = Vec::with_capacity(self.num_coefficients + 1);
+        d0_to_the.push(MantExpComplex::new(
+            MantExp::new(top_left_delta.re, 1),
+            MantExp::new(top_left_delta.im, 1)));
+
+        d0_to_the[0].reduce();
+
+        for i in 1..self.num_coefficients {
+            d0_to_the.push(d0_to_the[i - 1].clone() * d0_to_the[0].clone());
+            d0_to_the[i].reduce();
+            // there is a reduce here?
+        }
+
+        self.coefficients = vec!(vec![MantExpComplex::new(
+            MantExp::new(0.0, 1),
+            MantExp::new(0.0, 1)); self.x_n_f64.len()]; self.num_coefficients);
+
+        self.coefficients[0][0] = MantExpComplex::new(
+            MantExp::new(1.0, 1),
+            MantExp::new(0.0, 1));
+
+        let tol = 2.0f64.powf(-64.0);
+
+        for i in 1..self.x_n_f64.len() {
+            if self.num_coefficients >= 1 {
+                // temp here need to override f64
+                self.coefficients[0][i] = (self.coefficients[0][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + MantExpComplex::new(MantExp::new(1.0, 1), MantExp::new(0.0, 1));
+            }
+            if self.num_coefficients >= 2 {
+                self.coefficients[1][i] = (self.coefficients[1][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + self.coefficients[0][i - 1].clone() * self.coefficients[0][i - 1].clone();
+            }
+            if self.num_coefficients >= 3 {
+                self.coefficients[2][i] = (self.coefficients[2][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + (self.coefficients[1][i - 1].clone() * self.coefficients[0][i - 1].clone() * 2.0);
+            }
+            if self.num_coefficients >= 4 {
+                self.coefficients[3][i] = (self.coefficients[3][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + (self.coefficients[0][i - 1].clone() * self.coefficients[2][i - 1].clone() * 2.0) + self.coefficients[1][i - 1].clone() * self.coefficients[1][i - 1].clone();
+            }
+            if self.num_coefficients >= 5 {
+                self.coefficients[4][i] = (self.coefficients[4][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + (self.coefficients[0][i - 1].clone() * self.coefficients[3][i - 1].clone() * 2.0) + (self.coefficients[1][i - 1].clone() * self.coefficients[2][i - 1].clone() * 2.0);
+            }
+
+            for j in 0..self.num_coefficients {
+                self.coefficients[j][i].reduce();
+            }
+
+            if ((self.coefficients[self.num_coefficients - 2][i] * d0_to_the[self.num_coefficients - 2]).norm_mantexp() * tol).compare_lt(&mut (self.coefficients[self.num_coefficients - 1][i] * d0_to_the[self.num_coefficients - 1]).norm_mantexp()) {
+                return if i <= 3 {
+                    for j in 0..self.num_coefficients {
+                        self.coefficients[j].truncate(0);
+                    }
+                    0
+                } else {
+                    for j in 0..self.num_coefficients {
+                        self.coefficients[j].truncate(i);
+                    }
+                    i - 3
+                }
+            }
+        }
+
+        for j in 0..self.num_coefficients {
+            self.coefficients[j].truncate(self.x_n_f64.len());
+        }
+
+        self.x_n_f64.len() - 1
     }
 }
