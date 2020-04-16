@@ -31,7 +31,7 @@ fn main() {
         center.0,
         center.1,
         1000,
-        0.01,
+        0.99,
         true
     );
 

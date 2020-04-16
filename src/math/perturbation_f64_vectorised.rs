@@ -6,7 +6,12 @@ use packed_simd::*;
 use crate::util::ComplexFixed;
 
 impl ImageRenderer {
-    pub fn calculate_perturbations_f64_vectorised(&self, points_remaining: &mut Vec<Point<ComplexFixed<f64>>>, points_complete: &mut Vec<Point<ComplexFixed<f64>>>) {
+    pub fn calculate_perturbations_f64_vectorised(&self, points_remaining: &mut Vec<Point<ComplexFixed<f64>>>, points_complete: &mut Vec<Point<ComplexFixed<f64>>>, start_iteration: usize) {
+
+
+
+
+
         // here we pack the points into vectorised points
         // possibly only works on image sizes that are multiples of the vector lanes
         // investigate adding this earlier so that the vector of points never needs to be constructed
@@ -31,7 +36,7 @@ impl ImageRenderer {
                  let mut glitched = m64x4::splat(false);
                  let mut escaped = m64x4::splat(false);
 
-                 for iteration in 0..self.maximum_iterations {
+                 for iteration in start_iteration..self.maximum_iterations {
                      let temp = delta_n;
                      delta_n += ComplexVector::<f64x4>::splat(  self.x_n_f64[iteration] * 2.0);
                      delta_n *= temp;
