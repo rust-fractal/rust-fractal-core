@@ -5,12 +5,12 @@ use rayon::prelude::*;
 
 impl ImageRenderer {
     // This function will run the perturbation algorithm on all of the deltas in the locations,
-    pub fn calculate_perturbations_f64(&self, points_remaining: &mut Vec<Point<ComplexFixed<f64>>>, points_complete: &mut Vec<Point<ComplexFixed<f64>>>) {
+    pub fn calculate_perturbations_f64(&self, points_remaining: &mut Vec<Point<ComplexFixed<f64>>>, points_complete: &mut Vec<Point<ComplexFixed<f64>>>, skipped_iterations: usize) {
         *points_remaining = points_remaining.into_par_iter()
             .map(|point| {
-                let delta_0 = point.delta - self.reference_delta_f64;
-                let mut delta_n = delta_0;
-                let mut iteration = 0;
+                let delta_0 = point.delta_0 - self.reference_delta_f64;
+                let mut delta_n = point.delta - self.reference_delta_f64;
+                let mut iteration = skipped_iterations;
                 let mut glitched = false;
                 let mut z_norm = 0.0;
 
@@ -30,7 +30,8 @@ impl ImageRenderer {
                 }
 
                 Point {
-                    delta: point.delta,
+                    delta_0: point.delta_0,
+                    delta: point.delta_0,
                     index: point.index,
                     iterations: iteration,
                     smooth: 1.0 - (z_norm.log2() / 2.0).log2() as f32,

@@ -9,10 +9,10 @@ use crate::util::point::Point;
 use crate::colouring::ColourMethod;
 use mantexp::mantexp::MantExp;
 
-enum DeltaType {
-    Float32,
-    Float64
-}
+// enum DeltaType {
+//     Float32,
+//     Float64
+// }
 
 pub struct ImageRenderer {
     image_width: usize,
@@ -30,8 +30,8 @@ pub struct ImageRenderer {
     display_glitches: bool,
     colouring_method: ColourMethod,
     progress: ProgressBar<Stdout>,
-    delta_type: DeltaType,
-    precision: usize,
+    // delta_type: DeltaType,
+    // precision: usize,
     num_coefficients: usize,
     coefficients: Vec<Vec<MantExpComplex>>,
 
@@ -50,13 +50,13 @@ impl ImageRenderer {
 
         // Set just below the limit to allow all functions to work right
         // Currently for some reason the f64 is faster than the f32 version
-        let delta_type = if zoom < 1e-2 {
-            println!("Delta: f32");
-            DeltaType::Float32
-        } else {
-            println!("Delta: f64");
-            DeltaType::Float64
-        };
+        // let delta_type = if zoom < 1e-2 {
+        //     println!("Delta: f32");
+        //     DeltaType::Float32
+        // } else {
+        //     println!("Delta: f64");
+        //     DeltaType::Float64
+        // };
 
         // The height is kept to be the correct size (in terms of the zoom) and the width is scaled to counter for the aspect ratio
         // reference delta can be changes, but may need to be updated
@@ -76,9 +76,7 @@ impl ImageRenderer {
             display_glitches,
             colouring_method: ColourMethod::Iteration,
             progress: ProgressBar::new((image_width * image_height) as u64),
-            delta_type,
-            precision,
-            num_coefficients: 3,
+            num_coefficients: 5,
             coefficients: Vec::new()
         }
     }
@@ -103,6 +101,8 @@ impl ImageRenderer {
 
         let mut reference_time = 0;
         let mut iteration_time = 0;
+        let mut approximation_time = 0;
+        let mut skipped_iterations = 0;
 
         // Start solving the points by iteratively moving around the reference point
         while (points_remaining_f64.len()) as f32 > (self.glitch_tolerance * (self.image_width * self.image_height) as f32) {
@@ -121,19 +121,19 @@ impl ImageRenderer {
             self.calculate_reference();
             reference_time += start.elapsed().as_millis();
 
-            let mut temp_iterations = 0;
+            let start = Instant::now();
+            let mut iteration = 0;
 
-            if self.reference_points == 1 && false {
-                let skipped_iterations = self.calculate_series(top_left_delta);
-                println!("Series approximation skipped: {}", skipped_iterations);
-                temp_iterations = skipped_iterations;
-
-                if skipped_iterations != 0 {
+            if self.reference_points == 1 && true {
+                iteration = self.calculate_series(top_left_delta);
+                iteration = 3600000;
+                skipped_iterations = iteration;
+                if iteration != 0 {
                     for point in &mut points_remaining_f64 {
                         let mut d0_to_the = Vec::with_capacity(self.num_coefficients + 1);
                         d0_to_the.push(MantExpComplex::new(
-                            MantExp::new(point.delta.re, 1),
-                            MantExp::new(point.delta.im, 1)));
+                            MantExp::new(point.delta.re.clone(), 0),
+                            MantExp::new(point.delta.im.clone(), 0)));
 
                         d0_to_the[0].reduce();
 
@@ -146,28 +146,31 @@ impl ImageRenderer {
                         let mut delta_sub_n = MantExpComplex::new(
                             MantExp::new(0.0, 0),
                             MantExp::new(0.0, 0));
+                        delta_sub_n.reduce();
 
                         for i in 0..self.num_coefficients {
-                            delta_sub_n = delta_sub_n + (self.coefficients[i][skipped_iterations] * d0_to_the[i]);
+                            delta_sub_n = delta_sub_n + self.coefficients[i][skipped_iterations] * d0_to_the[i];
+                            delta_sub_n.reduce();
                         }
                         point.delta = delta_sub_n.to_complex();
                     }
                 }
             }
 
-            // go through all points and set the delta to the new delta by series approximation
+            approximation_time += start.elapsed().as_millis();
 
             let start = Instant::now();
-            self.calculate_perturbations_f64_vectorised(&mut points_remaining_f64, &mut points_complete_f64, temp_iterations);
+            self.calculate_perturbations_f64_vectorised(&mut points_remaining_f64, &mut points_complete_f64, iteration);
             iteration_time += start.elapsed().as_millis();
             self.progress.set(points_complete_f64.len() as u64);
         }
 
         self.progress.finish();
-        println!("\n{:<10}{:>6} ms", "Reference:", reference_time);
-        println!("{:<10}{:>6} ms", "Iteration:", iteration_time);
-        println!("{:<12}{:>7}", "References:", self.reference_points);
-        println!("{:<12}{:>7}", "Glitched:", points_remaining_f64.len());
+        println!("\n{:<14}{:>6} ms", "Reference:", reference_time);
+        println!("{:<14}{:>6} ms ({} skipped)", "Approximation:", approximation_time, skipped_iterations);
+        println!("{:<14}{:>6} ms", "Iteration:", iteration_time);
+        println!("{:<14}{:>6}", "References:", self.reference_points);
+        println!("{:<14}{:>6} ({:.2}%)", "Glitched:", points_remaining_f64.len(), 100.0 * points_remaining_f64.len() as f64 / (self.image_width * self.image_height) as f64);
 
         // Check if there are any glitched points remaining and add them to the complete points as algorithm has terminated
         if points_remaining_f64.len() > 0 {
@@ -176,13 +179,13 @@ impl ImageRenderer {
 
         let start = Instant::now();
         self.colouring_method.run(&points_complete_f64, &mut image, self.maximum_iterations, self.display_glitches);
-        println!("{:<10}{:>6} ms", "Colouring:", start.elapsed().as_millis());
+        println!("{:<14}{:>6} ms", "Colouring:", start.elapsed().as_millis());
 
         let start = Instant::now();
 
         image::save_buffer("output.png", &image, self.image_width as u32, self.image_height as u32, image::RGB(8)).unwrap();
 
-        println!("{:<10}{:>6} ms", "Saving:", start.elapsed().as_millis());
+        println!("{:<14}{:>6} ms", "Saving:", start.elapsed().as_millis());
     }
 
     pub fn calculate_reference(&mut self) {
@@ -203,72 +206,77 @@ impl ImageRenderer {
     }
 
     pub fn calculate_series(&mut self, top_left_delta: ComplexFixed<f64>) -> usize {
-        if self.num_coefficients < 2 {
-            return 0;
-        }
-
-        if self.num_coefficients > 5 {
-            self.num_coefficients = 5;
-        }
-
-        let mut d0_to_the = Vec::with_capacity(self.num_coefficients + 1);
+        let mut d0_to_the = Vec::with_capacity(self.num_coefficients);
         d0_to_the.push(MantExpComplex::new(
-            MantExp::new(top_left_delta.re, 1),
-            MantExp::new(top_left_delta.im, 1)));
+            MantExp::new(top_left_delta.re.clone(), 0),
+            MantExp::new(top_left_delta.im.clone(), 0)));
 
         d0_to_the[0].reduce();
 
         for i in 1..self.num_coefficients {
             d0_to_the.push(d0_to_the[i - 1].clone() * d0_to_the[0].clone());
             d0_to_the[i].reduce();
-            // there is a reduce here?
         }
 
         self.coefficients = vec!(vec![MantExpComplex::new(
-            MantExp::new(0.0, 1),
-            MantExp::new(0.0, 1)); self.x_n_f64.len()]; self.num_coefficients);
+            MantExp::new(0.0, 0),
+            MantExp::new(0.0, 0)); self.x_n_f64.len()]; self.num_coefficients);
 
         self.coefficients[0][0] = MantExpComplex::new(
-            MantExp::new(1.0, 1),
-            MantExp::new(0.0, 1));
+            MantExp::new(1.0, 0),
+            MantExp::new(0.0, 0));
 
         let tol = 2.0f64.powf(-64.0);
 
         for i in 1..self.x_n_f64.len() {
-            if self.num_coefficients >= 1 {
-                // temp here need to override f64
-                self.coefficients[0][i] = (self.coefficients[0][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + MantExpComplex::new(MantExp::new(1.0, 1), MantExp::new(0.0, 1));
-            }
-            if self.num_coefficients >= 2 {
-                self.coefficients[1][i] = (self.coefficients[1][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + self.coefficients[0][i - 1].clone() * self.coefficients[0][i - 1].clone();
-            }
-            if self.num_coefficients >= 3 {
-                self.coefficients[2][i] = (self.coefficients[2][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + (self.coefficients[1][i - 1].clone() * self.coefficients[0][i - 1].clone() * 2.0);
-            }
-            if self.num_coefficients >= 4 {
-                self.coefficients[3][i] = (self.coefficients[3][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + (self.coefficients[0][i - 1].clone() * self.coefficients[2][i - 1].clone() * 2.0) + self.coefficients[1][i - 1].clone() * self.coefficients[1][i - 1].clone();
-            }
-            if self.num_coefficients >= 5 {
-                self.coefficients[4][i] = (self.coefficients[4][i - 1].clone() * self.x_n_f64[i - 1] * 2.0) + (self.coefficients[0][i - 1].clone() * self.coefficients[3][i - 1].clone() * 2.0) + (self.coefficients[1][i - 1].clone() * self.coefficients[2][i - 1].clone() * 2.0);
-            }
+            // Set up the first term
+            self.coefficients[0][i] = (self.coefficients[0][i - 1] * self.x_n_f64[i - 1] * 2.0) + MantExpComplex::new(MantExp::new(1.0, 0), MantExp::new(0.0, 0));
+            self.coefficients[0][i].reduce();
 
-            for j in 0..self.num_coefficients {
-                self.coefficients[j][i].reduce();
-            }
-
-            if ((self.coefficients[self.num_coefficients - 2][i] * d0_to_the[self.num_coefficients - 2]).norm_mantexp() * tol).compare_lt(&mut (self.coefficients[self.num_coefficients - 1][i] * d0_to_the[self.num_coefficients - 1]).norm_mantexp()) {
-                return if i <= 3 {
-                    for j in 0..self.num_coefficients {
-                        self.coefficients[j].truncate(0);
+            for k in 1..self.num_coefficients {
+                // Even case (k is decremented by 1)
+                if k % 2 != 0 {
+                    // for k = 4, only chooses 0, for k = 6, only chooses 0..2 = 0 and 1
+                    for j in 0..(k / 2) {
+                        self.coefficients[k][i] = self.coefficients[k][i] + self.coefficients[j][i - 1] * self.coefficients[k - j - 1][i - 1];
+                        self.coefficients[k][i].reduce();
                     }
-                    0
+                    self.coefficients[k][i] = self.coefficients[k][i] + self.coefficients[k / 2][i - 1] * self.coefficients[k / 2][i - 1];
+                    self.coefficients[k][i].reduce();
                 } else {
-                    for j in 0..self.num_coefficients {
-                        self.coefficients[j].truncate(i);
+                    // for k = 3, choose 0, for k = 5 choose 0 and 1
+                    for j in 0..(k / 2) {
+                        self.coefficients[k][i] = self.coefficients[k][i] + self.coefficients[j][i - 1] * self.coefficients[k - j - 1][i - 1] * 2.0;
+                        self.coefficients[k][i].reduce();
                     }
-                    i - 3
                 }
+
+                self.coefficients[k][i] = self.coefficients[k][i] + (self.coefficients[k][i - 1] * self.x_n_f64[i - 1] * 2.0);
+                self.coefficients[k][i].reduce();
             }
+
+            let mut test1 = (self.coefficients[self.num_coefficients - 1][i] * d0_to_the[self.num_coefficients - 1]).norm_mantexp();
+
+
+            // this is a check to make sure that the series approximation is still valid
+            // http://www.fractalforums.com/mandel-machine/mandel-machine/msg74200/?PHPSESSID=5d3defa1a8a635c537bb79ad926ef973#msg74200
+
+            // reduce by factor of 64
+            // test1.exp -= 64;
+
+            // if test1.compare_lt(&mut (self.coefficients[self.num_coefficients - 2][i] * d0_to_the[self.num_coefficients - 2]).norm_mantexp()) {
+            //     return if i <= 3 {
+            //         for j in 0..self.num_coefficients {
+            //             self.coefficients[j].truncate(0);
+            //         }
+            //         0
+            //     } else {
+            //         for j in 0..self.num_coefficients {
+            //             self.coefficients[j].truncate(i);
+            //         }
+            //         i - 3
+            //     }
+            // }
         }
 
         for j in 0..self.num_coefficients {
