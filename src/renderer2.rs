@@ -21,8 +21,8 @@ fn plot(image: &mut Image, perturbation: &Perturbation, dt: f64) {
 }
 
 pub fn test() {
-    let width = 320;
-    let height = 320;
+    let width = 1000;
+    let height = 1000;
     let order = 10;
 
     let center = (
