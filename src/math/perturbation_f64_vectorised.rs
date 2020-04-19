@@ -26,15 +26,8 @@ impl ImageRenderer {
                  let mut points_re = vec![100.0; lanes];
                  let mut points_im = vec![100.0; lanes];
 
-                 for i in 0..chunk.len() {
-                     points_re_0[i] = chunk[i].delta_0.re - self.reference_delta_f64.re;
-                     points_im_0[i] = chunk[i].delta_0.im - self.reference_delta_f64.im;
-                     points_re[i] = chunk[i].delta.re - self.reference_delta_f64.re;
-                     points_im[i] = chunk[i].delta.im - self.reference_delta_f64.im;
-                 }
-
-                 let delta_0 = ComplexVector::<f64x4>::new(points_re_0.as_slice(), points_im_0.as_slice());
-                 let mut delta_n = ComplexVector::<f64x4>::new(points_re.as_slice(), points_im.as_slice());
+                 let delta_0 = ComplexVector::<f64x4>::new(points_re_0.as_slice(), points_im_0.as_slice()) - ComplexVector::<f64x4>::splat(self.reference_delta_f64);
+                 let mut delta_n = ComplexVector::<f64x4>::new(points_re.as_slice(), points_im.as_slice()) - ComplexVector::<f64x4>::splat(self.reference_delta_f64);
                  let mut iterations = u64x4::splat(start_iteration as u64);
                  let mut z_norm = f64x4::splat(0.0);
                  let mut glitched = m64x4::splat(false);
