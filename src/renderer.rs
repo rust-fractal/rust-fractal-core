@@ -23,7 +23,7 @@ pub struct ImageRenderer {
     reference_points: usize,
     origin: ComplexArbitrary,
     reference: ComplexArbitrary,
-    pub x_n_f64: Vec<ComplexFixed<f64>>,
+    pub z_reference: Vec<ComplexFixed<f64>>,
     pub tolerance_check_f64: Vec<f64>,
     pub reference_delta_f64: ComplexFixed<f64>,
     glitch_tolerance: f32,
@@ -69,7 +69,7 @@ impl ImageRenderer {
             reference_points: 0,
             origin: location.clone(),
             reference: location,
-            x_n_f64: Vec::new(),
+            z_reference: Vec::new(),
             tolerance_check_f64: Vec::new(),
             reference_delta_f64: ComplexFixed::new(0.0, 0.0),
             glitch_tolerance,
@@ -188,21 +188,26 @@ impl ImageRenderer {
         println!("{:<14}{:>6} ms", "Saving:", start.elapsed().as_millis());
     }
 
-    pub fn calculate_reference(&mut self) {
+    pub fn calculate_reference(&mut self) -> bool {
         let glitch_tolerance = 1e-6;
 
         // Clear both buffers for new values
-        self.x_n_f64.clear();
+        self.z_reference.clear();
         self.tolerance_check_f64.clear();
 
         let mut z = self.reference.clone();
 
         for _ in 0..=self.maximum_iterations {
-            self.x_n_f64.push(ComplexFixed::new(z.real().to_f64(), z.imag().to_f64()));
-            self.tolerance_check_f64.push(glitch_tolerance as f64 * self.x_n_f64.last().unwrap().norm_sqr());
+            self.z_reference.push(ComplexFixed::new(z.real().to_f64(), z.imag().to_f64()));
+            self.tolerance_check_f64.push(glitch_tolerance as f64 * self.z_reference.last().unwrap().norm_sqr());
+
+            if self.z_reference.last()?.norm_sqr() >= 4.0 {
+                return false
+            }
 
             z = z.square() + &self.reference
-        }
+        };
+        true
     }
 
     pub fn calculate_series(&mut self, top_left_delta: ComplexFixed<f64>) -> usize {
@@ -220,7 +225,7 @@ impl ImageRenderer {
 
         self.coefficients = vec!(vec![MantExpComplex::new(
             MantExp::new(0.0, 0),
-            MantExp::new(0.0, 0)); self.x_n_f64.len()]; self.num_coefficients);
+            MantExp::new(0.0, 0)); self.z_reference.len()]; self.num_coefficients);
 
         self.coefficients[0][0] = MantExpComplex::new(
             MantExp::new(1.0, 0),
@@ -228,9 +233,9 @@ impl ImageRenderer {
 
         let tol = 2.0f64.powf(-64.0);
 
-        for i in 1..self.x_n_f64.len() {
+        for i in 1..self.z_reference.len() {
             // Set up the first term
-            self.coefficients[0][i] = (self.coefficients[0][i - 1] * self.x_n_f64[i - 1] * 2.0) + MantExpComplex::new(MantExp::new(1.0, 0), MantExp::new(0.0, 0));
+            self.coefficients[0][i] = (self.coefficients[0][i - 1] * self.z_reference[i - 1] * 2.0) + MantExpComplex::new(MantExp::new(1.0, 0), MantExp::new(0.0, 0));
             self.coefficients[0][i].reduce();
 
             for k in 1..self.num_coefficients {
@@ -251,11 +256,14 @@ impl ImageRenderer {
                     }
                 }
 
-                self.coefficients[k][i] = self.coefficients[k][i] + (self.coefficients[k][i - 1] * self.x_n_f64[i - 1] * 2.0);
+                self.coefficients[k][i] = self.coefficients[k][i] + (self.coefficients[k][i - 1] * self.z_reference[i - 1] * 2.0);
                 self.coefficients[k][i].reduce();
             }
 
-            let mut test1 = (self.coefficients[self.num_coefficients - 1][i] * d0_to_the[self.num_coefficients - 1]).norm_mantexp();
+
+
+
+
 
 
             // this is a check to make sure that the series approximation is still valid
@@ -280,9 +288,9 @@ impl ImageRenderer {
         }
 
         for j in 0..self.num_coefficients {
-            self.coefficients[j].truncate(self.x_n_f64.len());
+            self.coefficients[j].truncate(self.z_reference.len());
         }
 
-        self.x_n_f64.len() - 1
+        self.z_reference.len() - 1
     }
 }
