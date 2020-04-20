@@ -1,8 +1,9 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed};
 
 pub struct Reference {
-    pub start_iteration: i32,
-    pub current_iteration: i32,
+    pub start_iteration: usize,
+    pub current_iteration: usize,
+    pub maximum_iteration: usize,
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
     pub z_reference: Vec<ComplexFixed<f64>>,
@@ -10,12 +11,14 @@ pub struct Reference {
 }
 
 impl Reference {
-    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, start_iteration: i32) -> Reference {
+    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> Reference {
         let z_fixed = to_fixed(&z);
 
+        // 1e-6 is the threshold for pauldelbrot's criterion
         Reference {
-            start_iteration,
-            current_iteration: start_iteration,
+            start_iteration: current_iteration,
+            current_iteration,
+            maximum_iteration,
             z,
             c,
             z_reference: vec![z_fixed],
@@ -32,13 +35,13 @@ impl Reference {
         z_fixed.norm_sqr() <= 4.0
     }
 
-    pub fn iterate(&mut self, max_iteration: i32) -> bool {
-        while self.current_iteration <= max_iteration {
+    pub fn run(&mut self) -> bool {
+        while self.current_iteration <= self.maximum_iteration {
             if !self.step() {
                 break;
             }
         };
-        self.current_iteration == max_iteration
+        self.current_iteration == self.maximum_iteration
     }
 }
 
