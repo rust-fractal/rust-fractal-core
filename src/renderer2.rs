@@ -45,7 +45,7 @@ impl FractalRenderer {
             zoom,
             center_location,
             maximum_iteration,
-            approximation_order: 20,
+            approximation_order: 40,
             glitch_tolerance,
             image: Image::new(image_width, image_height, display_glitches)
         }
