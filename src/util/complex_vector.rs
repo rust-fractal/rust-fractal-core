@@ -1,5 +1,6 @@
 use crate::util::ComplexFixed;
 use packed_simd::*;
+use std::ops::Mul;
 
 #[derive(Copy, Clone)]
 pub struct ComplexVector<T> {
@@ -74,6 +75,17 @@ impl ComplexVector<f64x4> {
     #[inline]
     pub fn norm_sqr(&self) -> f64x4 {
         self.re * self.re + self.im * self.im
+    }
+}
+
+impl std::ops::Mul<f64x4> for ComplexVector<f64x4> {
+    type Output = ComplexVector<f64x4>;
+
+    fn mul(self, other: f64x4) -> Self::Output {
+        ComplexVector {
+            re: self.re * other,
+            im: self.im * other
+        }
     }
 }
 
