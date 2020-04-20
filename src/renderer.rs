@@ -14,7 +14,7 @@ use mantexp::mantexp::MantExp;
 //     Float64
 // }
 
-pub struct ImageRenderer {
+pub struct FractalRenderer {
     image_width: usize,
     image_height: usize,
     aspect: f64,
@@ -37,7 +37,7 @@ pub struct ImageRenderer {
 
 }
 
-impl ImageRenderer {
+impl FractalRenderer {
     pub fn new(image_width: usize, image_height: usize, initial_zoom: f64, maximum_iterations: usize, center_re: &str, center_complex: &str, precision: usize, glitch_tolerance: f32, display_glitches: bool) -> Self {
         let location = ComplexArbitrary::with_val(
             precision as u32,
@@ -60,7 +60,7 @@ impl ImageRenderer {
 
         // The height is kept to be the correct size (in terms of the zoom) and the width is scaled to counter for the aspect ratio
         // reference delta can be changes, but may need to be updated
-        ImageRenderer {
+        FractalRenderer {
             image_width,
             image_height,
             aspect,

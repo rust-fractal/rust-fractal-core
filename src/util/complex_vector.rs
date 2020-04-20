@@ -40,6 +40,22 @@ impl ComplexVector<f64x4> {
     }
 
     #[inline]
+    pub fn new2(values: &[ComplexFixed<f64>]) -> Self {
+        let mut re = Vec::new();
+        let mut im = Vec::new();
+
+        for value in values {
+            re.push(value.re);
+            im.push(value.im);
+        }
+
+        ComplexVector {
+            re: f64x4::from_slice_unaligned(re.as_slice()),
+            im: f64x4::from_slice_unaligned(im.as_slice())
+        }
+    }
+
+    #[inline]
     pub fn splat(value: ComplexFixed<f64>) -> Self {
         ComplexVector {
             re: f64x4::splat(value.re),

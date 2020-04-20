@@ -1,5 +1,5 @@
 use std::time::Instant;
-use rust_fractal::renderer2::test;
+use rust_fractal::renderer2::FractalRenderer;
 
 fn main() {
     println!("Mandelbrot Renderer");
@@ -23,21 +23,24 @@ fn main() {
    //     "0.000000000000000000000000000000000145514706909258179374258");
    // let zoom = 1.2980742146337048E34;
 
-    // let mut renderer = ImageRenderer::new(
-    //     1000,
-    //     1000,
-    //     zoom,
-    //     5000000,
-    //     center.0,
-    //     center.1,
-    //     1000,
-    //     0.001,
-    //     true
-    // );
-    //
-    // let time = Instant::now();
-    // renderer.render();
-    // println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
+    let center = (
+        "-1.999999999138270118722935763129859470012913240693218269085000",
+        "-0.000000000000000000322680215517275822769282166130504217892606");
+    let zoom = 1.63e030;
 
-    test();
+    let mut renderer = FractalRenderer::new(
+        640,
+        320,
+        zoom,
+        500,
+        center.0,
+        center.1,
+        1000,
+        0.001,
+        true
+    );
+
+    let time = Instant::now();
+    renderer.render();
+    println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
 }
