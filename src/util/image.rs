@@ -30,14 +30,16 @@ impl Image {
 
     pub fn plot_image(&mut self, perturbation: &Perturbation, delta_pixel: f64) {
         for i in 0..(self.width * self.height) {
-            let (r, g, b) = if !perturbation.glitched[i] && !perturbation.escaped[i] {
-                (0, 0, 0)
-            } else if perturbation.escaped[i] {
-                let de = 2.0 * perturbation.delta_current[i].norm() * perturbation.delta_current[i].norm().ln() / perturbation.derivative_current[i].norm();
-                let out = (255.0 * (de / delta_pixel).tanh()) as u8;
-                (out, out, out)
-            } else {
+            let (r, g, b) = if perturbation.glitched[i] && self.display_glitches {
                 (255, 0, 0)
+            } else {
+                if perturbation.escaped[i] {
+                    let de = 2.0 * perturbation.delta_current[i].norm() * perturbation.delta_current[i].norm().ln() / perturbation.derivative_current[i].norm();
+                    let out = (255.0 * (de / delta_pixel).tanh()) as u8;
+                    (out, out, out)
+                } else {
+                    (0, 0, 0)
+                }
             };
 
             self.plot(perturbation.image_x[i], perturbation.image_y[i], r, g, b);
