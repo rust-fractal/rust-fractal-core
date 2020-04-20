@@ -48,7 +48,7 @@ impl Perturbation {
     }
 
     pub fn iterate(&mut self, reference: &Reference, maximum_iteration: usize) {
-        let mut packets = Vec::new();
+        // let mut packets = Vec::new();
 
         // TODO non 4x image
         // for i in (0..self.image_x.len()).step_by(4) {
@@ -96,33 +96,67 @@ impl Perturbation {
         //     }
         // }
 
+        let mut packets = Vec::new();
+
+        for i in (0..self.image_x.len()) {
+            packets.push(
+                PerturbationData2 {
+                    iteration: self.iteration[0],
+                    delta_reference: self.delta_reference[i],
+                    delta_current: self.delta_current[i],
+                    derivative_current: self.derivative_current[i],
+                    glitched: false,
+                    escaped: false
+                }
+            );
+        };
+
+        packets.par_chunks_mut(1)
+            .for_each(|packets| {
+                for packet in packets {
+                    while packet.iteration < maximum_iteration {
+                        // This uses the difference between the starting iteration of the reference - can be used to skip some
+                        let z = packet.delta_current + reference.z_reference[packet.iteration - reference.start_iteration];
+                        let z_norm = z.norm_sqr();
+
+                        if z_norm < reference.z_tolerance[packet.iteration - reference.start_iteration] {
+                            packet.glitched = true;
+                            packet.delta_current = z;
+                            break;
+                        }
+
+                        if z_norm > 65536.0 {
+                            packet.escaped = true;
+                            packet.delta_current = z;
+                            break;
+                        }
+
+                        packet.derivative_current = 2.0 * z * packet.derivative_current + 1.0;
+                        packet.delta_current = 2.0 * &reference.z_reference[packet.iteration - reference.start_iteration] * packet.delta_current + packet.delta_current * packet.delta_current + packet.delta_reference;
+                        packet.iteration += 1;
+                    }
+                }
+            });
 
 
+        for i in 0..self.image_x.len() {
+            self.iteration[i] = packets[i].iteration;
+            self.escaped[i] = packets[i].escaped;
+            self.glitched[i] = packets[i].glitched;
+            self.derivative_current[i] = packets[i].derivative_current;
+            self.delta_current[i] = packets[i].delta_current;
+        }
 
-        // TODO convert this into vectorised code
-        // for i in 0..self.image_x.len() {
-        //     while self.iteration[i] < maximum_iteration {
-        //         // This uses the difference between the starting iteration of the reference - can be used to skip some
-        //         let z = self.delta_current[i] + reference.z_reference[(self.iteration[i] - reference.start_iteration) as usize];
-        //         let z_norm = z.norm_sqr();
-        //
-        //         if z_norm < reference.z_tolerance[(self.iteration[i] - reference.start_iteration) as usize] {
-        //             self.glitched[i] = true;
-        //             self.delta_current[i] = z;
-        //             break;
-        //         }
-        //
-        //         if z_norm > 65536.0 {
-        //             self.escaped[i] = true;
-        //             self.delta_current[i] = z;
-        //             break;
-        //         }
-        //
-        //         self.derivative_current[i] = 2.0 * z * self.derivative_current[i] + 1.0;
-        //         self.delta_current[i] = 2.0 * reference.z_reference[(self.iteration[i] - reference.start_iteration) as usize] * self.delta_current[i] + self.delta_current[i] * self.delta_current[i] + self.delta_reference[i];
-        //         self.iteration[i] += 1;
-        //     }
-        // };
+
     }
+}
+
+struct PerturbationData2 {
+    iteration: usize,
+    delta_reference: ComplexFixed<f64>,
+    delta_current: ComplexFixed<f64>,
+    derivative_current: ComplexFixed<f64>,
+    glitched: bool,
+    escaped: bool,
 }
 
