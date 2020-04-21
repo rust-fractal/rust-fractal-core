@@ -32,8 +32,10 @@ impl Reference {
         let z_fixed = to_fixed(&self.z);
         self.z_reference.push(z_fixed);
         self.z_tolerance.push(1e-6 * z_fixed.norm_sqr());
-        z_fixed.norm_sqr() <= 4.0
+        // z_fixed.norm_sqr() <= 4.0
+        true
     }
+
 
     pub fn run(&mut self) -> bool {
         while self.current_iteration <= self.maximum_iteration {

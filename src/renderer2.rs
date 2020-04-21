@@ -1,6 +1,6 @@
 use crate::util::image::Image;
 use crate::math::perturbation::Perturbation;
-use crate::util::{ComplexArbitrary, ComplexFixed};
+use crate::util::{ComplexArbitrary, ComplexFixed, PixelData};
 use crate::math::series_approximation::SeriesApproximation;
 use crate::math::reference::Reference;
 
@@ -78,97 +78,90 @@ impl FractalRenderer {
         println!("{:<14}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
 
         let time = Instant::now();
-        let mut reference = series_approximation.get_reference();
+
+        // The first reference is the central point
+        let mut reference = series_approximation.get_reference(ComplexFixed::new(0.0, 0.0));
         reference.run();
         println!("{:<14}{:>6} ms", "Reference", time.elapsed().as_millis());
 
         // Now we need to do the perturbation
-
-        let time = Instant::now();
-        let mut image_x = Vec::new();
-        let mut image_y = Vec::new();
-        let mut iteration = Vec::new();
-        let mut delta_reference = Vec::new();
-        let mut delta_current = Vec::new();
-        let mut derivative_current = Vec::new();
+        let mut pixel_data = Vec::with_capacity(self.image_width * self.image_height);
 
         for i in 0..self.image_width {
             for j in 0..self.image_height {
-                image_x.push(i);
-                image_y.push(j);
-                iteration.push(reference.start_iteration);
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
-                delta_reference.push(element);
-                delta_current.push(series_approximation.evaluate(element));
-                derivative_current.push(series_approximation.evaluate_derivative(element));
+                pixel_data.push(PixelData {
+                    image_x: i,
+                    image_y: j,
+                    iteration: reference.start_iteration,
+                    delta_reference: element,
+                    delta_current: series_approximation.evaluate(element),
+                    derivative_current: series_approximation.evaluate_derivative(element),
+                    glitched: false,
+                    escaped: false
+                });
             }
         }
 
         println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
 
         let time = Instant::now();
-        let mut perturbation = Perturbation::new(image_x, image_y, iteration, delta_reference, delta_current, derivative_current);
-        perturbation.iterate(&reference, reference.current_iteration);
+        Perturbation::iterate(&mut pixel_data, &reference, reference.current_iteration);
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
-        self.image.plot_image(&perturbation, delta_pixel);
+        self.image.plot_image(&pixel_data, delta_pixel);
 
-        for i in 0..1 {
-            // could sort here
+        // Remove all non-glitched points from the remaining points
+        pixel_data.retain(|packet| {
+            packet.glitched
+        });
 
-            // Get all of the new glitched pixels
-            let mut glitched_image_x = Vec::new();
-            let mut glitched_image_y = Vec::new();
-            let mut glitched_iteration = Vec::new();
-            let mut glitched_delta_reference = Vec::new();
-            let mut glitched_delta_current = Vec::new();
-            let mut glitched_derivative_current = Vec::new();
+        println!("Fixing Glitches:");
+        let glitched = pixel_data.len();
+        let mut glitch_progress = ProgressBar::new(glitched as u64);
 
-            for i in 0..perturbation.image_x.len() {
-                if perturbation.glitched[i] {
-                    // reset back to the starting position
-                    glitched_image_x.push(perturbation.image_x[i]);
-                    glitched_image_y.push(perturbation.image_y[i]);
-                    glitched_iteration.push(reference.start_iteration);
-                    glitched_delta_reference.push(perturbation.delta_reference[i]);
-                    glitched_delta_current.push(series_approximation.evaluate(perturbation.delta_reference[i]));
-                    glitched_derivative_current.push(series_approximation.evaluate_derivative(perturbation.delta_reference[i]));
-                }
+        while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
+            // delta_c is the difference from the next reference from the previous one
+            let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+            let reference_wrt_sa = delta_c.delta_reference;
+
+            let delta_z = series_approximation.evaluate(reference_wrt_sa);
+
+            let mut r = series_approximation.get_reference(reference_wrt_sa);
+            r.run();
+
+            let mut temp2 = Vec::new();
+
+            for data in &mut pixel_data {
+                let temp = data.delta_reference;
+                data.iteration = series_approximation.current_iteration;
+                data.glitched = false;
+                data.escaped = false;
+                data.delta_reference -= reference_wrt_sa;
+                data.delta_current = series_approximation.evaluate(temp) - delta_z;
+                data.derivative_current = series_approximation.evaluate_derivative(temp);
+                temp2.push(temp);
             }
 
-            println!("{:<14}{:>6}", "Glitched", glitched_image_x.len());
+            Perturbation::iterate(&mut pixel_data, &r, r.maximum_iteration);
 
-            // Use the series approximation to get the current reference location
-            let temp = glitched_delta_reference.choose(&mut rand::thread_rng()).unwrap().clone();
-            let temp2 = series_approximation.evaluate(temp);
-            let temp3 = series_approximation.evaluate_derivative(temp);
-            *self.reference_location.mut_real() = self.center_location.real().clone() + temp.re;
-            *self.reference_location.mut_imag() = self.center_location.imag().clone() + temp.im;
+            self.image.plot_image(&pixel_data, delta_pixel);
 
-            let mut reference_location_current = series_approximation.c.clone();
-            *reference_location_current.mut_real() = reference_location_current.real().clone() + temp2.re;
-            *reference_location_current.mut_imag() = reference_location_current.imag().clone() + temp2.im;
-
-            // Run the new reference using the series approximation skipped values
-            let mut reference2 = Reference::new(reference_location_current.clone(), reference_location_current, reference.start_iteration, self.maximum_iteration);
-            reference2.run();
-
-            for i in 0..glitched_image_x.len() {
-                glitched_delta_reference[i] = glitched_delta_reference[i] - temp;
-                // glitched_delta_current[i] = glitched_delta_current[i] - temp2;
+            // Slow, replacing with every iteration
+            for i in 0..pixel_data.len() {
+                pixel_data[i].delta_reference = temp2[i]
             }
 
-            let mut perturbation2 = Perturbation::new(glitched_image_x, glitched_image_y, glitched_iteration, glitched_delta_reference, glitched_delta_current, glitched_derivative_current);
-            perturbation2.iterate(&reference2, reference2.current_iteration);
+            glitch_progress.set((glitched - pixel_data.len()) as u64);
 
-            // Resolving glitches
-            // while points_remaining_f64.len() as f64 > 100.0 * self.glitch_tolerance * (self.image_width * self.image_height) {
-            //
-            // }
-            self.image.plot_image(&perturbation2, delta_pixel);
+            // Remove all non-glitched points from the remaining points
+            pixel_data.retain(|packet| {
+                packet.glitched
+            });
         }
 
-
+        glitch_progress.finish();
+        println!("\n{:<14}{:>6} ms ({} remain)", "Fixing", time.elapsed().as_millis(), pixel_data.len());
 
         let time = Instant::now();
         self.image.save();

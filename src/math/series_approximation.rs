@@ -126,8 +126,17 @@ impl SeriesApproximation {
     }
 
     // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self) -> Reference {
-        Reference::new(self.z.clone(), self.c.clone(), self.current_iteration, self.maximum_iteration)
+    pub fn get_reference(&self, reference_delta: ComplexFixed<f64>) -> Reference {
+        let mut reference_c = self.c.clone();
+        *reference_c.mut_real() = reference_c.real().clone() + reference_delta.re;
+        *reference_c.mut_imag() = reference_c.imag().clone() + reference_delta.im;
+
+        let mut reference_z = self.z.clone();
+        let temp = self.evaluate(reference_delta);
+        *reference_z.mut_real() = reference_z.real().clone() + temp.re;
+        *reference_z.mut_imag() = reference_z.imag().clone() + temp.im;
+
+        Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
     }
 
     pub fn evaluate(&self, point_delta: ComplexFixed<f64>) -> ComplexFixed<f64> {
