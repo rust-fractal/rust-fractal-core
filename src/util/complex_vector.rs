@@ -1,5 +1,6 @@
 use crate::util::ComplexFixed;
 use packed_simd::*;
+use std::ops::Mul;
 
 #[derive(Copy, Clone)]
 pub struct ComplexVector<T> {
@@ -40,6 +41,22 @@ impl ComplexVector<f64x4> {
     }
 
     #[inline]
+    pub fn new2(values: &[ComplexFixed<f64>]) -> Self {
+        let mut re = Vec::new();
+        let mut im = Vec::new();
+
+        for value in values {
+            re.push(value.re);
+            im.push(value.im);
+        }
+
+        ComplexVector {
+            re: f64x4::from_slice_unaligned(re.as_slice()),
+            im: f64x4::from_slice_unaligned(im.as_slice())
+        }
+    }
+
+    #[inline]
     pub fn splat(value: ComplexFixed<f64>) -> Self {
         ComplexVector {
             re: f64x4::splat(value.re),
@@ -58,6 +75,17 @@ impl ComplexVector<f64x4> {
     #[inline]
     pub fn norm_sqr(&self) -> f64x4 {
         self.re * self.re + self.im * self.im
+    }
+}
+
+impl std::ops::Mul<f64x4> for ComplexVector<f64x4> {
+    type Output = ComplexVector<f64x4>;
+
+    fn mul(self, other: f64x4) -> Self::Output {
+        ComplexVector {
+            re: self.re * other,
+            im: self.im * other
+        }
     }
 }
 
