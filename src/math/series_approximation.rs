@@ -89,7 +89,7 @@ impl SeriesApproximation {
 
             for k in 1..=self.order {
                 series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                derivative_probe += (k + 1) as f64 * next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
             let mut relative_error = (self.perturbation_probes[i] - series_probe).norm();
@@ -101,7 +101,7 @@ impl SeriesApproximation {
             }
 
             // Check that the error over the derivative is less than the pixel spacing
-            if relative_error / derivative > 0.5 * self.delta_pixel {
+            if relative_error / derivative > self.delta_pixel {
                 return false;
             }
         }
@@ -141,7 +141,7 @@ impl SeriesApproximation {
 
         for i in 1..=self.order {
             delta_probe_n.push(delta_probe_n[i - 1] * delta_probe_scaled);
-            delta_probe_n_derivative.push((i + 1) as f64 * delta_probe_n_derivative[i - 1] * delta_probe_scaled);
+            delta_probe_n_derivative.push(delta_probe_n_derivative[i - 1] * delta_probe_scaled);
         }
 
         self.approximation_probes.push(delta_probe_n);
