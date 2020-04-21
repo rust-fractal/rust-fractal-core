@@ -7,6 +7,7 @@ use crate::math::reference::Reference;
 use pbr::ProgressBar;
 use std::time::Instant;
 use rand::seq::SliceRandom;
+use crate::colouring::ColourMethod;
 
 pub struct FractalRenderer {
     image_width: usize,
@@ -109,6 +110,8 @@ impl FractalRenderer {
         Perturbation::iterate(&mut pixel_data, &reference, reference.current_iteration);
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
+        // ColourMethod::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration);
+
         self.image.plot_image(&pixel_data, delta_pixel);
 
         // Remove all non-glitched points from the remaining points
@@ -146,6 +149,7 @@ impl FractalRenderer {
             Perturbation::iterate(&mut pixel_data, &r, r.maximum_iteration);
 
             self.image.plot_image(&pixel_data, delta_pixel);
+            // ColourMethod::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration);
 
             // Slow, replacing with every iteration
             for i in 0..pixel_data.len() {
