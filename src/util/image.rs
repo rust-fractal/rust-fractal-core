@@ -5,7 +5,7 @@ pub struct Image {
     width: usize,
     height: usize,
     rgb: Vec<u8>,
-    display_glitches: bool
+    pub display_glitches: bool
 }
 
 impl Image {

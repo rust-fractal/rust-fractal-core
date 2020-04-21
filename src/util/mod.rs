@@ -9,6 +9,7 @@ pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
     ComplexFixed::new(value.real().to_f64(), value.imag().to_f64())
 }
 
+#[derive(Clone)]
 pub struct PixelData {
     pub image_x: usize,
     pub image_y: usize,

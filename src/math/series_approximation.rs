@@ -8,46 +8,45 @@ pub struct SeriesApproximation {
     pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel: f64,
+    delta_top_left: ComplexFixed<f64>,
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
     pub order: usize,
     coefficients: Vec<ComplexFixed<f64>>,
-    current_probes: Vec<ComplexFixed<f64>>,
     original_probes: Vec<ComplexFixed<f64>>,
-    bmax: f64
+    perturbation_probes: Vec<ComplexFixed<f64>>,
+    approximation_probes: Vec<Vec<ComplexFixed<f64>>>,
+    approximation_probes_derivative: Vec<Vec<ComplexFixed<f64>>>,
+    delta_maximum: f64
 }
 
 impl SeriesApproximation {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: f64, delta_top_left: ComplexFixed<f64>) -> Self {
         assert!(order >= 1);
+        let delta_maximum = delta_top_left.norm();
 
-        // To avoid scaling issues we can put in b/bmax or something
+        // To avoid scaling issues we can put in delta / delta_maximum or something
         let mut coefficents = vec![ComplexFixed::new(0.0, 0.0); order as usize + 1];
         coefficents[0] = ComplexFixed::new(c.real().to_f64(), c.imag().to_f64());
 
-        // Set 1, 1, to bmax
-        coefficents[1] = ComplexFixed::new(delta_top_left.norm(), 0.0);
-
-        // I think these should already be scaled
-        let probes = vec![
-            ComplexFixed::new(delta_top_left.re, delta_top_left.im),
-            ComplexFixed::new(delta_top_left.re, delta_top_left.im * -1.0),
-            ComplexFixed::new(delta_top_left.re * -1.0, delta_top_left.im),
-            ComplexFixed::new(delta_top_left.re * -1.0, delta_top_left.im * -1.0),
-        ];
+        // Set 1, 1, to the maximum delta
+        coefficents[1] = ComplexFixed::new(delta_maximum, 0.0);
 
         // The current iteration is set to 1 as we set z = c
         SeriesApproximation {
             current_iteration: 1,
             maximum_iteration,
             delta_pixel,
+            delta_top_left,
             z: c.clone(),
             c,
             order,
             coefficients: coefficents,
-            current_probes: probes.clone(),
-            original_probes: probes,
-            bmax: delta_top_left.norm(),
+            original_probes: Vec::new(),
+            perturbation_probes: Vec::new(),
+            approximation_probes: Vec::new(),
+            approximation_probes_derivative: Vec::new(),
+            delta_maximum,
         }
     }
 
@@ -57,7 +56,7 @@ impl SeriesApproximation {
 
         // Store the x_n in the first element of the array to simplfy things
         next_coefficients[0] = ComplexFixed::new(z_next.real().to_f64(), z_next.imag().to_f64());
-        next_coefficients[1] = 2.0 * self.coefficients[0] * self.coefficients[1] + self.bmax;
+        next_coefficients[1] = 2.0 * self.coefficients[0] * self.coefficients[1] + self.delta_maximum;
 
         // Calculate the new coefficients
         for k in 2..=self.order {
@@ -76,28 +75,24 @@ impl SeriesApproximation {
             next_coefficients[k] = sum;
         }
 
-        for i in 0..self.original_probes.len() {
-            // step the probe points using perturbation
-            self.current_probes[i] = 2.0 * ComplexFixed::new(self.z.real().to_f64(), self.z.imag().to_f64()) * self.current_probes[i] + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
-            // self.derivative_probes[i] = 2.0 * ComplexFixed::new(self.z.real().to_f64(), self.z.imag().to_f64()) * self.derivative_probes[i] + 1.0;
+        // Step the probe points using perturbation
+        let z_next_fixed = ComplexFixed::new(self.z.real().to_f64(), self.z.imag().to_f64());
 
-            let scaled_delta = self.original_probes[i] / self.bmax;
+        for i in 0..self.perturbation_probes.len() {
+            self.perturbation_probes[i] = 2.0 * z_next_fixed * self.perturbation_probes[i] + self.perturbation_probes[i] * self.perturbation_probes[i] + self.original_probes[i];
+        }
 
-            // get the new approximations
-            let mut original_probe_n = scaled_delta;
+        for i in 0..self.approximation_probes.len() {
+            // Get the new approximations
             let mut series_probe = ComplexFixed::new(0.0, 0.0);
-            let mut original_probe_derivative_n = ComplexFixed::new(1.0, 0.0) / self.bmax;
             let mut derivative_probe = ComplexFixed::new(0.0, 0.0);
 
             for k in 1..=self.order {
-                series_probe += next_coefficients[k] * original_probe_n;
-                original_probe_n *= scaled_delta;
-
-                derivative_probe += k as f64 * next_coefficients[k] * original_probe_derivative_n;
-                original_probe_derivative_n *= scaled_delta;
+                series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
-            let mut relative_error = (self.current_probes[i] - series_probe).norm();
+            let mut relative_error = (self.perturbation_probes[i] - series_probe).norm();
             let mut derivative = derivative_probe.norm();
 
             // Check to make sure that the derivative is greater than or equal to 1
@@ -106,7 +101,7 @@ impl SeriesApproximation {
             }
 
             // Check that the error over the derivative is less than the pixel spacing
-            if relative_error / derivative > self.delta_pixel{
+            if relative_error / derivative > 0.5 * self.delta_pixel {
                 return false;
             }
         }
@@ -119,10 +114,38 @@ impl SeriesApproximation {
     }
 
     pub fn run(&mut self) {
+        // Add the probe points to the series approximation
+        self.add_probe(ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im * -1.0));
+        self.add_probe(ComplexFixed::new(self.delta_top_left.re * -1.0, self.delta_top_left.im));
+        self.add_probe(ComplexFixed::new(self.delta_top_left.re * -1.0, self.delta_top_left.im * -1.0));
+
         // Can be changed later into a better loop - this function could also return some more information
         while self.step() && self.current_iteration < self.maximum_iteration {
             continue;
         }
+    }
+
+    pub fn add_probe(&mut self, delta_probe: ComplexFixed<f64>) {
+        // here we will need to check to make sure we are still at the first iteration, or use perturbation to go forward
+        self.original_probes.push(delta_probe);
+        self.perturbation_probes.push(delta_probe);
+
+        let delta_probe_scaled = delta_probe / self.delta_maximum;
+        let mut delta_probe_n = Vec::with_capacity(self.order + 1);
+        let mut delta_probe_n_derivative = Vec::with_capacity(self.order + 1);
+
+        // The first element will be 1, in order for the derivative to be calculated
+        delta_probe_n.push(delta_probe_scaled);
+        delta_probe_n_derivative.push(ComplexFixed::new(1.0, 0.0) / self.delta_maximum);
+
+        for i in 1..=self.order {
+            delta_probe_n.push(delta_probe_n[i - 1] * delta_probe_scaled);
+            delta_probe_n_derivative.push((i + 1) as f64 * delta_probe_n_derivative[i - 1] * delta_probe_scaled);
+        }
+
+        self.approximation_probes.push(delta_probe_n);
+        self.approximation_probes_derivative.push(delta_probe_n_derivative);
     }
 
     // Get the current reference, and the current number of iterations done
@@ -140,7 +163,8 @@ impl SeriesApproximation {
     }
 
     pub fn evaluate(&self, point_delta: ComplexFixed<f64>) -> ComplexFixed<f64> {
-        let scaled_delta = point_delta / self.bmax;
+        // could remove this divide
+        let scaled_delta = point_delta / self.delta_maximum;
 
         let mut original_point_n = scaled_delta;
         let mut approximation = ComplexFixed::new(0.0, 0.0);
@@ -154,9 +178,9 @@ impl SeriesApproximation {
     }
 
     pub fn evaluate_derivative(&self, point_delta: ComplexFixed<f64>) -> ComplexFixed<f64> {
-        let scaled_delta = point_delta / self.bmax;
+        let scaled_delta = point_delta / self.delta_maximum;
 
-        let mut original_point_derivative_n = ComplexFixed::new(1.0, 0.0) / self.bmax;
+        let mut original_point_derivative_n = ComplexFixed::new(1.0, 0.0) / self.delta_maximum;
         let mut approximation_derivative = ComplexFixed::new(0.0, 0.0);
 
         for k in 1..=self.order {
