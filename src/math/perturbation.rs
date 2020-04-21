@@ -1,53 +1,16 @@
 use crate::math::reference::Reference;
-use crate::util::ComplexFixed;
+use crate::util::{ComplexFixed, PixelData};
 use crate::util::complex_vector::ComplexVector;
 
 use rayon::prelude::*;
-use packed_simd::*;
+use pbr::{ProgressBar, MultiBar};
+use std::sync::Arc;
 
 pub struct Perturbation {
-    pub image_x: Vec<usize>,
-    pub image_y: Vec<usize>,
-    pub iteration: Vec<usize>,
-    pub delta_reference: Vec<ComplexFixed<f64>>,
-    pub delta_current: Vec<ComplexFixed<f64>>,
-    pub derivative_current: Vec<ComplexFixed<f64>>,
-    pub glitched: Vec<bool>,
-    pub escaped: Vec<bool>,
-}
-
-// AoSoA layout
-struct PerturbationData {
-    iteration: u64x4,
-    delta_reference: ComplexVector<f64x4>,
-    delta_current: ComplexVector<f64x4>,
-    derivative_current: ComplexVector<f64x4>,
-    glitched: m64x4,
-    escaped: m64x4,
 }
 
 impl Perturbation {
-    // This sets up a new perturbation method. It will pack the points that are provided into the correct vectors
-    pub fn new(image_x: Vec<usize>,
-               image_y: Vec<usize>,
-               iteration: Vec<usize>,
-               delta_reference: Vec<ComplexFixed<f64>>,
-               delta_current: Vec<ComplexFixed<f64>>,
-               derivative_current: Vec<ComplexFixed<f64>>) -> Self {
-        let length = image_x.len();
-        Perturbation {
-            image_x,
-            image_y,
-            iteration,
-            delta_reference,
-            delta_current,
-            derivative_current,
-            glitched: vec![false; length],
-            escaped: vec![false; length],
-        }
-    }
-
-    pub fn iterate(&mut self, reference: &Reference, maximum_iteration: usize) {
+    pub fn iterate(pixel_data: &mut Vec<PixelData>, reference: &Reference, maximum_iteration: usize) {
         // let mut packets = Vec::new();
 
         // TODO non 4x image
@@ -96,24 +59,9 @@ impl Perturbation {
         //     }
         // }
 
-        let mut packets = Vec::new();
-
-        for i in (0..self.image_x.len()) {
-            packets.push(
-                PerturbationData2 {
-                    iteration: self.iteration[0],
-                    delta_reference: self.delta_reference[i],
-                    delta_current: self.delta_current[i],
-                    derivative_current: self.derivative_current[i],
-                    glitched: false,
-                    escaped: false
-                }
-            );
-        };
-
-        packets.par_chunks_mut(1)
-            .for_each(|packets| {
-                for packet in packets {
+        pixel_data.par_chunks_mut(1)
+            .for_each(|pixel_data| {
+                for packet in pixel_data {
                     while packet.iteration < maximum_iteration {
                         // This uses the difference between the starting iteration of the reference - can be used to skip some
                         let z = packet.delta_current + reference.z_reference[packet.iteration - reference.start_iteration];
@@ -137,26 +85,8 @@ impl Perturbation {
                     }
                 }
             });
-
-
-        for i in 0..self.image_x.len() {
-            self.iteration[i] = packets[i].iteration;
-            self.escaped[i] = packets[i].escaped;
-            self.glitched[i] = packets[i].glitched;
-            self.derivative_current[i] = packets[i].derivative_current;
-            self.delta_current[i] = packets[i].delta_current;
-        }
-
-
     }
 }
 
-struct PerturbationData2 {
-    iteration: usize,
-    delta_reference: ComplexFixed<f64>,
-    delta_current: ComplexFixed<f64>,
-    derivative_current: ComplexFixed<f64>,
-    glitched: bool,
-    escaped: bool,
-}
+
 
