@@ -8,8 +8,8 @@ pub struct SeriesApproximation {
     pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel: f64,
-    z: ComplexArbitrary,
-    c: ComplexArbitrary,
+    pub z: ComplexArbitrary,
+    pub c: ComplexArbitrary,
     pub order: usize,
     coefficients: Vec<ComplexFixed<f64>>,
     current_probes: Vec<ComplexFixed<f64>>,
@@ -79,6 +79,7 @@ impl SeriesApproximation {
         for i in 0..self.original_probes.len() {
             // step the probe points using perturbation
             self.current_probes[i] = 2.0 * ComplexFixed::new(self.z.real().to_f64(), self.z.imag().to_f64()) * self.current_probes[i] + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
+            // self.derivative_probes[i] = 2.0 * ComplexFixed::new(self.z.real().to_f64(), self.z.imag().to_f64()) * self.derivative_probes[i] + 1.0;
 
             let scaled_delta = self.original_probes[i] / self.bmax;
 
@@ -96,7 +97,7 @@ impl SeriesApproximation {
                 original_probe_derivative_n *= scaled_delta;
             };
 
-            let mut relative_error = (self.original_probes[i] - series_probe).norm();
+            let mut relative_error = (self.current_probes[i] - series_probe).norm();
             let mut derivative = derivative_probe.norm();
 
             // Check to make sure that the derivative is greater than or equal to 1
@@ -105,7 +106,7 @@ impl SeriesApproximation {
             }
 
             // Check that the error over the derivative is less than the pixel spacing
-            if relative_error / derivative > self.delta_pixel {
+            if relative_error / derivative > self.delta_pixel{
                 return false;
             }
         }

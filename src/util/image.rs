@@ -29,7 +29,7 @@ impl Image {
     }
 
     pub fn plot_image(&mut self, perturbation: &Perturbation, delta_pixel: f64) {
-        for i in 0..(self.width * self.height) {
+        for i in 0..perturbation.image_x.len() {
             let (r, g, b) = if perturbation.glitched[i] && self.display_glitches {
                 (255, 0, 0)
             } else {
