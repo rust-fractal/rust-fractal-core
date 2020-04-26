@@ -1,5 +1,5 @@
 use std::time::Instant;
-use rust_fractal::renderer2::FractalRenderer;
+use rust_fractal::renderer::FractalRenderer;
 
 fn main() {
     println!("Mandelbrot Renderer");
@@ -66,7 +66,6 @@ fn main() {
         150000,
         center.0,
         center.1,
-        1000,
         0.001,
         false,
         64

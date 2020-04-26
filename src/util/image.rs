@@ -1,4 +1,3 @@
-use crate::math::perturbation::Perturbation;
 use crate::util::PixelData;
 
 pub struct Image {

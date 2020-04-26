@@ -1,4 +1,3 @@
-pub mod complex_vector;
 pub mod point;
 pub mod image;
 
