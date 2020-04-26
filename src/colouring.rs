@@ -3,12 +3,13 @@ use crate::util::PixelData;
 
 pub enum ColourMethod {
     Iteration,
-    // IterationSquareRoot,
-    // Histogram
+    IterationSquareRoot,
+    Histogram,
+    Distance
 }
 
 impl ColourMethod {
-    pub fn run(&self, pixels: &Vec<PixelData>, image: &mut Image, maximum_iterations: usize) {
+    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
@@ -56,10 +57,12 @@ impl ColourMethod {
 
         match self {
             ColourMethod::Iteration => {
-                for pixel in pixels {
-                    let (red, green, blue) = if pixel.glitched && image.display_glitches {
+                // No smooth colouring at the moment
+
+                for pixel in pixel_data {
+                    let (r, g, b) = if pixel.glitched && image.display_glitches {
                         (255, 0, 0)
-                    } else if pixel.iteration >= maximum_iterations {
+                    } else if pixel.iteration >= maximum_iteration {
                         (0, 0, 0)
                     } else {
                         // 0.1656
@@ -70,87 +73,79 @@ impl ColourMethod {
                         (colour.0 as u8, colour.1 as u8, colour.2 as u8)
                     };
 
-                    image.plot(pixel.image_x, pixel.image_y, red, green, blue);
+                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            // ColourMethod::IterationSquareRoot => {
-            //     for point in points {
-            //         let index = point.index;
-            //
-            //         if point.glitched && display_glitches {
-            //             image[3 * index] = 255u8;
-            //             image[3 * index + 1] = 0u8;
-            //             image[3 * index + 2] = 0u8;
-            //         } else if point.iterations >= maximum_iterations {
-            //             image[3 * index] = 0u8;
-            //             image[3 * index + 1] = 0u8;
-            //             image[3 * index + 2] = 0u8;
-            //         } else {
-            //             let hue = 1600.0 * (point.iterations as f32 + point.smooth).sqrt() % 8192.0;
-            //
-            //             let colour = colours[(hue.floor() as usize) % 8192];
-            //             let colour2 = colours[(hue.floor() as usize + 1) % 8192];
-            //
-            //             let red = (colour.0 + ((colour2.0 - colour.0) * hue.fract())) as u8;
-            //             let green = (colour.1 + ((colour2.1 - colour.1) * hue.fract())) as u8;
-            //             let blue = (colour.2 + ((colour2.2 - colour.2) * hue.fract())) as u8;
-            //
-            //             image[3 * index] = red;
-            //             image[3 * index + 1] = green;
-            //             image[3 * index + 2] = blue;
-            //         }
-            //     }
-            // },
-            // ColourMethod::Histogram => {
-            //     let mut iteration_counts = vec![0usize; maximum_iterations + 1];
-            //
-            //     for point in points {
-            //         iteration_counts[point.iterations as usize] += 1
-            //     }
-            //
-            //     for i in 1..iteration_counts.len() {
-            //         iteration_counts[i] += iteration_counts[i - 1];
-            //     }
-            //
-            //     let total = iteration_counts[maximum_iterations - 1];
-            //
-            //     for point in points {
-            //         let index = point.index;
-            //
-            //         if point.glitched && display_glitches {
-            //             image[3 * index] = 255u8;
-            //             image[3 * index + 1] = 0u8;
-            //             image[3 * index + 2] = 0u8;
-            //         } else if point.iterations >= maximum_iterations {
-            //             image[3 * index] = 0u8;
-            //             image[3 * index + 1] = 0u8;
-            //             image[3 * index + 2] = 0u8;
-            //         } else {
-            //             let factor = if point.smooth == std::f32::NAN || point.iterations as f32 + point.smooth < 0.0 {
-            //                 point.iterations as f32
-            //             } else {
-            //                 point.iterations as f32 + point.smooth
-            //             };
-            //
-            //             let v1 = iteration_counts[factor as usize] as f32 / total as f32;
-            //             let v2 = iteration_counts[factor as usize + 1] as f32 / total as f32;
-            //
-            //             // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
-            //             let hue = (v1 + (v2 - v1) * factor.fract()) * 8192.0;
-            //
-            //             let colour = colours[hue.floor() as usize % 8192];
-            //             let colour2 = colours[(hue.floor() as usize + 1) % 8192];
-            //
-            //             let red = (colour.0 + ((colour2.0 - colour.0) * factor.fract())) as u8;
-            //             let green = (colour.1 + ((colour2.1 - colour.1) * factor.fract())) as u8;
-            //             let blue = (colour.2 + ((colour2.2 - colour.2) * factor.fract())) as u8;
-            //
-            //             image[3 * index] = red;
-            //             image[3 * index + 1] = green;
-            //             image[3 * index + 2] = blue;
-            //         }
-            //     }
-            // }
+            ColourMethod::IterationSquareRoot => {
+                for pixel in pixel_data {
+                    let (r, g, b) = if pixel.glitched && image.display_glitches {
+                        (255, 0, 0)
+                    } else if pixel.iteration >= maximum_iteration {
+                        (0, 0, 0)
+                    } else {
+                        // 0.1656
+                        let hue = (0.1656 * pixel.iteration as f64).sqrt() as usize % 8192;
+
+                        let colour = colours[hue];
+
+                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
+                    };
+
+                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
+                }
+            },
+            ColourMethod::Histogram => {
+                let mut iteration_counts = vec![0usize; maximum_iteration + 2];
+
+                for pixel in pixel_data {
+                    iteration_counts[pixel.iteration as usize] += 1
+                }
+
+                for i in 1..iteration_counts.len() {
+                    iteration_counts[i] += iteration_counts[i - 1];
+                }
+
+                // Don't count the pixels that are inside the set
+                let total = iteration_counts[maximum_iteration - 1];
+
+
+                for pixel in pixel_data {
+                    let (r, g, b) = if pixel.glitched && image.display_glitches {
+                        (255, 0, 0)
+                    } else if pixel.iteration >= maximum_iteration {
+                        (0, 0, 0)
+                    } else {
+                        let v1 = iteration_counts[pixel.iteration] as f32 / total as f32;
+
+                        // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
+                        let hue = (v1 * 8192.0) as usize;
+
+                        let colour = colours[hue % 8192];
+
+                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
+                    };
+
+                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
+                }
+            },
+            ColourMethod::Distance => {
+                // At the moment distance has a white-black gradient
+                for pixel in pixel_data {
+                    let (r, g, b) = if pixel.glitched && image.display_glitches {
+                        (255, 0, 0)
+                    } else {
+                        if pixel.escaped {
+                            let de = 2.0 * pixel.delta_current.norm() * pixel.delta_current.norm().ln() / pixel.derivative_current.norm();
+                            let out = (255.0 * (de / delta_pixel).tanh()) as u8;
+                            (out, out, out)
+                        } else {
+                            (0, 0, 0)
+                        }
+                    };
+
+                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
+                }
+            }
         }
     }
 }

@@ -1,8 +1,5 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed};
-use float_extended::complex_extended::ComplexExtended;
+use crate::util::{ComplexArbitrary, ComplexFixed};
 use crate::math::reference::Reference;
-use rug::Float;
-use float_extended::float_extended::FloatExtended;
 
 pub struct SeriesApproximation {
     pub current_iteration: usize,
@@ -92,7 +89,7 @@ impl SeriesApproximation {
                 derivative_probe += (k + 1) as f64 * next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
-            let mut relative_error = (self.perturbation_probes[i] - series_probe).norm();
+            let relative_error = (self.perturbation_probes[i] - series_probe).norm();
             let mut derivative = derivative_probe.norm();
 
             // Check to make sure that the derivative is greater than or equal to 1
