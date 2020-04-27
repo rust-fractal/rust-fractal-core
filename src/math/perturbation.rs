@@ -10,6 +10,9 @@ impl Perturbation {
         pixel_data.par_chunks_mut(1)
             .for_each(|pixel_data| {
                 for packet in pixel_data {
+                    // TODO investigate setting up a floatexp-type thing which only rescales every 500 or so iterations
+
+                    // normal
                     while packet.iteration < maximum_iteration {
                         // This uses the difference between the starting iteration of the reference - can be used to skip some
                         let z = packet.delta_current + reference.z_reference[packet.iteration - reference.start_iteration];
@@ -28,7 +31,7 @@ impl Perturbation {
                         }
 
                         packet.derivative_current = 2.0 * z * packet.derivative_current + 1.0;
-                        packet.delta_current = 2.0 * &reference.z_reference[packet.iteration - reference.start_iteration] * packet.delta_current + packet.delta_current * packet.delta_current + packet.delta_reference;
+                        packet.delta_current = 2.0 * reference.z_reference[packet.iteration - reference.start_iteration] * packet.delta_current + packet.delta_current * packet.delta_current + packet.delta_reference;
                         packet.iteration += 1;
                     }
                 }
