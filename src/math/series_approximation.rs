@@ -23,11 +23,11 @@ impl SeriesApproximation {
         let delta_maximum = delta_top_left.norm();
 
         // To avoid scaling issues we can put in delta / delta_maximum or something
-        let mut coefficents = vec![ComplexFixed::new(0.0, 0.0); order as usize + 1];
-        coefficents[0] = ComplexFixed::new(c.real().to_f64(), c.imag().to_f64());
+        let mut coefficients = vec![ComplexFixed::new(0.0, 0.0); order as usize + 1];
+        coefficients[0] = ComplexFixed::new(c.real().to_f64(), c.imag().to_f64());
 
         // Set 1, 1, to the maximum delta
-        coefficents[1] = ComplexFixed::new(delta_maximum, 0.0);
+        coefficients[1] = ComplexFixed::new(delta_maximum, 0.0);
 
         // The current iteration is set to 1 as we set z = c
         SeriesApproximation {
@@ -38,7 +38,7 @@ impl SeriesApproximation {
             z: c.clone(),
             c,
             order,
-            coefficients: coefficents,
+            coefficients,
             original_probes: Vec::new(),
             perturbation_probes: Vec::new(),
             approximation_probes: Vec::new(),
