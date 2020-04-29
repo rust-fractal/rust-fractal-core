@@ -1,3 +1,5 @@
+use float_extended::complex_extended::ComplexExtended;
+
 pub mod point;
 pub mod image;
 
@@ -13,6 +15,19 @@ pub struct PixelData {
     pub image_x: usize,
     pub image_y: usize,
     pub iteration: usize,
+    pub delta_reference: ComplexFixed<f64>,
+    pub delta_current: ComplexFixed<f64>,
+    pub derivative_current: ComplexFixed<f64>,
+    pub glitched: bool,
+    pub escaped: bool,
+}
+
+#[derive(Clone)]
+pub struct PixelData2 {
+    pub image_x: usize,
+    pub image_y: usize,
+    pub iteration: usize,
+    pub p_initial: i32,
     pub delta_reference: ComplexFixed<f64>,
     pub delta_current: ComplexFixed<f64>,
     pub derivative_current: ComplexFixed<f64>,

@@ -1,7 +1,7 @@
 use crate::util::{ComplexArbitrary, ComplexFixed};
 use crate::math::reference::Reference;
 
-pub struct SeriesApproximation {
+pub struct SeriesApproximationExp {
     pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel: f64,
@@ -17,7 +17,7 @@ pub struct SeriesApproximation {
     delta_maximum: f64
 }
 
-impl SeriesApproximation {
+impl SeriesApproximationExp {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: f64, delta_top_left: ComplexFixed<f64>) -> Self {
         assert!(order >= 1);
         let delta_maximum = delta_top_left.norm();
@@ -30,7 +30,7 @@ impl SeriesApproximation {
         coefficients[1] = ComplexFixed::new(delta_maximum, 0.0);
 
         // The current iteration is set to 1 as we set z = c
-        SeriesApproximation {
+        SeriesApproximationExp {
             current_iteration: 1,
             maximum_iteration,
             delta_pixel,
