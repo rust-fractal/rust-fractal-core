@@ -46,11 +46,13 @@ impl FractalRenderer {
 
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
         let radius = delta_pixel * image_width as f64;
-        let precision = max(64, -radius.exponent + 512);
+        let precision = max(64, -radius.exponent + 256);
 
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
             ComplexArbitrary::parse("(".to_owned() + center_real + "," + center_imag + ")").expect("Location is not valid!"));
+
+        println!("{}", center_location);
 
         FractalRenderer {
             image_width,
@@ -75,6 +77,7 @@ impl FractalRenderer {
         reference.run();
 
         println!("reference last: {}", reference.z_reference.last().unwrap());
+        println!("reference iterations: {}", reference.current_iteration);
         println!("precision: {}", self.center_location.prec().0);
 
         // we should now have the reference done...
