@@ -13,21 +13,18 @@ impl Perturbation2 {
             .for_each(|pixel_data| {
                 for packet in pixel_data {
                     // TODO investigate setting up a floatexp-type thing which only rescales every 500 or so iterations
-
-                    let temp_ref = packet.delta_reference;
-                    let temp_p = packet.p_initial;
-
                     // -500 is temporary (needs to be basically 300 * 3.13 or something)
-                    while packet.p_initial < -450 && packet.iteration < maximum_iteration {
+                    while packet.p_initial < -800 && packet.iteration < maximum_iteration {
                         // let z = packet.delta_current + reference.z_reference[packet.iteration - reference.start_iteration];
 
                         // packet.derivative_current = 2.0 * z * packet.derivative_current + 1.0;
                         // we need to do a check here to see if the z reference is 0
-                        let temp = reference.z_reference[packet.iteration - reference.start_iteration];
+                        let mut temp = reference.z_reference[packet.iteration - reference.start_iteration];
+
                         packet.delta_current = 2.0 * temp * packet.delta_current + packet.delta_reference;
                         packet.iteration += 1;
 
-                        if packet.iteration % 100 == 0 {
+                        if packet.iteration % 400 == 0 {
                             // here we should do the rescale, based on the real value
                             let (temp_mantissa, added_exponent) = packet.delta_current.re.frexp();
                             packet.delta_current.re = temp_mantissa;
@@ -50,20 +47,17 @@ impl Perturbation2 {
                     // iterations then do the normal
 
                     // ok, so now we should have the delta sized enough to fit in double
-                    packet.delta_current.re = packet.delta_current.re.ldexp(packet.p_initial);
-                    packet.delta_current.im = packet.delta_current.im.ldexp(packet.p_initial);
-                    packet.delta_reference.re = packet.delta_reference.re.ldexp(packet.p_initial);
-                    packet.delta_reference.im = packet.delta_reference.im.ldexp(packet.p_initial);
+                    // packet.delta_current.re = packet.delta_current.re.ldexp(packet.p_initial);
+                    // packet.delta_current.im = packet.delta_current.im.ldexp(packet.p_initial);
+                    // packet.delta_reference.re = packet.delta_reference.re.ldexp(packet.p_initial);
+                    // packet.delta_reference.im = packet.delta_reference.im.ldexp(packet.p_initial);
                     // packet.derivative_current *= 2.0f64.powi(packet.p_initial);
 
-                    let mut z_norm = 0.0;
-
-                    // normal
+                    // normal but with added exponent
                     while packet.iteration < maximum_iteration {
                         // This uses the difference between the starting iteration of the reference - can be used to skip some
-                        let temp = reference.z_reference[packet.iteration - reference.start_iteration];
-                        let z = packet.delta_current + temp;
-                        z_norm = z.norm_sqr();
+                        let z = reference.z_reference[packet.iteration - reference.start_iteration] + packet.delta_current * 2.0f64.powi(packet.p_initial);
+                        let z_norm = z.norm_sqr();
 
                         if z_norm < reference.z_tolerance[packet.iteration - reference.start_iteration] {
                             packet.glitched = true;
@@ -78,11 +72,32 @@ impl Perturbation2 {
                         }
 
                         // packet.derivative_current = 2.0 * z * packet.derivative_current + 1.0;
-                        packet.delta_current = 2.0 * reference.z_reference[packet.iteration - reference.start_iteration] * packet.delta_current + packet.delta_current * packet.delta_current + packet.delta_reference;
+
+                        packet.delta_current = 2.0 * reference.z_reference[packet.iteration - reference.start_iteration] * packet.delta_current + packet.delta_current * packet.delta_current * 2.0f64.powi(packet.p_initial) + packet.delta_reference;
+
                         packet.iteration += 1;
+
+                        // 2x time with 100 vs 1
+                        if packet.iteration % 400 == 0 {
+                            // here we should do the rescale, based on the real value
+                            let (temp_mantissa, added_exponent) = packet.delta_current.re.frexp();
+                            packet.delta_current.re = temp_mantissa;
+                            // packet.delta_current.im *= 2.0f64.powi(-added_exponent);
+                            // packet.p_initial += added_exponent;
+                            // packet.delta_reference *= 2.0f64.powi(-added_exponent);
+
+
+                            packet.delta_current.im = packet.delta_current.im.ldexp(-added_exponent);
+                            packet.p_initial += added_exponent;
+                            packet.delta_reference.re = packet.delta_reference.re.ldexp(-added_exponent);
+                            packet.delta_reference.im = packet.delta_reference.im.ldexp(-added_exponent);
+
+
+                            // packet.derivative_current /= 2.0f64.powi(added_exponent);
+                        }
                     }
 
-                    println!("{}, {}", packet.iteration, packet.delta_current);
+                    // println!("{}, {}", packet.iteration, packet.delta_current);
                 }
             });
     }
