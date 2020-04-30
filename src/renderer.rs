@@ -14,6 +14,7 @@ use crate::math::reference::Reference;
 use crate::math::perturbation2::Perturbation2;
 use crate::colouring2::ColourMethod2;
 use std::f64::consts::LOG2_10;
+use crate::math::reference2::Reference2;
 
 pub struct FractalRenderer {
     image_width: usize,
