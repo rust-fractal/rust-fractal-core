@@ -87,7 +87,7 @@ impl Perturbation2 {
                                 let new_p = max(packet.p_initial + temp4.1, temp3);
 
                                 packet.delta_reference = temp2 * 2.0f64.powi(temp3 - new_p);
-                                packet.delta_current = 2.0 * packet.delta_current * temp4.0 * 2.0f64.powi(packet.p_initial + temp4.1 - new_p) + packet.delta_reference;
+                                packet.delta_current = 2.0 * packet.delta_current * temp4.0 * 2.0f64.powi(packet.p_initial + temp4.1 - new_p) + packet.delta_current * packet.delta_current * 2.0f64.powi(2 * packet.p_initial - new_p) + packet.delta_reference;
                                 packet.p_initial = new_p;
                             } else {
                                 packet.delta_current = 2.0 * temp * packet.delta_current + packet.delta_reference;
