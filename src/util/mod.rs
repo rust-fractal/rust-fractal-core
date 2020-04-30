@@ -8,17 +8,26 @@ pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
 
 pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
-    let re = value.real().to_f64_round(Round::Up);
-    let im = value.imag().to_f64_round(Round::Up);
+    let re = value.real().to_f64();
+    let im = value.imag().to_f64();
 
-    if re == 0.0 {
-        re == -std::f64::MIN_POSITIVE;
-    }
-    if im == 0.0 {
-        im == -std::f64::MIN_POSITIVE;
-    }
+    // if re == 0.0 {
+    //     re == -std::f64::MIN_POSITIVE;
+    // }
+    // if im == 0.0 {
+    //     im == -std::f64::MIN_POSITIVE;
+    // }
 
     ComplexFixed::new(re, im)
+}
+
+pub fn to_fixed_exp(value: &ComplexArbitrary) -> (ComplexFixed<f64>, i32) {
+    let (re, p1) = value.real().to_f64_exp();
+    let (im, p2) = value.imag().to_f64_exp();
+
+    let im_new = im * 2f64.powi(p2 - p1);
+
+    (ComplexFixed::new(re, im_new), p1)
 }
 
 #[derive(Clone)]
