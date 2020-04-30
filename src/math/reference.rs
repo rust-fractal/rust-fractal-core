@@ -6,15 +6,21 @@ pub struct Reference {
     pub maximum_iteration: usize,
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
-    pub z_reference: Vec<ComplexFixed<f64>>,
-    pub z_reference_extended: Vec<(ComplexFixed<f64>, i32)>,
+    pub z_reference: Vec<(ComplexFixed<f64>, i32)>,
     pub z_tolerance: Vec<f64>
 }
 
 impl Reference {
     pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> Reference {
-        let z_fixed = to_fixed(&z);
-        let z_fixed_extended = to_fixed_exp(&z);
+        let z_fixed = (to_fixed(&z), 0);
+
+        // Stored in premultiplied form
+        let z_n = if z_fixed.0.re <= 1e-30 && z_fixed.0.re >= -1e-30 {
+            let temp = to_fixed_exp(&z);
+            (temp.0 * 2.0, temp.1)
+        } else {
+            (z_fixed.0 * 2.0, 0)
+        };
 
         // 1e-6 is the threshold for pauldelbrot's criterion
         Reference {
@@ -23,22 +29,30 @@ impl Reference {
             maximum_iteration,
             z,
             c,
-            z_reference: vec![z_fixed],
-            z_reference_extended: vec![z_fixed_extended],
-            z_tolerance: vec![1e-6 * z_fixed.norm_sqr()]
+            z_reference: vec![z_n],
+            z_tolerance: vec![1e-6 * z_fixed.0.norm_sqr()]
         }
     }
 
     pub fn step(&mut self) -> bool {
         self.z = self.z.clone().square() + self.c.clone();
         self.current_iteration += 1;
-        let z_fixed = to_fixed(&self.z);
-        self.z_reference.push(z_fixed);
-        self.z_reference_extended.push(to_fixed_exp(&self.z));
-        self.z_tolerance.push(1e-6 * z_fixed.norm_sqr());
-        // println!("{}", z_fixed);
 
-        z_fixed.norm_sqr() <= 4.0
+        let z_fixed = (to_fixed(&self.z), 0);
+
+        // Stored in premultiplied form
+        let z_n = if z_fixed.0.re <= 1e-30 && z_fixed.0.re >= -1e-30 {
+            let temp = to_fixed_exp(&self.z);
+            (temp.0 * 2.0, temp.1)
+        } else {
+            (z_fixed.0 * 2.0, 0)
+        };
+
+        self.z_reference.push(z_n);
+        self.z_tolerance.push(1e-6 * z_fixed.0.norm_sqr());
+
+        // If the value is not small we do the escape check, otherwise it has not escaped
+        z_fixed.0.norm_sqr() <= 4.0
     }
 
 
