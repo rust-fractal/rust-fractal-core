@@ -135,7 +135,7 @@ impl FractalRenderer {
 
         let time = Instant::now();
         ColourMethod2::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
-        println!("{:<14}{:>6} ms", "Colouring", time.elapsed().as_millis());
+        println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
         let time = Instant::now();
         self.image.save();

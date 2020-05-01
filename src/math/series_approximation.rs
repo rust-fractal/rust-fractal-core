@@ -13,7 +13,10 @@ pub struct SeriesApproximation2 {
     pub order: usize,
     coefficients: Vec<ComplexExtended>,
     current_probes: Vec<ComplexExtended>,
-    original_probes: Vec<ComplexExtended>
+    original_probes: Vec<ComplexExtended>,
+    approximation_probes: Vec<Vec<ComplexExtended>>,
+    approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
+    delta_top_left: ComplexExtended
 }
 
 impl SeriesApproximation2 {
@@ -26,13 +29,6 @@ impl SeriesApproximation2 {
         coefficients[0] = ComplexExtended::new(temp.0, temp.1);
         coefficients[1] = ComplexExtended::new2(1.0, 0.0, 0);
 
-        let probes = vec![
-            ComplexExtended::new2(delta_top_left.mantissa.re, delta_top_left.mantissa.im, delta_top_left.exponent),
-            ComplexExtended::new2(delta_top_left.mantissa.re, delta_top_left.mantissa.im * -1.0, delta_top_left.exponent),
-            ComplexExtended::new2(delta_top_left.mantissa.re * -1.0, delta_top_left.mantissa.im, delta_top_left.exponent),
-            ComplexExtended::new2(delta_top_left.mantissa.re * -1.0, delta_top_left.mantissa.im * -1.0, delta_top_left.exponent),
-        ];
-
         // The current iteration is set to 1 as we set z = c
         SeriesApproximation2 {
             current_iteration: 1,
@@ -42,8 +38,11 @@ impl SeriesApproximation2 {
             c,
             order,
             coefficients,
-            current_probes: probes.clone(),
-            original_probes: probes
+            current_probes: Vec::new(),
+            original_probes: Vec::new(),
+            approximation_probes: Vec::new(),
+            approximation_probes_derivative: Vec::new(),
+            delta_top_left
         }
     }
 
@@ -61,14 +60,14 @@ impl SeriesApproximation2 {
 
             for j in 0..=((k - 1) / 2) {
                 sum += self.coefficients[j] * self.coefficients[k - j];
-                sum.reduce();
+                // sum.reduce();
             }
             sum *= 2.0;
 
             // If even, we include the mid term as well
             if k % 2 == 0 {
                 sum += self.coefficients[k / 2] * self.coefficients[k / 2];
-                sum.reduce();
+                // sum.reduce();
             }
 
             next_coefficients[k] = sum;
@@ -82,25 +81,14 @@ impl SeriesApproximation2 {
             self.current_probes[i].reduce();
 
             // get the new approximations
-            let mut original_probe_n = self.original_probes[i];
             let mut series_probe = ComplexExtended::new2(0.0, 0.0, 0);
-
-            for k in 1..=self.order {
-                let test = next_coefficients[k] * original_probe_n;
-                series_probe = series_probe + next_coefficients[k] * original_probe_n;
-                original_probe_n *= self.original_probes[i];
-                series_probe.reduce();
-                original_probe_n.reduce();
-            };
-
-            let mut original_probe_derivative_n = ComplexExtended::new2(1.0, 0.0, 0);
             let mut derivative_probe = ComplexExtended::new2(0.0, 0.0, 0);
 
             for k in 1..=self.order {
-                derivative_probe = derivative_probe + next_coefficients[k] * original_probe_derivative_n * k as f64;
-                original_probe_derivative_n *= self.original_probes[i];
-                derivative_probe.reduce();
-                original_probe_derivative_n.reduce();
+                series_probe = series_probe + next_coefficients[k] * self.approximation_probes[i][k - 1];
+                derivative_probe = derivative_probe + next_coefficients[k] * self.approximation_probes_derivative[i][k - 1] * k as f64;
+                // series_probe.reduce();
+                // derivative_probe.reduce();
             };
 
             let mut relative_error = (self.current_probes[i] - series_probe).norm();
@@ -125,6 +113,11 @@ impl SeriesApproximation2 {
     }
 
     pub fn run(&mut self) {
+        self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+
         // Can be changed later into a better loop - this function could also return some more information
         while self.step() && self.current_iteration < self.maximum_iteration {
             continue;
@@ -160,4 +153,27 @@ impl SeriesApproximation2 {
     //
     //     approximation_derivative.to_float()
     // }
+
+    pub fn add_probe(&mut self, delta_probe: ComplexExtended) {
+        // here we will need to check to make sure we are still at the first iteration, or use perturbation to go forward
+        self.original_probes.push(delta_probe);
+        self.current_probes.push(delta_probe);
+
+        let mut delta_probe_n = Vec::with_capacity(self.order + 1);
+        let mut delta_probe_n_derivative = Vec::with_capacity(self.order + 1);
+
+        // The first element will be 1, in order for the derivative to be calculated
+        delta_probe_n.push(delta_probe);
+        delta_probe_n_derivative.push(ComplexExtended::new2(1.0, 0.0, 0));
+
+        for i in 1..=self.order {
+            delta_probe_n.push(delta_probe_n[i - 1] * delta_probe);
+            delta_probe_n_derivative.push(delta_probe_n_derivative[i - 1] * delta_probe);
+            delta_probe_n.last_mut().unwrap().reduce();
+            delta_probe_n_derivative.last_mut().unwrap().reduce();
+        }
+
+        self.approximation_probes.push(delta_probe_n);
+        self.approximation_probes_derivative.push(delta_probe_n_derivative);
+    }
 }
