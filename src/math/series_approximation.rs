@@ -7,7 +7,7 @@ use float_extended::float_extended::FloatExtended;
 pub struct SeriesApproximation2 {
     pub current_iteration: usize,
     maximum_iteration: usize,
-    delta_pixel: f64,
+    delta_pixel: FloatExtended,
     z: ComplexArbitrary,
     c: ComplexArbitrary,
     pub order: usize,
@@ -17,7 +17,7 @@ pub struct SeriesApproximation2 {
 }
 
 impl SeriesApproximation2 {
-    pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: f64, delta_top_left: ComplexExtended) -> Self {
+    pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: FloatExtended, delta_top_left: ComplexExtended) -> Self {
         assert!(order >= 1);
 
         let mut coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1];
@@ -61,12 +61,14 @@ impl SeriesApproximation2 {
 
             for j in 0..=((k - 1) / 2) {
                 sum += self.coefficients[j] * self.coefficients[k - j];
+                sum.reduce();
             }
             sum *= 2.0;
 
             // If even, we include the mid term as well
             if k % 2 == 0 {
                 sum += self.coefficients[k / 2] * self.coefficients[k / 2];
+                sum.reduce();
             }
 
             next_coefficients[k] = sum;
@@ -77,30 +79,36 @@ impl SeriesApproximation2 {
             let temp = to_fixed_exp(&self.z);
             let temp2 = ComplexExtended::new(temp.0, temp.1);
             self.current_probes[i] = temp2 * self.current_probes[i] * 2.0 + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
+            self.current_probes[i].reduce();
 
             // get the new approximations
             let mut original_probe_n = self.original_probes[i];
             let mut series_probe = ComplexExtended::new2(0.0, 0.0, 0);
 
             for k in 1..=self.order {
-                series_probe += next_coefficients[k] * original_probe_n;
+                let test = next_coefficients[k] * original_probe_n;
+                series_probe = series_probe + next_coefficients[k] * original_probe_n;
                 original_probe_n *= self.original_probes[i];
+                series_probe.reduce();
+                original_probe_n.reduce();
             };
 
             let mut original_probe_derivative_n = ComplexExtended::new2(1.0, 0.0, 0);
             let mut derivative_probe = ComplexExtended::new2(0.0, 0.0, 0);
 
             for k in 1..=self.order {
-                derivative_probe += next_coefficients[k] * original_probe_derivative_n * k as f64;
+                derivative_probe = derivative_probe + next_coefficients[k] * original_probe_derivative_n * k as f64;
                 original_probe_derivative_n *= self.original_probes[i];
+                derivative_probe.reduce();
+                original_probe_derivative_n.reduce();
             };
 
-            let mut relative_error = (self.current_probes[i] - series_probe).norm().to_float();
-            let mut derivative = derivative_probe.norm().to_float();
+            let mut relative_error = (self.current_probes[i] - series_probe).norm();
+            let mut derivative = derivative_probe.norm();
 
             // Check to make sure that the derivative is greater than or equal to 1
-            if derivative < 1.0 {
-                derivative = 1.0;
+            if derivative.to_float() < 1.0 {
+                derivative = FloatExtended::new(1.0, 0);
             }
 
             // Check that the error over the derivative is less than the pixel spacing
@@ -135,6 +143,7 @@ impl SeriesApproximation2 {
         for k in 1..=self.order {
             approximation += self.coefficients[k] * original_point_n;
             original_point_n *= point_delta;
+            approximation.reduce();
         };
 
         approximation
