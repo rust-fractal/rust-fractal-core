@@ -137,6 +137,54 @@ impl FractalRenderer {
         ColourMethod2::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
+        // println!("Fixing Glitches:");
+        // let glitched = pixel_data.len();
+        // let mut glitch_progress = ProgressBar::new(glitched as u64);
+        //
+        // while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
+        //     // delta_c is the difference from the next reference from the previous one
+        //     let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+        //     let reference_wrt_sa = ComplexExtended::new(delta_c.delta_reference, delta_c.p_initial);
+        //
+        //     let delta_z = series_approximation.evaluate(reference_wrt_sa);
+        //
+        //     let mut r = series_approximation.get_reference(reference_wrt_sa);
+        //     r.run();
+        //
+        //     let mut temp2 = Vec::new();
+        //
+        //     for data in &mut pixel_data {
+        //         let temp = data.delta_reference;
+        //         data.iteration = series_approximation.current_iteration;
+        //         data.glitched = false;
+        //         data.escaped = false;
+        //         data.delta_reference -= reference_wrt_sa;
+        //         // might not need the evaluate here as if we store it separately, there is no need
+        //         data.delta_current = series_approximation.evaluate(temp) - delta_z;
+        //         data.derivative_current = series_approximation.evaluate_derivative(temp);
+        //         temp2.push(temp);
+        //     }
+        //
+        //     Perturbation2::iterate(&mut pixel_data, &r, r.maximum_iteration);
+        //
+        //     ColourMethod2::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+        //
+        //     // Slow, replacing with every iteration
+        //     for i in 0..pixel_data.len() {
+        //         pixel_data[i].delta_reference = temp2[i]
+        //     }
+        //
+        //     glitch_progress.set((glitched - pixel_data.len()) as u64);
+        //
+        //     // Remove all non-glitched points from the remaining points
+        //     pixel_data.retain(|packet| {
+        //         packet.glitched
+        //     });
+        // }
+        //
+        // glitch_progress.finish();
+        // println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
+
         let time = Instant::now();
         self.image.save();
         println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
@@ -195,52 +243,7 @@ impl FractalRenderer {
         //     packet.glitched
         // });
         //
-        // println!("Fixing Glitches:");
-        // let glitched = pixel_data.len();
-        // let mut glitch_progress = ProgressBar::new(glitched as u64);
-        //
-        // while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
-        //     // delta_c is the difference from the next reference from the previous one
-        //     let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
-        //     let reference_wrt_sa = delta_c.delta_reference;
-        //
-        //     let delta_z = series_approximation.evaluate(reference_wrt_sa);
-        //
-        //     let mut r = series_approximation.get_reference(reference_wrt_sa);
-        //     r.run();
-        //
-        //     let mut temp2 = Vec::new();
-        //
-        //     for data in &mut pixel_data {
-        //         let temp = data.delta_reference;
-        //         data.iteration = series_approximation.current_iteration;
-        //         data.glitched = false;
-        //         data.escaped = false;
-        //         data.delta_reference -= reference_wrt_sa;
-        //         data.delta_current = series_approximation.evaluate(temp) - delta_z;
-        //         data.derivative_current = series_approximation.evaluate_derivative(temp);
-        //         temp2.push(temp);
-        //     }
-        //
-        //     Perturbation::iterate(&mut pixel_data, &r, r.maximum_iteration);
-        //
-        //     ColourMethod::Distance.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
-        //
-        //     // Slow, replacing with every iteration
-        //     for i in 0..pixel_data.len() {
-        //         pixel_data[i].delta_reference = temp2[i]
-        //     }
-        //
-        //     glitch_progress.set((glitched - pixel_data.len()) as u64);
-        //
-        //     // Remove all non-glitched points from the remaining points
-        //     pixel_data.retain(|packet| {
-        //         packet.glitched
-        //     });
-        // }
-        //
-        // glitch_progress.finish();
-        // println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
+
         //
         // let time = Instant::now();
         // self.image.save();
