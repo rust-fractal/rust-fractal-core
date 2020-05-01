@@ -136,7 +136,7 @@ impl SeriesApproximation2 {
         for k in 1..=self.order {
             approximation += self.coefficients[k] * original_point_n;
             original_point_n *= point_delta;
-            approximation.reduce();
+            // approximation.reduce();
         };
 
         approximation
@@ -169,8 +169,8 @@ impl SeriesApproximation2 {
         for i in 1..=self.order {
             delta_probe_n.push(delta_probe_n[i - 1] * delta_probe);
             delta_probe_n_derivative.push(delta_probe_n_derivative[i - 1] * delta_probe);
-            delta_probe_n.last_mut().unwrap().reduce();
-            delta_probe_n_derivative.last_mut().unwrap().reduce();
+            // delta_probe_n.last_mut().unwrap().reduce();
+            // delta_probe_n_derivative.last_mut().unwrap().reduce();
         }
 
         self.approximation_probes.push(delta_probe_n);
