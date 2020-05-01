@@ -53,8 +53,6 @@ impl FractalRenderer {
             precision as u32,
             ComplexArbitrary::parse("(".to_owned() + center_real + "," + center_imag + ")").expect("Location is not valid!"));
 
-        println!("{}", center_location);
-
         FractalRenderer {
             image_width,
             image_height,
@@ -81,47 +79,44 @@ impl FractalRenderer {
             self.center_location.clone(),
             self.approximation_order,
             self.maximum_iteration,
-            delta_pixel * 2.0f64.powi(-self.zoom.exponent),
+            FloatExtended::new(delta_pixel, -self.zoom.exponent),
             ComplexExtended::new(delta_top_left, -self.zoom.exponent),
         );
         series_approximation.run();
 
         println!("{:<14}{:>6} ms", "Approximation", time.elapsed().as_millis());
-        println!("{:<14}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
+        println!("{:<16}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
 
         // return;
+
+        let time = Instant::now();
 
         // let mut reference = Reference::new(self.center_location.clone(), self.center_location.clone(), 1, self.maximum_iteration);
         let mut reference = series_approximation.get_reference();
         reference.run();
 
-        println!("reference last: {}*2^{}", reference.z_reference.last().unwrap().0, reference.z_reference.last().unwrap().1);
-        println!("reference iterations: {}", reference.current_iteration);
-        println!("precision: {}", self.center_location.prec().0);
+        println!("{:<14}{:>6} ms (precision {}, iterations {})", "Reference", time.elapsed().as_millis(), self.center_location.prec().0, reference.current_iteration);
 
         // we should now have the reference done...
 
         // now we run the perturbation thing
 
         // Now we need to do the perturbation
+        let time = Instant::now();
         let mut pixel_data = Vec::with_capacity(self.image_width * self.image_height);
 
         for i in 0..self.image_width {
             for j in 0..self.image_height {
-                // let delta_reference = ComplexExtended::new(
-                //     ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im),
-                //     -self.zoom.exponent
-                // );
-
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = series_approximation.evaluate(point_delta);
+                // let new_delta = point_delta;
 
                 pixel_data.push(PixelData2 {
                     image_x: i,
                     image_y: j,
                     iteration: reference.start_iteration,
-                    p_initial: -self.zoom.exponent,
+                    p_initial: point_delta.exponent,
                     p_current: new_delta.exponent,
                     delta_reference: point_delta.mantissa,
                     delta_current: new_delta.mantissa,
@@ -132,13 +127,19 @@ impl FractalRenderer {
             }
         }
 
+        println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
+
+        let time = Instant::now();
         Perturbation2::iterate(&mut pixel_data, &reference, reference.current_iteration);
+        println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
+        let time = Instant::now();
         ColourMethod2::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+        println!("{:<14}{:>6} ms", "Colouring", time.elapsed().as_millis());
 
-        println!("{}", pixel_data[0].iteration);
-
+        let time = Instant::now();
         self.image.save();
+        println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
         //
         // let time = Instant::now();
         //
