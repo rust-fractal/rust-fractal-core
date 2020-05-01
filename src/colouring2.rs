@@ -66,7 +66,7 @@ impl ColourMethod2 {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (100.0 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (10.0 * pixel.iteration as f64) as usize % 8192;
 
                         let colour = colours[hue];
 

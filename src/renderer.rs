@@ -91,10 +91,10 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Approximation", time.elapsed().as_millis());
         println!("{:<14}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
 
-        return;
+        // return;
 
-        // let mut reference = Reference::new(self.center_location.clone(), self.center_location.clone(), 1, self.maximum_iteration);
-        let mut reference = series_approximation.get_reference(ComplexExtended::new(ComplexFixed::new(0.0, 0.0), 0));
+        let mut reference = Reference::new(self.center_location.clone(), self.center_location.clone(), 1, self.maximum_iteration);
+        // let mut reference = series_approximation.get_reference(ComplexExtended::new(ComplexFixed::new(0.0, 0.0), 0));
         reference.run();
 
         println!("reference last: {}*2^{}", reference.z_reference.last().unwrap().0, reference.z_reference.last().unwrap().1);
@@ -110,10 +110,12 @@ impl FractalRenderer {
 
         for i in 0..self.image_width {
             for j in 0..self.image_height {
-                let delta_reference = ComplexExtended::new(
-                    ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im),
-                    -self.zoom.exponent
-                );
+                // let delta_reference = ComplexExtended::new(
+                //     ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im),
+                //     -self.zoom.exponent
+                // );
+
+                let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
 
                 pixel_data.push(PixelData2 {
                     image_x: i,
@@ -121,7 +123,7 @@ impl FractalRenderer {
                     iteration: reference.start_iteration,
                     p_initial: -self.zoom.exponent,
                     delta_reference: element,
-                    delta_current: series_approximation.evaluate(),
+                    delta_current: element,
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
                     escaped: false
