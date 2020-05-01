@@ -82,7 +82,7 @@ impl FractalRenderer {
             self.approximation_order,
             self.maximum_iteration,
             delta_pixel * 2.0f64.powi(-self.zoom.exponent),
-            delta_top_left * 2.0f64.powi(-self.zoom.exponent),
+            ComplexExtended::new(delta_top_left, -self.zoom.exponent),
         );
         series_approximation.run();
 
@@ -114,19 +114,17 @@ impl FractalRenderer {
                 // );
 
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
-
-                let new_delta = series_approximation.evaluate(element * 2.0f64.powi(-self.zoom.exponent));
-
-                let test = ComplexExtended::new(new_delta, 0);
+                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                let new_delta = series_approximation.evaluate(point_delta);
 
                 pixel_data.push(PixelData2 {
                     image_x: i,
                     image_y: j,
                     iteration: reference.start_iteration,
                     p_initial: -self.zoom.exponent,
-                    p_current: test.exponent,
-                    delta_reference: element,
-                    delta_current: test.mantissa,
+                    p_current: new_delta.exponent,
+                    delta_reference: point_delta.mantissa,
+                    delta_current: new_delta.mantissa,
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
                     escaped: false
