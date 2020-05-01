@@ -1,7 +1,7 @@
 use crate::util::image::Image;
 use crate::math::perturbation::Perturbation;
 use crate::util::{ComplexArbitrary, ComplexFixed, PixelData, PixelData2};
-use crate::math::series_approximation::SeriesApproximation;
+use crate::math::series_approximation::{SeriesApproximation2};
 
 use pbr::ProgressBar;
 use std::time::Instant;
@@ -9,13 +9,12 @@ use rand::seq::SliceRandom;
 use std::cmp::max;
 use crate::colouring::ColourMethod;
 use float_extended::float_extended::FloatExtended;
-use crate::math::series_approximation_exp::ComplexExtended;
 use crate::math::reference::Reference;
 use crate::math::perturbation2::Perturbation2;
 use crate::colouring2::ColourMethod2;
 use std::f64::consts::LOG2_10;
 use crate::math::reference2::Reference2;
-use crate::math::series_approximation_exp::SeriesApproximationExp;
+use float_extended::complex_extended::ComplexExtended;
 
 pub struct FractalRenderer {
     image_width: usize,
@@ -78,13 +77,12 @@ impl FractalRenderer {
         let time = Instant::now();
 
         // We run the series approximation using the center point as a reference
-        let mut series_approximation = SeriesApproximationExp::new(
+        let mut series_approximation = SeriesApproximation2::new(
             self.center_location.clone(),
             self.approximation_order,
             self.maximum_iteration,
-            ComplexExtended::new(ComplexFixed::new(delta_pixel, 0.0), -self.zoom.exponent),
-            delta_top_left,
-            -self.zoom.exponent
+            delta_pixel * 2.0f64.powi(-self.zoom.exponent),
+            delta_top_left * 2.0f64.powi(-self.zoom.exponent),
         );
         series_approximation.run();
 
@@ -93,8 +91,8 @@ impl FractalRenderer {
 
         // return;
 
-        let mut reference = Reference::new(self.center_location.clone(), self.center_location.clone(), 1, self.maximum_iteration);
-        // let mut reference = series_approximation.get_reference(ComplexExtended::new(ComplexFixed::new(0.0, 0.0), 0));
+        // let mut reference = Reference::new(self.center_location.clone(), self.center_location.clone(), 1, self.maximum_iteration);
+        let mut reference = series_approximation.get_reference();
         reference.run();
 
         println!("reference last: {}*2^{}", reference.z_reference.last().unwrap().0, reference.z_reference.last().unwrap().1);
@@ -117,13 +115,18 @@ impl FractalRenderer {
 
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
 
+                let new_delta = series_approximation.evaluate(element * 2.0f64.powi(-self.zoom.exponent));
+
+                let test = ComplexExtended::new(new_delta, 0);
+
                 pixel_data.push(PixelData2 {
                     image_x: i,
                     image_y: j,
                     iteration: reference.start_iteration,
                     p_initial: -self.zoom.exponent,
+                    p_current: test.exponent,
                     delta_reference: element,
-                    delta_current: element,
+                    delta_current: test.mantissa,
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
                     escaped: false

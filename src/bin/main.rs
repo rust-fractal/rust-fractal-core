@@ -137,7 +137,7 @@ fn main() {
         center.1,
         0.001,
         true,
-        4
+        16
     );
 
     let time = Instant::now();
