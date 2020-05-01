@@ -16,6 +16,10 @@ impl Perturbation2 {
                 for packet in pixel_data {
                     let original_reference = (packet.delta_reference, packet.p_initial);
 
+                    // normalise so that the current d0 is same as current dn
+                    packet.delta_reference *= 2.0f64.powi(packet.p_initial - packet.p_current);
+                    packet.p_initial = packet.p_current;
+
                     // normal but with added exponent
                     while packet.iteration < maximum_iteration {
                         // This uses the difference between the starting iteration of the reference - can be used to skip some
@@ -23,9 +27,9 @@ impl Perturbation2 {
 
                         let z_reference = reference.z_reference[packet.iteration - reference.start_iteration];
 
-                        if packet.p_initial > -800 {
+                        if packet.p_current > -800 {
                             // The -1 in the power here is because the reference is already pre-multiplied by 2
-                            let z = z_reference.0 * 2.0f64.powi(z_reference.1 - 1) + packet.delta_current * 2.0f64.powi(packet.p_initial);
+                            let z = z_reference.0 * 2.0f64.powi(z_reference.1 - 1) + packet.delta_current * 2.0f64.powi(packet.p_current);
                             let z_norm = z.norm_sqr();
 
                             if z_norm < reference.z_tolerance[packet.iteration - reference.start_iteration] {
@@ -43,16 +47,16 @@ impl Perturbation2 {
                             // We have already done this check, we only need to check if the current value is in floatexp form
                             if z_reference.1 < 0 {
                                 // this is the new p value we will be using
-                                let new_p = max(packet.p_initial + z_reference.1, original_reference.1);
+                                let new_p = max(packet.p_current + z_reference.1, original_reference.1);
 
                                 packet.delta_reference = original_reference.0 * 2.0f64.powi(original_reference.1 - new_p);
 
                                 // for the delta squared bit, as we want it in terms of the new p level, the powers are 2^(2 * pinit) / 2^(new_p)
-                                packet.delta_current = packet.delta_current * z_reference.0 * 2.0f64.powi(packet.p_initial + z_reference.1 - new_p) + packet.delta_current * packet.delta_current * 2.0f64.powi(2 * packet.p_initial - new_p) + packet.delta_reference;
-                                packet.p_initial = new_p;
+                                packet.delta_current = packet.delta_current * z_reference.0 * 2.0f64.powi(packet.p_current + z_reference.1 - new_p) + packet.delta_current * packet.delta_current * 2.0f64.powi(2 * packet.p_current - new_p) + packet.delta_reference;
+                                packet.p_current = new_p;
                             } else {
                                 // for the delta squared bit, as we want it in terms of the current p level, the powers are 2^(2 * pinit) / 2^(pinit)
-                                packet.delta_current = z_reference.0 * packet.delta_current + packet.delta_current * packet.delta_current * 2.0f64.powi(packet.p_initial) + packet.delta_reference;
+                                packet.delta_current = z_reference.0 * packet.delta_current + packet.delta_current * packet.delta_current * 2.0f64.powi(packet.p_current) + packet.delta_reference;
                             }
                         } else {
                             // here, we have that the exponent gets very low - need to do a relative thing
@@ -62,12 +66,12 @@ impl Perturbation2 {
                                 // we rescale back to the initial delta level
 
                                 // this is the new p value we will be using
-                                let new_p = max(packet.p_initial + z_reference.1, original_reference.1);
+                                let new_p = max(packet.p_current + z_reference.1, original_reference.1);
 
                                 packet.delta_reference = original_reference.0 * 2.0f64.powi(original_reference.1 - new_p);
 
-                                packet.delta_current = packet.delta_current * z_reference.0 * 2.0f64.powi(packet.p_initial + z_reference.1 - new_p) + packet.delta_current * packet.delta_current * 2.0f64.powi(2 * packet.p_initial - new_p) + packet.delta_reference;
-                                packet.p_initial = new_p;
+                                packet.delta_current = packet.delta_current * z_reference.0 * 2.0f64.powi(packet.p_current + z_reference.1 - new_p) + packet.delta_current * packet.delta_current * 2.0f64.powi(2 * packet.p_current - new_p) + packet.delta_reference;
+                                packet.p_current = new_p;
                             } else {
                                 packet.delta_current = z_reference.0 * packet.delta_current + packet.delta_reference;
                             }
@@ -82,7 +86,7 @@ impl Perturbation2 {
                             packet.delta_current.re = temp_mantissa;
 
                             packet.delta_current.im = packet.delta_current.im.ldexp(-added_exponent);
-                            packet.p_initial += added_exponent;
+                            packet.p_current += added_exponent;
                             packet.delta_reference.re = packet.delta_reference.re.ldexp(-added_exponent);
                             packet.delta_reference.im = packet.delta_reference.im.ldexp(-added_exponent);
 

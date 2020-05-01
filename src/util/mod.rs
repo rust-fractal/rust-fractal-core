@@ -48,6 +48,7 @@ pub struct PixelData2 {
     pub image_y: usize,
     pub iteration: usize,
     pub p_initial: i32,
+    pub p_current: i32,
     pub delta_reference: ComplexFixed<f64>,
     pub delta_current: ComplexFixed<f64>,
     pub derivative_current: ComplexFixed<f64>,
