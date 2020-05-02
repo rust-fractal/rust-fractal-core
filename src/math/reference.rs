@@ -22,6 +22,8 @@ impl Reference {
             (z_fixed.0 * 2.0, 0)
         };
 
+        // println!("z_n sa_end: {}, {}", z_n.0, z_n.1);
+
         // 1e-6 is the threshold for pauldelbrot's criterion
         Reference {
             start_iteration: current_iteration,
@@ -52,12 +54,14 @@ impl Reference {
         self.z_tolerance.push(1e-6 * z_fixed.0.norm_sqr());
 
         // If the value is not small we do the escape check, otherwise it has not escaped
-        z_fixed.0.norm_sqr() <= 4.0
+        // as we do the check for 65536 on the perturbation, we need this to be more than that squared
+        z_fixed.0.norm_sqr() <= 1e256
+        // true
     }
 
 
     pub fn run(&mut self) -> bool {
-        while self.current_iteration <= self.maximum_iteration {
+        while self.current_iteration < self.maximum_iteration {
             if !self.step() {
                 break;
             }
