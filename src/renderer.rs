@@ -15,6 +15,8 @@ use crate::colouring2::ColourMethod2;
 use std::f64::consts::LOG2_10;
 use crate::math::reference2::Reference2;
 use float_extended::complex_extended::ComplexExtended;
+use itertools::Itertools;
+use rayon::prelude::*;
 
 pub struct FractalRenderer {
     image_width: usize,
@@ -105,14 +107,16 @@ impl FractalRenderer {
         let time = Instant::now();
         let mut pixel_data = Vec::with_capacity(self.image_width * self.image_height);
 
-        for i in 0..self.image_width {
-            for j in 0..self.image_height {
+        let indices = (0..self.image_width).cartesian_product(0..self.image_height);
+
+        pixel_data = indices.into_iter().par_bridge()
+            .map(|(i, j)| {
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = series_approximation.evaluate(point_delta);
                 // let new_delta = point_delta;
 
-                pixel_data.push(PixelData2 {
+                PixelData2 {
                     image_x: i,
                     image_y: j,
                     iteration: reference.start_iteration,
@@ -123,9 +127,8 @@ impl FractalRenderer {
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
                     escaped: false
-                });
-            }
-        }
+                }
+            }).collect::<Vec<PixelData2>>();
 
         println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
 
@@ -158,23 +161,28 @@ impl FractalRenderer {
             let mut r = series_approximation.get_reference(reference_wrt_sa);
             r.run();
 
-            for data in &mut pixel_data {
-                let element = ComplexFixed::new(data.image_x as f64 * delta_pixel + delta_top_left.re, data.image_y as f64 * delta_pixel + delta_top_left.im);
-                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+            // this can be made faster, without having to do the series approximation again
+            // this is done by storing more data in pixeldata2
+            pixel_data.chunks_mut(1)
+                .for_each(|pixel_data| {
+                    for data in pixel_data {
+                        let element = ComplexFixed::new(data.image_x as f64 * delta_pixel + delta_top_left.re, data.image_y as f64 * delta_pixel + delta_top_left.im);
+                        let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
 
-                data.iteration = reference.start_iteration;
-                data.glitched = false;
-                data.escaped = false;
-                let temp = series_approximation.evaluate(point_delta) - delta_z;
-                data.delta_current = temp.mantissa;
-                data.p_current = temp.exponent;
+                        data.iteration = reference.start_iteration;
+                        data.glitched = false;
+                        data.escaped = false;
+                        let temp = series_approximation.evaluate(point_delta) - delta_z;
+                        data.delta_current = temp.mantissa;
+                        data.p_current = temp.exponent;
 
-                let temp2 = point_delta - reference_wrt_sa;
-                data.delta_reference = temp2.mantissa;
-                data.p_initial = temp2.exponent;
-                // might not need the evaluate here as if we store it separately, there is no need
-                data.derivative_current = ComplexFixed::new(1.0, 0.0);
-            }
+                        let temp2 = point_delta - reference_wrt_sa;
+                        data.delta_reference = temp2.mantissa;
+                        data.p_initial = temp2.exponent;
+                        // might not need the evaluate here as if we store it separately, there is no need
+                        data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                    }
+                });
 
             Perturbation2::iterate(&mut pixel_data, &r, r.current_iteration);
 

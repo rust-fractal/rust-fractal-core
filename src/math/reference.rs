@@ -15,14 +15,12 @@ impl Reference {
         let z_fixed = (to_fixed(&z), 0);
 
         // Stored in premultiplied form
-        let z_n = if z_fixed.0.re <= 1e-30 && z_fixed.0.re >= -1e-30 {
+        let z_n = if z_fixed.0.re <= 1e-128 && z_fixed.0.re >= -1e-128 {
             let temp = to_fixed_exp(&z);
             (temp.0 * 2.0, temp.1)
         } else {
             (z_fixed.0 * 2.0, 0)
         };
-
-        // println!("z_n sa_end: {}, {}", z_n.0, z_n.1);
 
         // 1e-6 is the threshold for pauldelbrot's criterion
         Reference {
@@ -43,7 +41,7 @@ impl Reference {
         let z_fixed = (to_fixed(&self.z), 0);
 
         // Stored in premultiplied form
-        let z_n = if z_fixed.0.re <= 1e-30 && z_fixed.0.re >= -1e-30 {
+        let z_n = if z_fixed.0.re <= 1e-128 && z_fixed.0.re >= -1e-128 {
             let temp = to_fixed_exp(&self.z);
             (temp.0 * 2.0, temp.1)
         } else {

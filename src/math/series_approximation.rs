@@ -3,6 +3,7 @@ use float_extended::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
 use rug::{Float, Assign};
 use float_extended::float_extended::FloatExtended;
+use rayon::prelude::*;
 
 pub struct SeriesApproximation2 {
     pub current_iteration: usize,
@@ -74,12 +75,12 @@ impl SeriesApproximation2 {
         }
 
         let temp = to_fixed_exp(&self.z);
-        let temp2 = ComplexExtended::new(temp.0, temp.1);
+        let temp2 = ComplexExtended::new(temp.0, temp.1 + 1);
 
         // this section takes about half of the time
         for i in 0..self.original_probes.len() {
             // step the probe points using perturbation
-            self.current_probes[i] = temp2 * self.current_probes[i] * 2.0 + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
+            self.current_probes[i] = temp2 * self.current_probes[i] + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
             self.current_probes[i].reduce();
 
             // get the new approximations
