@@ -37,7 +37,7 @@ impl Reference {
     }
 
     pub fn step(&mut self) -> bool {
-        self.z = self.z.clone().square() + self.c.clone();
+        self.z = self.z.clone().square() + &self.c;
         self.current_iteration += 1;
 
         let z_fixed = (to_fixed(&self.z), 0);

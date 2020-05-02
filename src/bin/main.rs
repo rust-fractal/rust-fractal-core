@@ -144,8 +144,8 @@ fn main() {
     // let zoom = "1.0E2034";
 
     let mut renderer = FractalRenderer::new(
-        500,
-        500,
+        2000,
+        2000,
         zoom,
         1500000,
         center.0,
