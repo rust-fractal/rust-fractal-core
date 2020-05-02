@@ -70,6 +70,7 @@ impl SeriesApproximation2 {
                 // sum.reduce();
             }
 
+            sum.reduce();
             next_coefficients[k] = sum;
         }
 
@@ -85,8 +86,8 @@ impl SeriesApproximation2 {
             let mut derivative_probe = ComplexExtended::new2(0.0, 0.0, 0);
 
             for k in 1..=self.order {
-                series_probe = series_probe + next_coefficients[k] * self.approximation_probes[i][k - 1];
-                derivative_probe = derivative_probe + next_coefficients[k] * self.approximation_probes_derivative[i][k - 1] * k as f64;
+                series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1] * k as f64;
                 // series_probe.reduce();
                 // derivative_probe.reduce();
             };
@@ -125,8 +126,25 @@ impl SeriesApproximation2 {
     }
 
     // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self) -> Reference {
-        Reference::new(self.z.clone(), self.c.clone(), self.current_iteration, self.maximum_iteration)
+    pub fn get_reference(&self, reference_delta: ComplexExtended) -> Reference {
+        let mut reference_c = self.c.clone();
+        let temp = Float::with_val(self.c.real().prec(), reference_delta.exponent).exp2();
+        let temp2 = Float::with_val(self.c.real().prec(), reference_delta.mantissa.re);
+        let temp3 = Float::with_val(self.c.real().prec(), reference_delta.mantissa.im);
+
+        *reference_c.mut_real() += &temp2 * &temp;
+        *reference_c.mut_imag() += &temp3 * &temp;
+
+        let mut reference_z = self.z.clone();
+        let temp4 = self.evaluate(reference_delta);
+        let temp = Float::with_val(self.c.real().prec(), temp4.exponent).exp2();
+        let temp2 = Float::with_val(self.c.real().prec(), temp4.mantissa.re);
+        let temp3 = Float::with_val(self.c.real().prec(), temp4.mantissa.im);
+
+        *reference_z.mut_real() += &temp2 * &temp;
+        *reference_z.mut_imag() += &temp3 * &temp;
+
+        Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended) -> ComplexExtended {
@@ -167,10 +185,12 @@ impl SeriesApproximation2 {
         delta_probe_n_derivative.push(ComplexExtended::new2(1.0, 0.0, 0));
 
         for i in 1..=self.order {
-            delta_probe_n.push(delta_probe_n[i - 1] * delta_probe);
-            delta_probe_n_derivative.push(delta_probe_n_derivative[i - 1] * delta_probe);
-            // delta_probe_n.last_mut().unwrap().reduce();
-            // delta_probe_n_derivative.last_mut().unwrap().reduce();
+            let mut delta_probe1 = delta_probe_n[i - 1] * delta_probe;
+            let mut delta_probe2 = delta_probe_n_derivative[i - 1] * delta_probe;
+            delta_probe1.reduce();
+            delta_probe2.reduce();
+            delta_probe_n.push(delta_probe1);
+            delta_probe_n_derivative.push(delta_probe2);
         }
 
         self.approximation_probes.push(delta_probe_n);

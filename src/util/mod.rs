@@ -11,13 +11,6 @@ pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
     let re = value.real().to_f64();
     let im = value.imag().to_f64();
 
-    // if re == 0.0 {
-    //     re == -std::f64::MIN_POSITIVE;
-    // }
-    // if im == 0.0 {
-    //     im == -std::f64::MIN_POSITIVE;
-    // }
-
     ComplexFixed::new(re, im)
 }
 

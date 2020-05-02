@@ -10,7 +10,7 @@ use std::cmp::max;
 pub struct Perturbation2 {}
 
 impl Perturbation2 {
-    pub fn iterate(pixel_data: &mut Vec<PixelData2>, reference: &Reference, maximum_iteration: usize) {
+    pub fn iterate(pixel_data: &mut Vec<PixelData2>, reference: &Reference, reference_current_iteration: usize) {
         pixel_data.par_chunks_mut(1)
             .for_each(|pixel_data| {
                 for packet in pixel_data {
@@ -21,13 +21,13 @@ impl Perturbation2 {
                     packet.p_initial = packet.p_current;
 
                     // normal but with added exponent
-                    while packet.iteration < maximum_iteration {
+                    while packet.iteration < reference_current_iteration {
                         // This uses the difference between the starting iteration of the reference - can be used to skip some
                         // packet.derivative_current = 2.0 * z * packet.derivative_current + 1.0;
 
                         let z_reference = reference.z_reference[packet.iteration - reference.start_iteration];
 
-                        if packet.p_current > -800 {
+                        if packet.p_current > -500 {
                             // The -1 in the power here is because the reference is already pre-multiplied by 2
                             let z = z_reference.0 * 2.0f64.powi(z_reference.1 - 1) + packet.delta_current * 2.0f64.powi(packet.p_current);
                             let z_norm = z.norm_sqr();
@@ -38,7 +38,7 @@ impl Perturbation2 {
                                 break;
                             }
 
-                            if z_norm > 65536.0 {
+                            if z_norm > 1e16 {
                                 packet.escaped = true;
                                 packet.delta_current = z;
                                 break;
