@@ -19,7 +19,7 @@ fn main() {
         s.push_str(".kfr")
     };
 
-    println!("Rendering {}...", s);
+    println!("Reading: {}", s);
 
     let data = fs::read_to_string(s).expect("Unable to read file.");
 
@@ -53,6 +53,10 @@ fn main() {
             _ => {}
         }
     }
+
+    println!("Zoom: {}", zoom);
+
+    println!("Rendering...");
 
     let mut renderer = FractalRenderer::new(
         1000,
