@@ -8,6 +8,8 @@ use std::fs::File;
 fn main() {
     println!("Mandelbrot Renderer");
 
+    // TODO on some images, we may need to check the imaginary part of the floatexp to make sure that is not too large.
+
     let mut s = String::new();
     print!("File to render: ");
     let _ = stdout().flush();

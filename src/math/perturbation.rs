@@ -10,7 +10,6 @@ pub struct Perturbation {}
 //         pixel_data.par_chunks_mut(1)
 //             .for_each(|pixel_data| {
 //                 for packet in pixel_data {
-//                     // TODO investigate setting up a floatexp-type thing which only rescales every 500 or so iterations
 //
 //                     // normal
 //                     while packet.iteration < maximum_iteration {
