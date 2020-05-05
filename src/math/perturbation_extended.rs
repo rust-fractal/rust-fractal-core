@@ -1,16 +1,14 @@
-use crate::math::reference::Reference;
-use crate::util::{PixelData, PixelData2};
+use crate::util::PixelDataExtended;
 use float_extended::util::FloatExp;
 
 use rayon::prelude::*;
-use float_extended::float_extended::FloatExtended;
-use crate::math::reference2::Reference2;
+use crate::math::reference_extended::ReferenceExtended;
 use std::cmp::max;
 
-pub struct Perturbation2 {}
+pub struct PerturbationExtended {}
 
-impl Perturbation2 {
-    pub fn iterate(pixel_data: &mut Vec<PixelData2>, reference: &Reference, reference_current_iteration: usize) {
+impl PerturbationExtended {
+    pub fn iterate(pixel_data: &mut Vec<PixelDataExtended>, reference: &ReferenceExtended, reference_current_iteration: usize) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
                 for packet in pixel_data {

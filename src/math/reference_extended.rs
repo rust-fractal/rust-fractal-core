@@ -1,6 +1,6 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed, to_fixed_exp};
 
-pub struct Reference {
+pub struct ReferenceExtended {
     pub start_iteration: usize,
     pub current_iteration: usize,
     pub maximum_iteration: usize,
@@ -10,8 +10,8 @@ pub struct Reference {
     pub z_tolerance: Vec<f64>
 }
 
-impl Reference {
-    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> Reference {
+impl ReferenceExtended {
+    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> ReferenceExtended {
         let z_fixed = (to_fixed(&z), 0);
 
         // Stored in premultiplied form
@@ -23,7 +23,7 @@ impl Reference {
         };
 
         // 1e-6 is the threshold for pauldelbrot's criterion
-        Reference {
+        ReferenceExtended {
             start_iteration: current_iteration,
             current_iteration,
             maximum_iteration,
@@ -54,7 +54,6 @@ impl Reference {
         // If the value is not small we do the escape check, otherwise it has not escaped
         // as we do the check for 65536 on the perturbation, we need this to be more than that squared
         z_fixed.0.norm_sqr() <= 1e256
-        // true
     }
 
 

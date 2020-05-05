@@ -1,15 +1,15 @@
 use crate::util::image::Image;
-use crate::util::{PixelData, PixelData2};
+use crate::util::PixelDataDouble;
 
-pub enum ColourMethod2 {
+pub enum ColouringDouble {
     Iteration,
     IterationSquareRoot,
     Histogram,
     Distance
 }
 
-impl ColourMethod2 {
-    pub fn run(&self, pixel_data: &Vec<PixelData2>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
+impl ColouringDouble {
+    pub fn run(&self, pixel_data: &Vec<PixelDataDouble>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
@@ -56,7 +56,7 @@ impl ColourMethod2 {
         }
 
         match self {
-            ColourMethod2::Iteration => {
+            ColouringDouble::Iteration => {
                 // No smooth colouring at the moment
 
                 for pixel in pixel_data {
@@ -66,7 +66,7 @@ impl ColourMethod2 {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (100.0 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (7.0 * pixel.iteration as f64) as usize % 8192;
 
                         let colour = colours[hue];
 
@@ -76,7 +76,7 @@ impl ColourMethod2 {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColourMethod2::IterationSquareRoot => {
+            ColouringDouble::IterationSquareRoot => {
                 for pixel in pixel_data {
                     let (r, g, b) = if pixel.glitched && image.display_glitches {
                         (255, 0, 0)
@@ -94,7 +94,7 @@ impl ColourMethod2 {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColourMethod2::Histogram => {
+            ColouringDouble::Histogram => {
                 let mut iteration_counts = vec![0usize; maximum_iteration + 2];
 
                 for pixel in pixel_data {
@@ -128,7 +128,7 @@ impl ColourMethod2 {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColourMethod2::Distance => {
+            ColouringDouble::Distance => {
                 // At the moment distance has a white-black gradient
                 for pixel in pixel_data {
                     let (r, g, b) = if pixel.glitched && image.display_glitches {
