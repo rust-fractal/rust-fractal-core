@@ -1,8 +1,6 @@
-use float_extended::complex_extended::ComplexExtended;
-use rug::float::Round;
-
-pub mod point;
 pub mod image;
+pub mod colouring_double;
+pub mod colouring_extended;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
@@ -24,7 +22,7 @@ pub fn to_fixed_exp(value: &ComplexArbitrary) -> (ComplexFixed<f64>, i32) {
 }
 
 #[derive(Clone)]
-pub struct PixelData {
+pub struct PixelDataDouble {
     pub image_x: usize,
     pub image_y: usize,
     pub iteration: usize,
@@ -36,7 +34,7 @@ pub struct PixelData {
 }
 
 #[derive(Clone)]
-pub struct PixelData2 {
+pub struct PixelDataExtended {
     pub image_x: usize,
     pub image_y: usize,
     pub iteration: usize,

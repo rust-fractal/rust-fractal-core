@@ -1,9 +1,7 @@
 use std::time::Instant;
 use rust_fractal::renderer::FractalRenderer;
-use float_extended::float_extended::FloatExtended;
-use std::{io, fs};
-use std::io::{stdout, stdin, Write, BufReader, BufRead};
-use std::fs::File;
+use std::fs;
+use std::io::{stdout, stdin, Write};
 
 fn main() {
     println!("Mandelbrot Renderer");
@@ -33,32 +31,26 @@ fn main() {
     for line in data.lines() {
         let mut parts = line.split_whitespace();
         // println!("{}", line);
-        let mut temp = parts.next().unwrap();
+        let temp = parts.next().unwrap();
 
         match temp {
             "Re:" => {
-                let mut temp2 = parts.next().unwrap();
-                center_re = temp2;
+                center_re = parts.next().unwrap();
             },
             "Im:" => {
-                let mut temp2 = parts.next().unwrap();
-                center_im = temp2;
+                center_im = parts.next().unwrap();
             }
             "Zoom:" => {
-                let mut temp2 = parts.next().unwrap();
-                zoom = temp2;
+                zoom = parts.next().unwrap();
             },
             "Iterations:" => {
-                let mut temp2 = parts.next().unwrap();
-                iterations = temp2;
+                iterations = parts.next().unwrap();
             }
             _ => {}
         }
     }
 
     println!("Zoom: {}", zoom);
-
-    println!("Rendering...");
 
     let mut renderer = FractalRenderer::new(
         1000,

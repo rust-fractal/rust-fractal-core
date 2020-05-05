@@ -1,11 +1,10 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed, to_fixed_exp};
+use crate::util::{ComplexArbitrary, to_fixed_exp};
 use float_extended::complex_extended::ComplexExtended;
-use crate::math::reference::Reference;
+use crate::math::reference_extended::ReferenceExtended;
 use rug::{Float, Assign};
 use float_extended::float_extended::FloatExtended;
-use rayon::prelude::*;
 
-pub struct SeriesApproximation2 {
+pub struct SeriesApproximationExtended {
     pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel: FloatExtended,
@@ -20,7 +19,7 @@ pub struct SeriesApproximation2 {
     delta_top_left: ComplexExtended
 }
 
-impl SeriesApproximation2 {
+impl SeriesApproximationExtended {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: FloatExtended, delta_top_left: ComplexExtended) -> Self {
         assert!(order >= 1);
 
@@ -31,7 +30,7 @@ impl SeriesApproximation2 {
         coefficients[1] = ComplexExtended::new2(1.0, 0.0, 0);
 
         // The current iteration is set to 1 as we set z = c
-        SeriesApproximation2 {
+        SeriesApproximationExtended {
             current_iteration: 1,
             maximum_iteration,
             delta_pixel,
@@ -97,7 +96,7 @@ impl SeriesApproximation2 {
                 }
             };
 
-            let mut relative_error = (self.current_probes[i] - series_probe).norm();
+            let relative_error = (self.current_probes[i] - series_probe).norm();
             let mut derivative = derivative_probe.norm();
 
             // Check to make sure that the derivative is greater than or equal to 1
@@ -131,7 +130,7 @@ impl SeriesApproximation2 {
     }
 
     // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self, reference_delta: ComplexExtended) -> Reference {
+    pub fn get_reference(&self, reference_delta: ComplexExtended) -> ReferenceExtended {
         let mut reference_c = self.c.clone();
         let temp = Float::with_val(self.c.real().prec(), reference_delta.exponent).exp2();
         let temp2 = Float::with_val(self.c.real().prec(), reference_delta.mantissa.re);
@@ -149,7 +148,7 @@ impl SeriesApproximation2 {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
+        ReferenceExtended::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended) -> ComplexExtended {
