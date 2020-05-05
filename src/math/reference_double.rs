@@ -1,6 +1,6 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed};
 
-pub struct Reference {
+pub struct ReferenceDouble {
     pub start_iteration: usize,
     pub current_iteration: usize,
     pub maximum_iteration: usize,
@@ -10,12 +10,12 @@ pub struct Reference {
     pub z_tolerance: Vec<f64>
 }
 
-impl Reference {
-    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> Reference {
+impl ReferenceDouble {
+    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> ReferenceDouble {
         let z_fixed = to_fixed(&z);
 
         // 1e-6 is the threshold for pauldelbrot's criterion
-        Reference {
+        ReferenceDouble {
             start_iteration: current_iteration,
             current_iteration,
             maximum_iteration,
@@ -27,18 +27,17 @@ impl Reference {
     }
 
     pub fn step(&mut self) -> bool {
-        self.z = self.z.clone().square() + self.c.clone();
+        self.z = self.z.clone().square() + &self.c;
         self.current_iteration += 1;
         let z_fixed = to_fixed(&self.z);
         self.z_reference.push(z_fixed);
         self.z_tolerance.push(1e-6 * z_fixed.norm_sqr());
-        // z_fixed.norm_sqr() <= 4.0
-        true
+        z_fixed.norm_sqr() <= 1e256
     }
 
 
     pub fn run(&mut self) -> bool {
-        while self.current_iteration <= self.maximum_iteration {
+        while self.current_iteration < self.maximum_iteration {
             if !self.step() {
                 break;
             }
@@ -46,4 +45,3 @@ impl Reference {
         self.current_iteration == self.maximum_iteration
     }
 }
-

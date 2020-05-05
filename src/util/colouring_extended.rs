@@ -1,15 +1,15 @@
 use crate::util::image::Image;
-use crate::util::PixelData;
+use crate::util::PixelDataExtended;
 
-pub enum ColourMethod {
+pub enum ColouringExtended {
     Iteration,
     IterationSquareRoot,
     Histogram,
     Distance
 }
 
-impl ColourMethod {
-    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
+impl ColouringExtended {
+    pub fn run(&self, pixel_data: &Vec<PixelDataExtended>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
@@ -56,7 +56,7 @@ impl ColourMethod {
         }
 
         match self {
-            ColourMethod::Iteration => {
+            ColouringExtended::Iteration => {
                 // No smooth colouring at the moment
 
                 for pixel in pixel_data {
@@ -66,7 +66,7 @@ impl ColourMethod {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (0.1656 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (7.0 * pixel.iteration as f64) as usize % 8192;
 
                         let colour = colours[hue];
 
@@ -76,7 +76,7 @@ impl ColourMethod {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColourMethod::IterationSquareRoot => {
+            ColouringExtended::IterationSquareRoot => {
                 for pixel in pixel_data {
                     let (r, g, b) = if pixel.glitched && image.display_glitches {
                         (255, 0, 0)
@@ -84,7 +84,7 @@ impl ColourMethod {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (0.1656 * pixel.iteration as f64).sqrt() as usize % 8192;
+                        let hue = (7.0 * pixel.iteration as f64).sqrt() as usize % 8192;
 
                         let colour = colours[hue];
 
@@ -94,7 +94,7 @@ impl ColourMethod {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColourMethod::Histogram => {
+            ColouringExtended::Histogram => {
                 let mut iteration_counts = vec![0usize; maximum_iteration + 2];
 
                 for pixel in pixel_data {
@@ -128,13 +128,14 @@ impl ColourMethod {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColourMethod::Distance => {
+            ColouringExtended::Distance => {
                 // At the moment distance has a white-black gradient
                 for pixel in pixel_data {
                     let (r, g, b) = if pixel.glitched && image.display_glitches {
                         (255, 0, 0)
                     } else {
                         if pixel.escaped {
+                            println!("{}", pixel.derivative_current.norm());
                             let de = 2.0 * pixel.delta_current.norm() * pixel.delta_current.norm().ln() / pixel.derivative_current.norm();
                             let out = (255.0 * (de / delta_pixel).tanh()) as u8;
                             (out, out, out)

@@ -1,7 +1,7 @@
 use crate::util::{ComplexArbitrary, ComplexFixed};
-use crate::math::reference::Reference;
+use crate::math::reference_double::ReferenceDouble;
 
-pub struct SeriesApproximation {
+pub struct SeriesApproximationDouble {
     pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel: f64,
@@ -17,7 +17,7 @@ pub struct SeriesApproximation {
     delta_maximum: f64
 }
 
-impl SeriesApproximation {
+impl SeriesApproximationDouble {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: f64, delta_top_left: ComplexFixed<f64>) -> Self {
         assert!(order >= 1);
         let delta_maximum = delta_top_left.norm();
@@ -30,7 +30,7 @@ impl SeriesApproximation {
         coefficents[1] = ComplexFixed::new(delta_maximum, 0.0);
 
         // The current iteration is set to 1 as we set z = c
-        SeriesApproximation {
+        SeriesApproximationDouble {
             current_iteration: 1,
             maximum_iteration,
             delta_pixel,
@@ -146,7 +146,7 @@ impl SeriesApproximation {
     }
 
     // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self, reference_delta: ComplexFixed<f64>) -> Reference {
+    pub fn get_reference(&self, reference_delta: ComplexFixed<f64>) -> ReferenceDouble {
         let mut reference_c = self.c.clone();
         *reference_c.mut_real() = reference_c.real().clone() + reference_delta.re;
         *reference_c.mut_imag() = reference_c.imag().clone() + reference_delta.im;
@@ -156,7 +156,7 @@ impl SeriesApproximation {
         *reference_z.mut_real() = reference_z.real().clone() + temp.re;
         *reference_z.mut_imag() = reference_z.imag().clone() + temp.im;
 
-        Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
+        ReferenceDouble::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
     }
 
     pub fn evaluate(&self, point_delta: ComplexFixed<f64>) -> ComplexFixed<f64> {
