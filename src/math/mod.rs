@@ -1,5 +1,6 @@
-// pub mod perturbation_f64;
-// pub mod perturbation_f64_vectorised;
-pub mod perturbation;
-pub mod reference;
-pub mod series_approximation;
+pub mod perturbation_double;
+pub mod perturbation_extended;
+pub mod reference_double;
+pub mod reference_extended;
+pub mod series_approximation_double;
+pub mod series_approximation_extended;
