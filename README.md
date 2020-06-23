@@ -12,6 +12,6 @@ A mandelbrot fractal image generator featuring perturbation theory and series ap
 - Up to E280 zoom level for double precision, extended to E10000+.
 
 ## Usage
-You need to be able to complie the 'rug' crate. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, change the settings in the ```main.rs``` file located in ```src/```. Build and run the crate with:
+You need to be able to compile the 'rug' crate. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, change the settings in the ```main.rs``` file located in ```src/```. Build and run the crate with:
 
 ```cargo run --release```
