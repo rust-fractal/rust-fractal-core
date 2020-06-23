@@ -1,5 +1,5 @@
 use crate::util::PixelDataExtended;
-use float_extended::util::FloatExp;
+use crate::util::FloatExp;
 
 use rayon::prelude::*;
 use crate::math::reference_extended::ReferenceExtended;

@@ -1,9 +1,35 @@
 pub mod image;
 pub mod colouring_double;
 pub mod colouring_extended;
+pub mod float_extended;
+pub mod complex_extended;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
+
+use std::os::raw::{c_double, c_int};
+
+extern "C" {
+    fn frexp(x: c_double, exp: *mut c_int) -> c_double;
+    fn ldexp(x: c_double, exp: c_int) -> c_double;
+}
+
+pub trait FloatExp: Sized {
+    fn frexp(self) -> (Self, i32);
+    fn ldexp(self, exp: i32) -> Self;
+}
+
+impl FloatExp for f64 {
+    fn frexp(self) -> (Self, i32) {
+        let mut exp: c_int = 0;
+        let res = unsafe { frexp(self, &mut exp) };
+        (res, exp)
+    }
+
+    fn ldexp(self, exp: i32) -> Self {
+        unsafe { ldexp(self, exp) }
+    }
+}
 
 pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
     let re = value.real().to_f64();

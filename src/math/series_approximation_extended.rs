@@ -1,8 +1,8 @@
 use crate::util::{ComplexArbitrary, to_fixed_exp};
-use float_extended::complex_extended::ComplexExtended;
+use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference_extended::ReferenceExtended;
 use rug::{Float, Assign};
-use float_extended::float_extended::FloatExtended;
+use crate::util::float_extended::FloatExtended;
 
 pub struct SeriesApproximationExtended {
     pub current_iteration: usize,
