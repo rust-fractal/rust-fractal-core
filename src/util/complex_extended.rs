@@ -1,4 +1,4 @@
-use crate::float_extended::FloatExtended;
+use crate::util::float_extended::FloatExtended;
 use std::ops::{Mul, Add, AddAssign, MulAssign, Sub, DivAssign, SubAssign, Div};
 use num_complex::Complex;
 use std::fmt::{Display, Result, Formatter};
