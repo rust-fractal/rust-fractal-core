@@ -1,8 +1,6 @@
 extern crate ispc;
 
 fn main() {
-    // ispc::compile_library("mandelbrot", &["src/mandelbrot.ispc"]);
-
     println!("cargo:rerun-if-changed=build.rs");
 
     let mut cfg = ispc::Config::new();
@@ -11,7 +9,7 @@ fn main() {
         cfg.debug(false);
     }
 
-    let ispc_files = vec!["src/math/perturbation_f64.ispc"];
+    let ispc_files = vec!["src/math/perturbation_double.ispc"];
 
     for s in &ispc_files[..] {
         cfg.file(*s);

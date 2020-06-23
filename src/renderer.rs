@@ -1,165 +1,306 @@
+use crate::util::image::Image;
+use crate::util::{ComplexArbitrary, ComplexFixed, PixelDataDouble, PixelDataExtended};
+use crate::math::series_approximation_extended::{SeriesApproximationExtended};
+
+use pbr::ProgressBar;
 use std::time::Instant;
 use rand::seq::SliceRandom;
-use pbr::ProgressBar;
-use std::io::Stdout;
+use std::cmp::max;
+use crate::util::float_extended::FloatExtended;
+use std::f64::consts::LOG2_10;
+use crate::util::complex_extended::ComplexExtended;
+use itertools::Itertools;
+use rayon::prelude::*;
+use crate::math::series_approximation_double::SeriesApproximationDouble;
+use crate::math::perturbation_extended::PerturbationExtended;
+use crate::math::perturbation_double::PerturbationDouble;
+use crate::math::perturbation_double_ispc::PerturbationDoubleISPC;
+use crate::util::colouring_double::ColouringDouble;
+use crate::util::colouring_extended::ColouringExtended;
 
-use crate::util::ComplexFixed;
-use crate::util::point::Point;
-use crate::colouring::ColourMethod;
-use std::process::Command;
-
-enum DeltaType {
-    Float32,
-    Float64
-}
-
-pub struct ImageRenderer {
+pub struct FractalRenderer {
     image_width: usize,
     image_height: usize,
     aspect: f64,
-    zoom: f64,
-    pub maximum_iterations: usize,
-    reference_points: usize,
-    // origin: String,
-    reference: String,
-    pub x_n_f64: Vec<ComplexFixed<f64>>,
-    pub tolerance_check_f64: Vec<f64>,
-    pub reference_delta_f64: ComplexFixed<f64>,
-    glitch_tolerance: f32,
-    display_glitches: bool,
-    colouring_method: ColourMethod,
-    progress: ProgressBar<Stdout>,
-    delta_type: DeltaType,
-    precision: usize,
+    zoom: FloatExtended,
+    center_location: ComplexArbitrary,
+    maximum_iteration: usize,
+    approximation_order: usize,
+    glitch_tolerance: f64,
+    image: Image,
 }
 
-impl ImageRenderer {
-    pub fn new(image_width: usize, image_height: usize, initial_zoom: f64, maximum_iterations: usize, center_re: &str, center_complex: &str, precision: usize, glitch_tolerance: f32, display_glitches: bool) -> Self {
-        let location = "(".to_owned() + center_re + "," + center_complex + ")";
+impl FractalRenderer {
+    pub fn new(image_width: usize,
+               image_height: usize,
+               initial_zoom: &str,
+               maximum_iteration: usize,
+               center_real: &str,
+               center_imag: &str,
+               glitch_tolerance: f64,
+               display_glitches: bool,
+               approximation_order: usize) -> Self {
 
         let aspect = image_width as f64 / image_height as f64;
         let image_width = image_width;
         let image_height = image_height;
-        let zoom = initial_zoom;
+        let temp: Vec<&str> = initial_zoom.split('E').collect();
+        let zoom = FloatExtended::new(temp[0].parse::<f64>().unwrap() * 2.0_f64.powf((temp[1].parse::<f64>().unwrap() * LOG2_10).fract()), (temp[1].parse::<f64>().unwrap() * LOG2_10).floor() as i32);
 
-        // Set just below the limit to allow all functions to work right
-        // Currently for some reason the f64 is faster than the f32 version
-        let delta_type = if zoom < 1e-2 {
-            println!("Delta: f32");
-            DeltaType::Float32
-        } else {
-            println!("Delta: f64");
-            DeltaType::Float64
-        };
+        let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
+        let radius = delta_pixel * image_width as f64;
+        let precision = max(64, -radius.exponent + 64);
 
-        // The height is kept to be the correct size (in terms of the zoom) and the width is scaled to counter for the aspect ratio
-        // reference delta can be changes, but may need to be updated
-        ImageRenderer {
+        let center_location = ComplexArbitrary::with_val(
+            precision as u32,
+            ComplexArbitrary::parse("(".to_owned() + center_real + "," + center_imag + ")").expect("Location is not valid!"));
+
+        FractalRenderer {
             image_width,
             image_height,
             aspect,
             zoom,
-            maximum_iterations,
-            reference_points: 0,
-            // origin: location.clone(),
-            reference: location,
-            x_n_f64: Vec::new(),
-            tolerance_check_f64: Vec::new(),
-            reference_delta_f64: ComplexFixed::new(0.0, 0.0),
+            center_location,
+            maximum_iteration,
+            approximation_order,
             glitch_tolerance,
-            display_glitches,
-            colouring_method: ColourMethod::Iteration,
-            progress: ProgressBar::new((image_width * image_height) as u64),
-            delta_type,
-            precision
+            image: Image::new(image_width, image_height, display_glitches)
         }
     }
 
     pub fn render(&mut self) {
-        self.progress.set(0);
-        let mut points_remaining_f64 = Vec::with_capacity(self.image_width * self.image_height);
-        let mut points_complete_f64 = Vec::with_capacity(self.image_width * self.image_height);
+        let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
 
-        let mut image = vec![0u8; self.image_width * self.image_height * 3];
+        // this should be the delta relative to the image, without the big zoom factor applied.
+        let delta_top_left = ComplexFixed::new((4.0 / self.image_width as f64 - 2.0) / self.zoom.mantissa * self.aspect as f64, (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa);
 
-        let resolution =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom) / self.image_height as f64;
-        let top_left_delta = ComplexFixed::new(
-            (4.0 / self.image_width as f64 - 2.0) / self.zoom as f64 * self.aspect as f64,
-            (4.0 / self.image_height as f64 - 2.0) / self.zoom as f64);
+        let time = Instant::now();
 
-        for image_y in 0..self.image_height {
-            for image_x in 0..self.image_width {
-                points_remaining_f64.push(Point::<ComplexFixed<f64>>::new(image_x, image_y, self.image_width, resolution, top_left_delta));
+        if self.zoom.exponent < 900 {
+            println!("Rendering with double...");
+
+            let mut series_approximation = SeriesApproximationDouble::new(
+                self.center_location.clone(),
+                self.approximation_order,
+                self.maximum_iteration,
+                delta_pixel * 2.0f64.powi(-self.zoom.exponent),
+                delta_top_left * 2.0f64.powi(-self.zoom.exponent)
+            );
+
+            series_approximation.run();
+
+            println!("{:<14}{:>6} ms", "Approximation", time.elapsed().as_millis());
+            println!("{:<16}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
+
+            let time = Instant::now();
+
+            let mut reference = series_approximation.get_reference(ComplexFixed::new(0.0, 0.0));
+            reference.run();
+
+            println!("{:<14}{:>6} ms (precision {}, iterations {})", "Reference", time.elapsed().as_millis(), self.center_location.prec().0, reference.current_iteration);
+
+            let time = Instant::now();
+
+            let indices = (0..self.image_width).cartesian_product(0..self.image_height);
+
+            let mut pixel_data = indices.into_iter().par_bridge()
+                                .map(|(i, j)| {
+                                    let element = ComplexFixed::new(
+                                        (i as f64 * delta_pixel + delta_top_left.re) * 2.0f64.powi(-self.zoom.exponent),
+                                        (j as f64 * delta_pixel + delta_top_left.im) * 2.0f64.powi(-self.zoom.exponent)
+                                    );
+
+                                    PixelDataDouble {
+                                        image_x: i,
+                                        image_y: j,
+                                        iteration: reference.start_iteration,
+                                        delta_reference: element,
+                                        delta_current: series_approximation.evaluate(element),
+                                        derivative_current: series_approximation.evaluate_derivative(element),
+                                        glitched: false,
+                                        escaped: false
+                                    }
+                                }).collect::<Vec<PixelDataDouble>>();
+
+            println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
+
+            let time = Instant::now();
+            PerturbationDoubleISPC::iterate(&mut pixel_data, &reference, reference.current_iteration);
+            println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
+
+            let time = Instant::now();
+            ColouringDouble::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel * 2.0f64.powi(-self.zoom.exponent));
+            println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
+
+            // Remove all non-glitched points from the remaining points
+            pixel_data.retain(|packet| {
+                packet.glitched
+            });
+
+            println!("Fixing Glitches:");
+            let glitched = pixel_data.len();
+            let mut glitch_progress = ProgressBar::new(glitched as u64);
+
+            while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
+                // delta_c is the difference from the next reference from the previous one
+                let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+                let reference_wrt_sa = ComplexFixed::new(delta_c.image_x as f64 * delta_pixel + delta_top_left.re, delta_c.image_y as f64 * delta_pixel + delta_top_left.im) * 2.0f64.powi(-self.zoom.exponent);
+
+                let delta_z = series_approximation.evaluate(reference_wrt_sa);
+
+                let mut r = series_approximation.get_reference(reference_wrt_sa);
+                r.run();
+
+                // this can be made faster, without having to do the series approximation again
+                // this is done by storing more data in pixeldata2
+                pixel_data.chunks_mut(1)
+                          .for_each(|pixel_data| {
+                              for data in pixel_data {
+                                  let point_delta = ComplexFixed::new(data.image_x as f64 * delta_pixel + delta_top_left.re, data.image_y as f64 * delta_pixel + delta_top_left.im) * 2.0f64.powi(-self.zoom.exponent);
+                                  data.iteration = reference.start_iteration;
+                                  data.glitched = false;
+                                  data.escaped = false;
+                                  data.delta_reference = point_delta - reference_wrt_sa;
+                                  data.delta_current = series_approximation.evaluate(point_delta) - delta_z;
+
+                                  data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                              }
+                          });
+
+                PerturbationDoubleISPC::iterate(&mut pixel_data, &r, r.current_iteration);
+
+                ColouringDouble::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+
+                // Remove all non-glitched points from the remaining points
+                pixel_data.retain(|packet| {
+                    packet.glitched
+                });
+
+                glitch_progress.set((glitched - pixel_data.len()) as u64);
             }
-        }
 
-        let mut reference_time = 0;
-        let mut iteration_time = 0;
+            glitch_progress.finish();
+            println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
+        } else {
+            println!("Rendering with extended double...");
 
-        // Start solving the points by iteratively moving around the reference point
-        while (points_remaining_f64.len()) as f32 > (self.glitch_tolerance * (self.image_width * self.image_height) as f32) {
-            if self.reference_points != 0 {
-                // At the moment this just randomly chooses a point in the glitched points.
-                // A slightly better method might be to group all of the glitched points and then choose the center of the largest group
-                // and continue with this - this may be more effective at reducing the glitch count fast.
-                let temp = points_remaining_f64.choose(&mut rand::thread_rng()).unwrap().delta;
-                self.reference_delta_f64 = temp;
+            let mut series_approximation = SeriesApproximationExtended::new(
+                self.center_location.clone(),
+                self.approximation_order,
+                self.maximum_iteration,
+                FloatExtended::new(delta_pixel, -self.zoom.exponent),
+                ComplexExtended::new(delta_top_left, -self.zoom.exponent),
+            );
+
+            series_approximation.run();
+
+            println!("{:<14}{:>6} ms", "Approximation", time.elapsed().as_millis());
+            println!("{:<16}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
+
+            let time = Instant::now();
+
+            let mut reference = series_approximation.get_reference(ComplexExtended::new2(0.0, 0.0, 0));
+            reference.run();
+
+            println!("{:<14}{:>6} ms (precision {}, iterations {})", "Reference", time.elapsed().as_millis(), self.center_location.prec().0, reference.current_iteration);
+
+            let time = Instant::now();
+
+            let indices = (0..self.image_width).cartesian_product(0..self.image_height);
+
+            let mut pixel_data = indices.into_iter().par_bridge()
+                                .map(|(i, j)| {
+                                    let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
+                                    let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                                    let new_delta = series_approximation.evaluate(point_delta);
+
+                                    PixelDataExtended {
+                                        image_x: i,
+                                        image_y: j,
+                                        iteration: reference.start_iteration,
+                                        p_initial: point_delta.exponent,
+                                        p_current: new_delta.exponent,
+                                        delta_reference: point_delta.mantissa,
+                                        delta_current: new_delta.mantissa,
+                                        derivative_current: ComplexFixed::new(1.0, 0.0),
+                                        glitched: false,
+                                        escaped: false
+                                    }
+                                }).collect::<Vec<PixelDataExtended>>();
+
+            println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
+
+            let time = Instant::now();
+            PerturbationExtended::iterate(&mut pixel_data, &reference, reference.current_iteration);
+            println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
+
+            let time = Instant::now();
+            ColouringExtended::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+            println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
+
+            // Remove all non-glitched points from the remaining points
+            pixel_data.retain(|packet| {
+                packet.glitched
+            });
+
+            println!("Fixing Glitches:");
+            let glitched = pixel_data.len();
+            let mut glitch_progress = ProgressBar::new(glitched as u64);
+
+            while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
+                // delta_c is the difference from the next reference from the previous one
+                let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+                let element = ComplexFixed::new(delta_c.image_x as f64 * delta_pixel + delta_top_left.re, delta_c.image_y as f64 * delta_pixel + delta_top_left.im);
+
+                let reference_wrt_sa = ComplexExtended::new(element, -self.zoom.exponent);
+
+                let delta_z = series_approximation.evaluate(reference_wrt_sa);
+
+                let mut r = series_approximation.get_reference(reference_wrt_sa);
+                r.run();
+
+                // this can be made faster, without having to do the series approximation again
+                // this is done by storing more data in pixeldata2
+                pixel_data.chunks_mut(1)
+                          .for_each(|pixel_data| {
+                              for data in pixel_data {
+                                  let element = ComplexFixed::new(data.image_x as f64 * delta_pixel + delta_top_left.re, data.image_y as f64 * delta_pixel + delta_top_left.im);
+                                  let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+
+                                  data.iteration = reference.start_iteration;
+                                  data.glitched = false;
+                                  data.escaped = false;
+                                  let temp = series_approximation.evaluate(point_delta) - delta_z;
+                                  data.delta_current = temp.mantissa;
+                                  data.p_current = temp.exponent;
+
+                                  let temp2 = point_delta - reference_wrt_sa;
+                                  data.delta_reference = temp2.mantissa;
+                                  data.p_initial = temp2.exponent;
+                                  // might not need the evaluate here as if we store it separately, there is no need
+                                  data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                              }
+                          });
+
+                PerturbationExtended::iterate(&mut pixel_data, &r, r.current_iteration);
+
+                ColouringExtended::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+
+                // Remove all non-glitched points from the remaining points
+                pixel_data.retain(|packet| {
+                    packet.glitched
+                });
+
+                glitch_progress.set((glitched - pixel_data.len()) as u64);
             }
 
-            self.reference_points += 1;
-            let start = Instant::now();
-            self.calculate_reference();
-            reference_time += start.elapsed().as_millis();
-            let start = Instant::now();
-            self.calculate_perturbations_f64_ispc(&mut points_remaining_f64, &mut points_complete_f64);
-            iteration_time += start.elapsed().as_millis();
-            self.progress.set(points_complete_f64.len() as u64);
+            glitch_progress.finish();
+            println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         }
 
-        self.progress.finish();
-        println!("\n{:<10}{:>6} ms", "Reference:", reference_time);
-        println!("{:<10}{:>6} ms", "Iteration:", iteration_time);
-        println!("{:<12}{:>7}", "References:", self.reference_points);
-        println!("{:<12}{:>7}", "Glitched:", points_remaining_f64.len());
-
-        // Check if there are any glitched points remaining and add them to the complete points as algorithm has terminated
-        if points_remaining_f64.len() > 0 {
-            points_complete_f64.append(&mut points_remaining_f64);
-        }
-
-        let start = Instant::now();
-        self.colouring_method.run(&points_complete_f64, &mut image, self.maximum_iterations, self.display_glitches);
-        println!("{:<10}{:>6} ms", "Colouring:", start.elapsed().as_millis());
-
-        let start = Instant::now();
-
-        image::save_buffer("output.png", &image, self.image_width as u32, self.image_height as u32, image::RGB(8)).unwrap();
-
-        println!("{:<10}{:>6} ms", "Saving:", start.elapsed().as_millis());
-    }
-
-    pub fn calculate_reference(&mut self) {
-        let glitch_tolerance = 1e-6;
-
-        // Clear both buffers for new values
-        self.x_n_f64.clear();
-        self.tolerance_check_f64.clear();
-
-        let output = Command::new("rust-arbitrary")
-            .args(&[self.reference.clone(),
-                self.reference_delta_f64.re.to_string(),
-                self.reference_delta_f64.im.to_string(),
-                self.maximum_iterations.to_string(),
-                self.precision.to_string()])
-            .output()
-            .unwrap().stdout;
-
-        for i in (0..output.len()).step_by(16) {
-            self.x_n_f64.push(ComplexFixed::new(
-                f64::from_le_bytes([output[i], output[i + 1], output[i + 2], output[i + 3], output[i + 4], output[i + 5], output[i + 6], output[i + 7]]),
-                f64::from_le_bytes([output[i + 8], output[i + 9], output[i + 10], output[i + 11], output[i + 12], output[i + 13], output[i + 14], output[i + 15]])
-            ));
-            self.tolerance_check_f64.push(glitch_tolerance as f64 * self.x_n_f64.last().unwrap().norm_sqr());
-        }
+        let time = Instant::now();
+        self.image.save();
+        println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
+        return;
     }
 }

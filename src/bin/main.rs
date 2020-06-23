@@ -1,41 +1,70 @@
 use std::time::Instant;
-use rust_fractal::renderer::ImageRenderer;
+use rust_fractal::renderer::FractalRenderer;
+use std::fs;
+use std::io::{stdout, stdin, Write};
 
 fn main() {
     println!("Mandelbrot Renderer");
-    let center = (
-        "-1.99996619445037030418434688506350579675531241540724851511761922944801584242342684381376129778868913812287046406560949864353810575744772166485672496092803920095332",
-        "+0.00000000000000000000000000000000030013824367909383240724973039775924987346831190773335270174257280120474975614823581185647299288414075519224186504978181625478529");
-    let zoom = 2.3620330788506154104770818136626E157;
 
-   // let center = (
-   //     "0.0",
-   //     "0.0");
-   // let zoom = 1.0;
+    // TODO on some images, we may need to check the imaginary part of the floatexp to make sure that is not too large.
 
-   //  let center = (
-   //     "-0.749999987350877481864108888020013802837969258626230419972587823828734338471228477079750588709551510361714463695461745528645748607681279674273355384334270208362211787387351792878073779449767292692440",
-   //     "0.001000038688236832013124581230049849132759425863378894883003211011278068229551274712347955044740933397589760194545872789087012331273586364914484522575986336846199522726507205442204060303594956029930");
-   // let zoom = 3.7E191;
+    let mut s = String::new();
+    print!("File to render: ");
+    let _ = stdout().flush();
+    stdin().read_line(&mut s).expect("User did not enter a correct string.");
 
-   // let center = (
-   //     "-1.689573325432279612075987864633746594591438093139394112928000260",
-   //     "0.000000000000000000000000000000000145514706909258179374258");
-   // let zoom = 1.2980742146337048E34;
+    s.pop();
 
-    let mut renderer = ImageRenderer::new(
+    if !s.ends_with(".kfr") {
+        s.push_str(".kfr")
+    };
+
+    println!("Reading: {}", s);
+
+    let data = fs::read_to_string(s).expect("Unable to read file.");
+
+    let mut center_re = "-0.75";
+    let mut center_im  = "0.0";
+    let mut zoom = "1E0";
+    let mut iterations = "1000";
+
+    for line in data.lines() {
+        let mut parts = line.split_whitespace();
+        // println!("{}", line);
+        let temp = parts.next().unwrap();
+
+        match temp {
+            "Re:" => {
+                center_re = parts.next().unwrap();
+            },
+            "Im:" => {
+                center_im = parts.next().unwrap();
+            }
+            "Zoom:" => {
+                zoom = parts.next().unwrap();
+            },
+            "Iterations:" => {
+                iterations = parts.next().unwrap();
+            }
+            _ => {}
+        }
+    }
+
+    println!("Zoom: {}", zoom);
+
+    let mut renderer = FractalRenderer::new(
         1000,
         1000,
         zoom,
-        100000,
-        center.0,
-        center.1,
-        1000,
-        0.01,
-        true
+        iterations.parse::<usize>().unwrap(),
+        center_re,
+        center_im,
+        0.001,
+        true,
+        16
     );
 
     let time = Instant::now();
     renderer.render();
-    println!("{:<10}{:>6} ms", "TOTAL", time.elapsed().as_millis());
+    println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
 }
