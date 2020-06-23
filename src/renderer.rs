@@ -14,6 +14,7 @@ use rayon::prelude::*;
 use crate::math::series_approximation_double::SeriesApproximationDouble;
 use crate::math::perturbation_extended::PerturbationExtended;
 use crate::math::perturbation_double::PerturbationDouble;
+use crate::math::perturbation_double_ispc::PerturbationDoubleISPC;
 use crate::util::colouring_double::ColouringDouble;
 use crate::util::colouring_extended::ColouringExtended;
 
@@ -124,7 +125,7 @@ impl FractalRenderer {
             println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
 
             let time = Instant::now();
-            PerturbationDouble::iterate(&mut pixel_data, &reference, reference.current_iteration);
+            PerturbationDoubleISPC::iterate(&mut pixel_data, &reference, reference.current_iteration);
             println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
             let time = Instant::now();
@@ -166,7 +167,7 @@ impl FractalRenderer {
                               }
                           });
 
-                PerturbationDouble::iterate(&mut pixel_data, &r, r.current_iteration);
+                PerturbationDoubleISPC::iterate(&mut pixel_data, &r, r.current_iteration);
 
                 ColouringDouble::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
 

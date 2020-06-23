@@ -27,19 +27,24 @@ static inline int perturbation_double(
 
         if (z_norm < tolerance_check[i]) {
             *glitched = 1;
+            *delta_current_re = z_re;
+            *delta_current_im = z_im;
             break;
         }
 
         if (z_norm > 1e16) {
             *escaped = 1;
+            *delta_current_re = z_re;
+            *delta_current_im = z_im;
             break;
         }
 
         double temp_real = *delta_current_re;
+        double temp_imag = *delta_current_im;
 
-        *delta_current_re = 2.0 * (ref_re_tmp * temp_real - ref_im_tmp * *delta_current_im) + *delta_current_re * temp_real - temp_real * *delta_current_im + delta_reference_re;
-        *delta_current_im = 2.0 * (ref_re_tmp * *delta_current_im + ref_im_tmp * temp_real + *delta_current_im * temp_real) + delta_reference_im;
-        iterations += 1;
+        *delta_current_re = 2.0 * (ref_re_tmp * temp_real - ref_im_tmp * temp_imag) + temp_real * temp_real - temp_imag * temp_imag + delta_reference_re;
+        *delta_current_im = 2.0 * (ref_re_tmp * temp_imag + ref_im_tmp * temp_real + temp_imag * temp_real) + delta_reference_im;
+        *iterations += 1;
         i += 1;
     }
 }
