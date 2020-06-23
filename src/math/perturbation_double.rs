@@ -10,12 +10,14 @@ impl PerturbationDouble {
             .for_each(|pixel_data| {
                 for packet in pixel_data {
                     // normal
+                    let mut i = 0;
+
                     while packet.iteration < reference_current_iteration {
                         // This uses the difference between the starting iteration of the reference - can be used to skip some
-                        let z = packet.delta_current + reference.z_reference[packet.iteration - reference.start_iteration];
+                        let z = packet.delta_current + reference.z_reference[i];
                         let z_norm = z.norm_sqr();
 
-                        if z_norm < reference.z_tolerance[packet.iteration - reference.start_iteration] {
+                        if z_norm < reference.z_tolerance[i] {
                             packet.glitched = true;
                             packet.delta_current = z;
                             break;
@@ -28,8 +30,9 @@ impl PerturbationDouble {
                         }
 
                         // packet.derivative_current = 2.0 * z * packet.derivative_current + 1.0;
-                        packet.delta_current = 2.0 * reference.z_reference[packet.iteration - reference.start_iteration] * packet.delta_current + packet.delta_current * packet.delta_current + packet.delta_reference;
+                        packet.delta_current = 2.0 * reference.z_reference[i] * packet.delta_current + packet.delta_current * packet.delta_current + packet.delta_reference;
                         packet.iteration += 1;
+                        i += 1;
                     }
                 }
             });
