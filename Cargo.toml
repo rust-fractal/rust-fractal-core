@@ -5,15 +5,13 @@ authors = ["jackyarndley <34801340+jackyarndley@users.noreply.github.com>"]
 edition = "2018"
 
 [dependencies]
-image = "0.22.3"
-rand = "0.7.3"
-num-complex = "0.2.4"
-pbr = "1.0.2"
-rayon = "1.3.0"
-packed_simd = "0.3.3"
-rug = "1.7.0"
-float-extended = {path = "../rust-float-extended/"}
-itertools = "0.9.0"
+image = "^0.22.3"
+rand = "^0.7.3"
+num-complex = "^0.2.4"
+pbr = "^1.0.2"
+rayon = "^1.3.0"
+rug = "^1.7.0"
+itertools = "^0.9.0"
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 #[profile.release]
