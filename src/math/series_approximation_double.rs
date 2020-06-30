@@ -53,7 +53,6 @@ impl SeriesApproximationDouble {
         // This section takes 2328 ms / ~6000ms
         self.z.square_mut();
         self.z += &self.c;
-        // let z_next = self.z.clone().square() + self.c.clone();
 
         // Store the x_n in the first element of the array to simplfy things
         self.next_coefficients[0] = to_fixed(&self.z);
@@ -102,6 +101,7 @@ impl SeriesApproximationDouble {
             }
 
             // Check that the error over the derivative is less than the pixel spacing
+            // TODO maybe roll back one iteration when the best has been found (might be more stable)
             if relative_error / derivative > self.delta_pixel {
                 self.z -= &self.c;
                 self.z.sqrt_mut();
