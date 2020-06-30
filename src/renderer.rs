@@ -1,8 +1,7 @@
 use crate::util::image::Image;
 use crate::util::{ComplexArbitrary, ComplexFixed, PixelDataDouble, PixelDataExtended};
-use crate::math::series_approximation_extended::{SeriesApproximationExtended};
+use crate::math::series_approximation_extended::SeriesApproximationExtended;
 
-use pbr::ProgressBar;
 use std::time::Instant;
 use rand::seq::SliceRandom;
 use std::cmp::max;
@@ -137,8 +136,6 @@ impl FractalRenderer {
             });
 
             println!("Fixing Glitches:");
-            let glitched = pixel_data.len();
-            let mut glitch_progress = ProgressBar::new(glitched as u64);
 
             while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
                 // delta_c is the difference from the next reference from the previous one
@@ -174,11 +171,8 @@ impl FractalRenderer {
                 pixel_data.retain(|packet| {
                     packet.glitched
                 });
-
-                glitch_progress.set((glitched - pixel_data.len()) as u64);
             }
 
-            glitch_progress.finish();
             println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         } else {
             println!("Rendering with extended double...");
@@ -243,8 +237,6 @@ impl FractalRenderer {
             });
 
             println!("Fixing Glitches:");
-            let glitched = pixel_data.len();
-            let mut glitch_progress = ProgressBar::new(glitched as u64);
 
             while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
                 // delta_c is the difference from the next reference from the previous one
@@ -289,11 +281,8 @@ impl FractalRenderer {
                 pixel_data.retain(|packet| {
                     packet.glitched
                 });
-
-                glitch_progress.set((glitched - pixel_data.len()) as u64);
             }
 
-            glitch_progress.finish();
             println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         }
 
