@@ -127,15 +127,13 @@ impl FractalRenderer {
             println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
             let time = Instant::now();
-            ColouringDouble::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel * 2.0f64.powi(-self.zoom.exponent));
+            ColouringDouble::Distance.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel * 2.0f64.powi(-self.zoom.exponent));
             println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
                 packet.glitched
             });
-
-            println!("Fixing Glitches:");
 
             while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
                 // delta_c is the difference from the next reference from the previous one
@@ -158,14 +156,13 @@ impl FractalRenderer {
                                   data.escaped = false;
                                   data.delta_reference = point_delta - reference_wrt_sa;
                                   data.delta_current = series_approximation.evaluate(point_delta) - delta_z;
-
-                                  data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                                  data.derivative_current = series_approximation.evaluate_derivative(point_delta);
                               }
                           });
 
                 PerturbationDouble::iterate(&mut pixel_data, &r, r.current_iteration);
 
-                ColouringDouble::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+                ColouringDouble::Distance.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel * 2.0f64.powi(-self.zoom.exponent));
 
                 // Remove all non-glitched points from the remaining points
                 pixel_data.retain(|packet| {
@@ -173,7 +170,7 @@ impl FractalRenderer {
                 });
             }
 
-            println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
+            println!("{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         } else {
             println!("Rendering with extended double...");
 
@@ -235,8 +232,6 @@ impl FractalRenderer {
             pixel_data.retain(|packet| {
                 packet.glitched
             });
-
-            println!("Fixing Glitches:");
 
             while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
                 // delta_c is the difference from the next reference from the previous one

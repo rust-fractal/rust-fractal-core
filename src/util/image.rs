@@ -23,6 +23,6 @@ impl Image {
     }
 
     pub fn save(&mut self) {
-        image::save_buffer("output.png", &self.rgb, self.width as u32, self.height as u32, image::RGB(8)).unwrap();
+        image::save_buffer("output.png", &self.rgb, self.width as u32, self.height as u32, image::ColorType::Rgb8).unwrap();
     }
 }

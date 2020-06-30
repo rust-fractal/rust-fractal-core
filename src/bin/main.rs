@@ -60,7 +60,7 @@ fn main() {
         center_re,
         center_im,
         0.001,
-        true,
+        false,
         16
     );
 

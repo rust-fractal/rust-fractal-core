@@ -135,7 +135,6 @@ impl ColouringDouble {
                         (255, 0, 0)
                     } else {
                         if pixel.escaped {
-                            println!("{}", pixel.derivative_current.norm());
                             let de = 2.0 * pixel.delta_current.norm() * pixel.delta_current.norm().ln() / pixel.derivative_current.norm();
                             let out = (255.0 * (de / delta_pixel).tanh()) as u8;
                             (out, out, out)

@@ -1,5 +1,6 @@
-use crate::util::{ComplexArbitrary, ComplexFixed};
+use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed};
 use crate::math::reference_double::ReferenceDouble;
+use std::mem::swap;
 
 pub struct SeriesApproximationDouble {
     pub current_iteration: usize,
@@ -10,6 +11,7 @@ pub struct SeriesApproximationDouble {
     pub c: ComplexArbitrary,
     pub order: usize,
     coefficients: Vec<ComplexFixed<f64>>,
+    next_coefficients: Vec<ComplexFixed<f64>>,
     original_probes: Vec<ComplexFixed<f64>>,
     perturbation_probes: Vec<ComplexFixed<f64>>,
     approximation_probes: Vec<Vec<ComplexFixed<f64>>>,
@@ -19,15 +21,14 @@ pub struct SeriesApproximationDouble {
 
 impl SeriesApproximationDouble {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: f64, delta_top_left: ComplexFixed<f64>) -> Self {
-        assert!(order >= 1);
         let delta_maximum = delta_top_left.norm();
 
         // To avoid scaling issues we can put in delta / delta_maximum or something
-        let mut coefficents = vec![ComplexFixed::new(0.0, 0.0); order as usize + 1];
-        coefficents[0] = ComplexFixed::new(c.real().to_f64(), c.imag().to_f64());
+        let mut coefficients = vec![ComplexFixed::new(0.0, 0.0); order as usize + 1];
+        coefficients[0] = to_fixed(&c);
 
         // Set 1, 1, to the maximum delta
-        coefficents[1] = ComplexFixed::new(delta_maximum, 0.0);
+        coefficients[1] = ComplexFixed::new(delta_maximum, 0.0);
 
         // The current iteration is set to 1 as we set z = c
         SeriesApproximationDouble {
@@ -38,7 +39,8 @@ impl SeriesApproximationDouble {
             z: c.clone(),
             c,
             order,
-            coefficients: coefficents,
+            coefficients: coefficients.clone(),
+            next_coefficients: coefficients,
             original_probes: Vec::new(),
             perturbation_probes: Vec::new(),
             approximation_probes: Vec::new(),
@@ -48,17 +50,20 @@ impl SeriesApproximationDouble {
     }
 
     pub fn step(&mut self) -> bool {
-        let z_next = self.z.clone().square() + self.c.clone();
-        let mut next_coefficients = vec![ComplexFixed::new(0.0, 0.0); self.order as usize + 1];
+        // This section takes 2328 ms / ~6000ms
+        self.z.square_mut();
+        self.z += &self.c;
+        // let z_next = self.z.clone().square() + self.c.clone();
 
         // Store the x_n in the first element of the array to simplfy things
-        next_coefficients[0] = ComplexFixed::new(z_next.real().to_f64(), z_next.imag().to_f64());
-        next_coefficients[1] = 2.0 * self.coefficients[0] * self.coefficients[1] + self.delta_maximum;
+        self.next_coefficients[0] = to_fixed(&self.z);
+        self.next_coefficients[1] = 2.0 * self.coefficients[0] * self.coefficients[1] + self.delta_maximum;
 
         // Calculate the new coefficients
         for k in 2..=self.order {
             let mut sum = ComplexFixed::new(0.0, 0.0);
 
+            // This adds all opposite pair multiples
             for j in 0..=((k - 1) / 2) {
                 sum += self.coefficients[j] * self.coefficients[k - j];
             }
@@ -69,14 +74,13 @@ impl SeriesApproximationDouble {
                 sum += self.coefficients[k / 2] * self.coefficients[k / 2];
             }
 
-            next_coefficients[k] = sum;
+            self.next_coefficients[k] = sum;
         }
 
-        // Step the probe points using perturbation
-        let z_next_fixed = ComplexFixed::new(self.z.real().to_f64(), self.z.imag().to_f64());
+        // This section is about 2000 ms
 
         for i in 0..self.perturbation_probes.len() {
-            self.perturbation_probes[i] = 2.0 * z_next_fixed * self.perturbation_probes[i] + self.perturbation_probes[i] * self.perturbation_probes[i] + self.original_probes[i];
+            self.perturbation_probes[i] = 2.0 * self.coefficients[0] * self.perturbation_probes[i] + self.perturbation_probes[i] * self.perturbation_probes[i] + self.original_probes[i];
         }
 
         for i in 0..self.approximation_probes.len() {
@@ -85,8 +89,8 @@ impl SeriesApproximationDouble {
             let mut derivative_probe = ComplexFixed::new(0.0, 0.0);
 
             for k in 1..=self.order {
-                series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                derivative_probe += (k + 1) as f64 * next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                series_probe += self.next_coefficients[k] * self.approximation_probes[i][k - 1];
+                derivative_probe += (k + 1) as f64 * self.next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
             let relative_error = (self.perturbation_probes[i] - series_probe).norm();
@@ -99,14 +103,17 @@ impl SeriesApproximationDouble {
 
             // Check that the error over the derivative is less than the pixel spacing
             if relative_error / derivative > self.delta_pixel {
+                self.z -= &self.c;
+                self.z.sqrt_mut();
                 return false;
             }
         }
 
         // If the approximation is valid, continue
         self.current_iteration += 1;
-        self.z = z_next;
-        self.coefficients = next_coefficients;
+
+        // Swap the two coefficients buffers
+        swap(&mut self.coefficients, &mut self.next_coefficients);
         true
     }
 
