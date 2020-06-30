@@ -26,21 +26,19 @@ impl ReferenceDouble {
         }
     }
 
-    pub fn step(&mut self) -> bool {
-        self.z = self.z.clone().square() + &self.c;
-        self.current_iteration += 1;
-        let z_fixed = to_fixed(&self.z);
-        self.z_reference.push(z_fixed);
-        self.z_tolerance.push(1e-6 * z_fixed.norm_sqr());
-        z_fixed.norm_sqr() <= 1e256
-    }
-
-
     pub fn run(&mut self) -> bool {
+        // Loop until the reference point escapes or the specified maximum is reached
         while self.current_iteration < self.maximum_iteration {
-            if !self.step() {
+            // Square and add c
+            self.z.square_mut();
+            self.z += &self.c;
+            self.current_iteration += 1;
+            let z_fixed = to_fixed(&self.z);
+            self.z_reference.push(z_fixed);
+            self.z_tolerance.push(1e-6 * z_fixed.norm_sqr());
+            if z_fixed.norm_sqr() >= 1e256 {
                 break;
-            }
+            };
         };
         self.current_iteration == self.maximum_iteration
     }

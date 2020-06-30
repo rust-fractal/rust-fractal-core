@@ -31,6 +31,7 @@ impl FloatExp for f64 {
     }
 }
 
+#[inline]
 pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
     let re = value.real().to_f64();
     let im = value.imag().to_f64();
