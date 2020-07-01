@@ -108,13 +108,19 @@ impl FractalRenderer {
                                         (j as f64 * delta_pixel + delta_top_left.im) * 2.0f64.powi(-self.zoom.exponent)
                                     );
 
+                                    let delta_approximation = series_approximation.evaluate(element);
+                                    let derivative_approximation = series_approximation.evaluate_derivative(element);
+
                                     PixelDataDouble {
                                         image_x: i,
                                         image_y: j,
                                         iteration: reference.start_iteration,
+                                        delta_centre: element,
                                         delta_reference: element,
-                                        delta_current: series_approximation.evaluate(element),
-                                        derivative_current: series_approximation.evaluate_derivative(element),
+                                        delta_approximation,
+                                        delta_current: delta_approximation,
+                                        derivative_approximation,
+                                        derivative_current: derivative_approximation,
                                         glitched: false,
                                         escaped: false
                                     }
@@ -150,13 +156,12 @@ impl FractalRenderer {
                 pixel_data.chunks_mut(1)
                           .for_each(|pixel_data| {
                               for data in pixel_data {
-                                  let point_delta = ComplexFixed::new(data.image_x as f64 * delta_pixel + delta_top_left.re, data.image_y as f64 * delta_pixel + delta_top_left.im) * 2.0f64.powi(-self.zoom.exponent);
                                   data.iteration = reference.start_iteration;
                                   data.glitched = false;
                                   data.escaped = false;
-                                  data.delta_reference = point_delta - reference_wrt_sa;
-                                  data.delta_current = series_approximation.evaluate(point_delta) - delta_z;
-                                  data.derivative_current = series_approximation.evaluate_derivative(point_delta);
+                                  data.delta_reference = data.delta_centre - reference_wrt_sa;
+                                  data.delta_current = data.delta_approximation - delta_z;
+                                  data.derivative_current = data.derivative_approximation;
                               }
                           });
 

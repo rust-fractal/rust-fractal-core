@@ -119,10 +119,10 @@ impl SeriesApproximationDouble {
 
     pub fn run(&mut self) {
         // Add the probe points to the series approximation
-        self.add_probe(ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
-        self.add_probe(ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im * -1.0));
-        self.add_probe(ComplexFixed::new(self.delta_top_left.re * -1.0, self.delta_top_left.im));
-        self.add_probe(ComplexFixed::new(self.delta_top_left.re * -1.0, self.delta_top_left.im * -1.0));
+        self.add_probe(1.5 * ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(1.5 * ComplexFixed::new(self.delta_top_left.re, -self.delta_top_left.im));
+        self.add_probe(1.5 * ComplexFixed::new(-self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(1.5 * ComplexFixed::new(-self.delta_top_left.re, -self.delta_top_left.im));
 
         // Can be changed later into a better loop - this function could also return some more information
         while self.step() && self.current_iteration < self.maximum_iteration {
