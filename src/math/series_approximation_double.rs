@@ -119,12 +119,11 @@ impl SeriesApproximationDouble {
         // Add the probe points to the series approximation
         // These are added outside of the image in order to reduce overskipping
         // These could possibly be reduced
-        let probe_scaling_factor = 100.0;
 
-        self.add_probe(probe_scaling_factor * ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
-        self.add_probe(probe_scaling_factor * ComplexFixed::new(self.delta_top_left.re, -self.delta_top_left.im));
-        self.add_probe(probe_scaling_factor * ComplexFixed::new(-self.delta_top_left.re, self.delta_top_left.im));
-        self.add_probe(probe_scaling_factor * ComplexFixed::new(-self.delta_top_left.re, -self.delta_top_left.im));
+        self.add_probe(ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(ComplexFixed::new(self.delta_top_left.re, -self.delta_top_left.im));
+        self.add_probe(ComplexFixed::new(-self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(ComplexFixed::new(-self.delta_top_left.re, -self.delta_top_left.im));
 
         // Can be changed later into a better loop - this function could also return some more information
         while self.step() {
