@@ -283,7 +283,7 @@ impl FractalRenderer {
                 });
             }
 
-            println!("\n{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
+            println!("{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         }
 
         let time = Instant::now();
