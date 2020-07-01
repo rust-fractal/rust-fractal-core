@@ -13,7 +13,7 @@ pub struct SeriesApproximationDouble {
     coefficients: Vec<ComplexFixed<f64>>,
     next_coefficients: Vec<ComplexFixed<f64>>,
     original_probes: Vec<ComplexFixed<f64>>,
-    perturbation_probes: Vec<ComplexFixed<f64>>,
+    current_probes: Vec<ComplexFixed<f64>>,
     approximation_probes: Vec<Vec<ComplexFixed<f64>>>,
     approximation_probes_derivative: Vec<Vec<ComplexFixed<f64>>>,
     delta_maximum: f64
@@ -42,7 +42,7 @@ impl SeriesApproximationDouble {
             coefficients: coefficients.clone(),
             next_coefficients: coefficients,
             original_probes: Vec::new(),
-            perturbation_probes: Vec::new(),
+            current_probes: Vec::new(),
             approximation_probes: Vec::new(),
             approximation_probes_derivative: Vec::new(),
             delta_maximum,
@@ -78,11 +78,9 @@ impl SeriesApproximationDouble {
 
         // This section is about 2000 ms
 
-        for i in 0..self.perturbation_probes.len() {
-            self.perturbation_probes[i] = 2.0 * self.coefficients[0] * self.perturbation_probes[i] + self.perturbation_probes[i] * self.perturbation_probes[i] + self.original_probes[i];
-        }
+        for i in 0..self.current_probes.len() {
+            self.current_probes[i] = 2.0 * self.coefficients[0] * self.current_probes[i] + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
 
-        for i in 0..self.approximation_probes.len() {
             // Get the new approximations
             let mut series_probe = ComplexFixed::new(0.0, 0.0);
             let mut derivative_probe = ComplexFixed::new(0.0, 0.0);
@@ -92,7 +90,7 @@ impl SeriesApproximationDouble {
                 derivative_probe += (k + 1) as f64 * self.next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
-            let relative_error = (self.perturbation_probes[i] - series_probe).norm();
+            let relative_error = (self.current_probes[i] - series_probe).norm();
             let mut derivative = derivative_probe.norm();
 
             // Check to make sure that the derivative is greater than or equal to 1
@@ -114,18 +112,22 @@ impl SeriesApproximationDouble {
 
         // Swap the two coefficients buffers
         swap(&mut self.coefficients, &mut self.next_coefficients);
-        true
+        self.current_iteration < self.maximum_iteration
     }
 
     pub fn run(&mut self) {
         // Add the probe points to the series approximation
-        self.add_probe(1.5 * ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
-        self.add_probe(1.5 * ComplexFixed::new(self.delta_top_left.re, -self.delta_top_left.im));
-        self.add_probe(1.5 * ComplexFixed::new(-self.delta_top_left.re, self.delta_top_left.im));
-        self.add_probe(1.5 * ComplexFixed::new(-self.delta_top_left.re, -self.delta_top_left.im));
+        // These are added outside of the image in order to reduce overskipping
+        // These could possibly be reduced
+        let probe_scaling_factor = 100.0;
+
+        self.add_probe(probe_scaling_factor * ComplexFixed::new(self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(probe_scaling_factor * ComplexFixed::new(self.delta_top_left.re, -self.delta_top_left.im));
+        self.add_probe(probe_scaling_factor * ComplexFixed::new(-self.delta_top_left.re, self.delta_top_left.im));
+        self.add_probe(probe_scaling_factor * ComplexFixed::new(-self.delta_top_left.re, -self.delta_top_left.im));
 
         // Can be changed later into a better loop - this function could also return some more information
-        while self.step() && self.current_iteration < self.maximum_iteration {
+        while self.step() {
             continue;
         }
     }
@@ -133,7 +135,7 @@ impl SeriesApproximationDouble {
     pub fn add_probe(&mut self, delta_probe: ComplexFixed<f64>) {
         // here we will need to check to make sure we are still at the first iteration, or use perturbation to go forward
         self.original_probes.push(delta_probe);
-        self.perturbation_probes.push(delta_probe);
+        self.current_probes.push(delta_probe);
 
         let delta_probe_scaled = delta_probe / self.delta_maximum;
         let mut delta_probe_n = Vec::with_capacity(self.order + 1);
