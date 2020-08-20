@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed, to_fixed_exp};
+use crate::util::{ComplexArbitrary, ComplexFixed, to_fixed, to_extended};
 
 pub struct ReferenceExtended {
     pub start_iteration: usize,

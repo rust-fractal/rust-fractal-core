@@ -1,6 +1,6 @@
-use crate::util::{ComplexArbitrary, to_fixed_exp};
+use crate::util::{ComplexArbitrary, to_extended};
 use crate::util::complex_extended::ComplexExtended;
-use crate::math::reference_extended::ReferenceExtended;
+use crate::math::reference::Reference;
 use rug::Float;
 use crate::util::float_extended::FloatExtended;
 use std::mem::swap;
@@ -25,8 +25,7 @@ impl SeriesApproximationExtended {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: FloatExtended, delta_top_left: ComplexExtended) -> Self {
         let mut coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1];
 
-        let temp = to_fixed_exp(&c);
-        coefficients[0] = ComplexExtended::new(temp.0, temp.1);
+        coefficients[0] = to_extended(&c);
         coefficients[1] = ComplexExtended::new2(1.0, 0.0, 0);
 
         // The current iteration is set to 1 as we set z = c
@@ -51,8 +50,7 @@ impl SeriesApproximationExtended {
         self.z.square_mut();
         self.z += &self.c;
 
-        let temp = to_fixed_exp(&self.z);
-        self.next_coefficients[0] = ComplexExtended::new(temp.0, temp.1);
+        self.next_coefficients[0] = to_extended(&self.z);
         self.next_coefficients[1] = self.coefficients[0] * self.coefficients[1] * 2.0 + ComplexExtended::new2(1.0, 0.0, 0);
 
         // Calculate the new coefficents
@@ -155,7 +153,7 @@ impl SeriesApproximationExtended {
     }
 
     // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self, reference_delta: ComplexExtended) -> ReferenceExtended {
+    pub fn get_reference(&self, reference_delta: ComplexExtended) -> Reference {
         let mut reference_c = self.c.clone();
         let temp = Float::with_val(self.c.real().prec(), reference_delta.exponent).exp2();
         let temp2 = Float::with_val(self.c.real().prec(), reference_delta.mantissa.re);
@@ -173,7 +171,7 @@ impl SeriesApproximationExtended {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        ReferenceExtended::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
+        Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended) -> ComplexExtended {

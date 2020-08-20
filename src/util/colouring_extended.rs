@@ -1,15 +1,15 @@
 use crate::util::image::Image;
-use crate::util::PixelDataExtended;
+use crate::util::PixelData;
 
 pub enum ColouringExtended {
     Iteration,
     IterationSquareRoot,
     Histogram,
-    Distance
+    // Distance
 }
 
 impl ColouringExtended {
-    pub fn run(&self, pixel_data: &Vec<PixelDataExtended>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
+    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
@@ -66,7 +66,7 @@ impl ColouringExtended {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (7.0 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (7.0f64 * pixel.iteration as f64) as usize % 8192;
 
                         let colour = colours[hue];
 
@@ -84,7 +84,7 @@ impl ColouringExtended {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (7.0 * pixel.iteration as f64).sqrt() as usize % 8192;
+                        let hue = (7.0f64 * pixel.iteration as f64).sqrt() as usize % 8192;
 
                         let colour = colours[hue];
 
@@ -128,24 +128,24 @@ impl ColouringExtended {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            ColouringExtended::Distance => {
-                // At the moment distance has a white-black gradient
-                for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && image.display_glitches {
-                        (255, 0, 0)
-                    } else {
-                        if pixel.escaped {
-                            let de = 2.0 * pixel.delta_current.norm() * pixel.delta_current.norm().ln() / pixel.derivative_current.norm();
-                            let out = (255.0 * (de / delta_pixel).tanh()) as u8;
-                            (out, out, out)
-                        } else {
-                            (0, 0, 0)
-                        }
-                    };
+            // ColouringExtended::Distance => {
+            //     // At the moment distance has a white-black gradient
+            //     for pixel in pixel_data {
+            //         let (r, g, b) = if pixel.glitched && image.display_glitches {
+            //             (255, 0, 0)
+            //         } else {
+            //             if pixel.escaped {
+            //                 let de = 2.0 * pixel.delta_current.norm() * pixel.delta_current.norm().ln() / pixel.derivative_current.norm();
+            //                 let out = (255.0 * (de / delta_pixel).tanh()) as u8;
+            //                 (out, out, out)
+            //             } else {
+            //                 (0, 0, 0)
+            //             }
+            //         };
 
-                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
-                }
-            }
+            //         image.plot(pixel.image_x, pixel.image_y, r, g, b);
+            //     }
+            // }
         }
     }
 }
