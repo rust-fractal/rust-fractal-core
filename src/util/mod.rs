@@ -4,6 +4,9 @@ pub mod colouring_extended;
 pub mod float_extended;
 pub mod complex_extended;
 
+pub use complex_extended::ComplexExtended;
+pub use float_extended::FloatExtended;
+
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
 
@@ -39,13 +42,20 @@ pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
     ComplexFixed::new(re, im)
 }
 
-pub fn to_fixed_exp(value: &ComplexArbitrary) -> (ComplexFixed<f64>, i32) {
-    let (re, p1) = value.real().to_f64_exp();
-    let (im, p2) = value.imag().to_f64_exp();
+pub fn to_extended(value: &ComplexArbitrary) -> ComplexExtended {
+    let (mut re, p1) = value.real().to_f64_exp();
+    let (mut im, p2) = value.imag().to_f64_exp();
+    let mut exponent = 0;
 
-    let im_new = im * 2f64.powi(p2 - p1);
+    if p1 < p2 {
+        im *= 2f64.powi(p1 - p2);
+        exponent = p2;
+    } else {
+        re *= 2f64.powi(p2 - p1);
+        exponent = p1;
+    }
 
-    (ComplexFixed::new(re, im_new), p1)
+    ComplexExtended::new2(re, im, exponent)
 }
 
 #[derive(Clone)]
@@ -72,6 +82,18 @@ pub struct PixelDataExtended {
     pub p_current: i32,
     pub delta_reference: ComplexFixed<f64>,
     pub delta_current: ComplexFixed<f64>,
+    pub derivative_current: ComplexFixed<f64>,
+    pub glitched: bool,
+    pub escaped: bool,
+}
+
+#[derive(Clone)]
+pub struct PixelData {
+    pub image_x: usize,
+    pub image_y: usize,
+    pub iteration: usize,
+    pub delta_reference: ComplexExtended,
+    pub delta_current: ComplexExtended,
     pub derivative_current: ComplexFixed<f64>,
     pub glitched: bool,
     pub escaped: bool,

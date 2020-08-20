@@ -61,7 +61,7 @@ fn main() {
         center_im,
         0.001,
         false,
-        64
+        8
     );
 
     let time = Instant::now();

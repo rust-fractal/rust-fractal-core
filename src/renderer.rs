@@ -1,5 +1,5 @@
 use crate::util::image::Image;
-use crate::util::{ComplexArbitrary, ComplexFixed, PixelDataDouble, PixelDataExtended};
+use crate::util::{ComplexArbitrary, ComplexFixed, PixelData, PixelDataDouble};
 use crate::math::series_approximation_extended::SeriesApproximationExtended;
 
 use std::time::Instant;
@@ -11,7 +11,7 @@ use crate::util::complex_extended::ComplexExtended;
 use itertools::Itertools;
 use rayon::prelude::*;
 use crate::math::series_approximation_double::SeriesApproximationDouble;
-use crate::math::perturbation_extended::PerturbationExtended;
+use crate::math::perturbation::Perturbation;
 use crate::math::perturbation_double::PerturbationDouble;
 use crate::util::colouring_double::ColouringDouble;
 use crate::util::colouring_extended::ColouringExtended;
@@ -74,7 +74,7 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        if self.zoom.exponent < 900 {
+        if self.zoom.exponent < 0 {
             println!("Rendering with double...");
 
             let mut series_approximation = SeriesApproximationDouble::new(
@@ -209,24 +209,22 @@ impl FractalRenderer {
                                     let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                                     let new_delta = series_approximation.evaluate(point_delta);
 
-                                    PixelDataExtended {
+                                    PixelData {
                                         image_x: i,
                                         image_y: j,
                                         iteration: reference.start_iteration,
-                                        p_initial: point_delta.exponent,
-                                        p_current: new_delta.exponent,
-                                        delta_reference: point_delta.mantissa,
-                                        delta_current: new_delta.mantissa,
+                                        delta_reference: point_delta,
+                                        delta_current: new_delta,
                                         derivative_current: ComplexFixed::new(1.0, 0.0),
                                         glitched: false,
                                         escaped: false
                                     }
-                                }).collect::<Vec<PixelDataExtended>>();
+                                }).collect::<Vec<PixelData>>();
 
             println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
 
             let time = Instant::now();
-            PerturbationExtended::iterate(&mut pixel_data, &reference, reference.current_iteration);
+            Perturbation::iterate(&mut pixel_data, &reference, reference.current_iteration);
             println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
             let time = Instant::now();
@@ -261,19 +259,14 @@ impl FractalRenderer {
                                   data.iteration = reference.start_iteration;
                                   data.glitched = false;
                                   data.escaped = false;
-                                  let temp = series_approximation.evaluate(point_delta) - delta_z;
-                                  data.delta_current = temp.mantissa;
-                                  data.p_current = temp.exponent;
-
-                                  let temp2 = point_delta - reference_wrt_sa;
-                                  data.delta_reference = temp2.mantissa;
-                                  data.p_initial = temp2.exponent;
+                                  data.delta_current = series_approximation.evaluate(point_delta) - delta_z;
+                                  data.delta_reference = point_delta - reference_wrt_sa;
                                   // might not need the evaluate here as if we store it separately, there is no need
                                   data.derivative_current = ComplexFixed::new(1.0, 0.0);
                               }
                           });
 
-                PerturbationExtended::iterate(&mut pixel_data, &r, r.current_iteration);
+                Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
                 ColouringExtended::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
 
