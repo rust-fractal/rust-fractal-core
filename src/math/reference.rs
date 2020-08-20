@@ -17,9 +17,6 @@ pub struct ReferenceIteration {
 
 impl Reference {
     pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize) -> Reference {
-
-        println!("{}", z);
-
         Reference {
             start_iteration: current_iteration,
             current_iteration,
@@ -59,8 +56,6 @@ impl Reference {
                 }
             )
         }
-
-        println!("{}", self.z);
 
         // If the value is not small we do the escape check, otherwise it has not escaped
         // as we do the check for 65536 on the perturbation, we need this to be more than that squared
