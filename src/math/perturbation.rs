@@ -48,18 +48,18 @@ impl Perturbation {
                             // If the reference is not small, use the usual method
                             None => {
                                 // possible to check if the exponent is below -500, if so dont bother with z^2
-                                pixel.delta_current.mantissa = 2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + scaled_scale_factor_1 * pixel.delta_current.mantissa * pixel.delta_current.mantissa + scaled_delta_reference;
+                                // pixel.delta_current.mantissa = 2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + scaled_scale_factor_1 * pixel.delta_current.mantissa * pixel.delta_current.mantissa + scaled_delta_reference;
 
-                                // pixel.delta_current.mantissa = if pixel.delta_current.exponent < -500 {
-                                //     2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + scaled_delta_reference
-                                // } else {
-                                //     2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + scaled_scale_factor_1 * pixel.delta_current.mantissa * pixel.delta_current.mantissa + scaled_delta_reference
-                                // };
+                                pixel.delta_current.mantissa = if pixel.delta_current.exponent < -1000 {
+                                    2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + scaled_delta_reference
+                                } else {
+                                    2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + scaled_scale_factor_1 * pixel.delta_current.mantissa * pixel.delta_current.mantissa + scaled_delta_reference
+                                };
 
                                 scaled_iterations += 1;
 
-                                // check the counter, if it is > 500, do a normalisation
-                                if scaled_iterations > 500 {
+                                // check the counter, if it is > 250, do a normalisation
+                                if scaled_iterations > 250 {
                                     pixel.delta_current.reduce();
 
                                     scaled_scale_factor_1 = 2.0f64.powi(pixel.delta_current.exponent);

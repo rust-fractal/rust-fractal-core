@@ -66,7 +66,7 @@ impl ColouringExtended {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (7.0f64 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (250.0f64 * pixel.iteration as f64) as usize % 8192;
 
                         let colour = colours[hue];
 
