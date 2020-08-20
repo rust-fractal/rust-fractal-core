@@ -28,18 +28,16 @@ impl Reference {
     }
 
     pub fn step(&mut self) -> bool {
-        // self.z.square_mut();
-        // self.z += &self.c;
-
-        self.z = self.z.clone().square() + &self.c;
-
+        self.z.square_mut();
+        self.z += &self.c;
         self.current_iteration += 1;
 
         let z_fixed = to_fixed(&self.z);
         let z_tolerance = 1e-6 * z_fixed.norm_sqr();
 
         // This is if we need to use the extended precision for the reference
-        if z_fixed.re.abs() < 1e300 && z_fixed.im.abs() < 1e300 {
+        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+            println!("found slow at: {}", self.current_iteration);
             self.data.push(
                 ReferenceIteration {
                     z_fixed,

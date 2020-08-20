@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, to_extended};
+use crate::util::{ComplexArbitrary, to_extended, to_fixed};
 use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
 use rug::Float;
@@ -49,6 +49,12 @@ impl SeriesApproximationExtended {
     pub fn step(&mut self) -> bool {
         self.z.square_mut();
         self.z += &self.c;
+
+        let z_fixed = to_fixed(&self.z);
+
+        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+            println!("found slow at: {}", self.current_iteration);
+        }
 
         self.next_coefficients[0] = to_extended(&self.z);
         self.next_coefficients[1] = self.coefficients[0] * self.coefficients[1] * 2.0 + ComplexExtended::new2(1.0, 0.0, 0);
