@@ -48,10 +48,10 @@ pub fn to_extended(value: &ComplexArbitrary) -> ComplexExtended {
     let mut exponent = 0;
 
     if p1 < p2 {
-        im *= 2f64.powi(p1 - p2);
+        re *= 2f64.powi(p1 - p2);
         exponent = p2;
     } else {
-        re *= 2f64.powi(p2 - p1);
+        im *= 2f64.powi(p2 - p1);
         exponent = p1;
     }
 

@@ -53,15 +53,15 @@ fn main() {
     println!("Zoom: {}", zoom);
 
     let mut renderer = FractalRenderer::new(
-        1000,
-        1000,
+        500,
+        500,
         zoom,
         iterations.parse::<usize>().unwrap(),
         center_re,
         center_im,
         0.001,
         false,
-        8
+        16
     );
 
     let time = Instant::now();
