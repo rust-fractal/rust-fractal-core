@@ -17,7 +17,7 @@ impl Perturbation {
                     while pixel.iteration < reference_current_iteration {
                         let delta_current_float = scaled_scale_factor_1 * pixel.delta_current.mantissa;
 
-                        if pixel.delta_current.exponent > -250 {
+                        if pixel.delta_current.exponent > -500 {
                             let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float).norm_sqr();
 
                             if z_norm < reference.data[pixel.iteration - reference.start_iteration].z_tolerance {

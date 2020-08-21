@@ -5,7 +5,7 @@ use rug::Float;
 use crate::util::float_extended::FloatExtended;
 use std::mem::swap;
 
-pub struct SeriesApproximationExtended {
+pub struct SeriesApproximation {
     pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel: FloatExtended,
@@ -21,7 +21,7 @@ pub struct SeriesApproximationExtended {
     delta_top_left: ComplexExtended
 }
 
-impl SeriesApproximationExtended {
+impl SeriesApproximation {
     pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: FloatExtended, delta_top_left: ComplexExtended) -> Self {
         let mut coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1];
 
@@ -29,7 +29,7 @@ impl SeriesApproximationExtended {
         coefficients[1] = ComplexExtended::new2(1.0, 0.0, 0);
 
         // The current iteration is set to 1 as we set z = c
-        SeriesApproximationExtended {
+        SeriesApproximation {
             current_iteration: 1,
             maximum_iteration,
             delta_pixel,
