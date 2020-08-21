@@ -5,11 +5,10 @@ A mandelbrot fractal image generator featuring perturbation theory and series ap
 
 - Perturbation based iteration count with glitch detection.
 - Glitch fixing through automatic reference movement and recalculation.
-- Series approximation calculation to skip a large number of iterations.
+- Series approximation calculation to skip (and approximate) large amounts of perturbation iterations.
 - Multithreading of core perturbation loops through rayon.
 - Multiple colouring methods including iteration, histogram and distance.
-- Adaptive precision allowing for both double, and extended double (mantissa-exponent) types for deltas.
-- Up to E280 zoom level for double precision, extended to E10000+.
+- Utilises scaling and mantissa-exponent based extended precision to allow for arbitrary zoom, whilst maintaining good performance. Verified to be working at depths exceeding E20000. Theoretically, this is only limited by MPFR's precision.
 
 ## Usage
 You need to be able to compile the 'rug' crate. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, change the settings in the ```main.rs``` file located in ```src/```. Build and run the crate with:
