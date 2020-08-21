@@ -9,7 +9,7 @@ pub enum ColouringExtended {
 }
 
 impl ColouringExtended {
-    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, delta_pixel: f64) {
+    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, _delta_pixel: f64) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 

@@ -45,15 +45,14 @@ pub fn to_fixed(value: &ComplexArbitrary) -> ComplexFixed<f64> {
 pub fn to_extended(value: &ComplexArbitrary) -> ComplexExtended {
     let (mut re, p1) = value.real().to_f64_exp();
     let (mut im, p2) = value.imag().to_f64_exp();
-    let mut exponent = 0;
 
-    if p1 < p2 {
+    let exponent = if p1 < p2 {
         re *= 2f64.powi(p1 - p2);
-        exponent = p2;
+        p2
     } else {
         im *= 2f64.powi(p2 - p1);
-        exponent = p1;
-    }
+        p1
+    };
 
     ComplexExtended::new2(re, im, exponent)
 }
