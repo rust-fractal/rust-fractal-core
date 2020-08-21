@@ -1,5 +1,6 @@
 use crate::util::image::Image;
 use crate::util::PixelData;
+use crate::math::Reference;
 
 pub enum Colouring {
     Iteration,
@@ -9,7 +10,7 @@ pub enum Colouring {
 }
 
 impl Colouring {
-    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, _delta_pixel: f64) {
+    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, _delta_pixel: f64, reference: &Reference) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
@@ -65,8 +66,11 @@ impl Colouring {
                     } else if pixel.iteration >= maximum_iteration {
                         (0, 0, 0)
                     } else {
+                        let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.to_float()).norm();
+                        let smooth = 1.0 - (z_norm.ln()).log2();
+
                         // 0.1656
-                        let hue = (250.0f64 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (7.0f64 * (pixel.iteration as f64 + smooth) + 8192.0) as usize % 8192;
 
                         let colour = colours[hue];
 
