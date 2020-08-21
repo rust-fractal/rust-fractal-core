@@ -120,7 +120,7 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
         let time = Instant::now();
-        Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+        Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &reference);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
         // Remove all non-glitched points from the remaining points
@@ -157,7 +157,7 @@ impl FractalRenderer {
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
-            Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+            Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &r);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
