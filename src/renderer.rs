@@ -1,20 +1,13 @@
-use crate::util::image::Image;
-use crate::util::{ComplexArbitrary, ComplexFixed, PixelData, PixelDataDouble};
-use crate::math::series_approximation_extended::SeriesApproximationExtended;
+use crate::util::{image::Image, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, colouring::Colouring};
+use crate::math::{SeriesApproximation, Perturbation};
 
 use std::time::Instant;
-use rand::seq::SliceRandom;
 use std::cmp::max;
-use crate::util::float_extended::FloatExtended;
 use std::f64::consts::LOG2_10;
-use crate::util::complex_extended::ComplexExtended;
+
+use rand::seq::SliceRandom;
 use itertools::Itertools;
 use rayon::prelude::*;
-use crate::math::series_approximation_double::SeriesApproximationDouble;
-use crate::math::perturbation::Perturbation;
-use crate::math::perturbation_double::PerturbationDouble;
-use crate::util::colouring_double::ColouringDouble;
-use crate::util::colouring_extended::ColouringExtended;
 
 pub struct FractalRenderer {
     image_width: usize,
@@ -76,7 +69,7 @@ impl FractalRenderer {
 
         println!("Rendering...");
 
-        let mut series_approximation = SeriesApproximationExtended::new(
+        let mut series_approximation = SeriesApproximation::new(
             self.center_location.clone(),
             self.approximation_order,
             self.maximum_iteration,
@@ -110,7 +103,9 @@ impl FractalRenderer {
                                     image_x: i,
                                     image_y: j,
                                     iteration: reference.start_iteration,
+                                    delta_centre: point_delta,
                                     delta_reference: point_delta,
+                                    delta_start: new_delta,
                                     delta_current: new_delta,
                                     derivative_current: ComplexFixed::new(1.0, 0.0),
                                     glitched: false,
@@ -125,7 +120,7 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
         let time = Instant::now();
-        ColouringExtended::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+        Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
         // Remove all non-glitched points from the remaining points
@@ -150,14 +145,11 @@ impl FractalRenderer {
             pixel_data.chunks_mut(1)
                         .for_each(|pixel_data| {
                             for data in pixel_data {
-                                let element = ComplexFixed::new(data.image_x as f64 * delta_pixel + delta_top_left.re, data.image_y as f64 * delta_pixel + delta_top_left.im);
-                                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-
                                 data.iteration = reference.start_iteration;
                                 data.glitched = false;
                                 data.escaped = false;
-                                data.delta_current = series_approximation.evaluate(point_delta) - delta_z;
-                                data.delta_reference = point_delta - reference_wrt_sa;
+                                data.delta_current = data.delta_start - delta_z;
+                                data.delta_reference = data.delta_centre - reference_wrt_sa;
                                 // might not need the evaluate here as if we store it separately, there is no need
                                 data.derivative_current = ComplexFixed::new(1.0, 0.0);
                             }
@@ -165,7 +157,7 @@ impl FractalRenderer {
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
-            ColouringExtended::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
+            Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {

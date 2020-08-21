@@ -1,6 +1,5 @@
 pub mod image;
-pub mod colouring_double;
-pub mod colouring_extended;
+pub mod colouring;
 pub mod float_extended;
 pub mod complex_extended;
 
@@ -58,40 +57,13 @@ pub fn to_extended(value: &ComplexArbitrary) -> ComplexExtended {
 }
 
 #[derive(Clone)]
-pub struct PixelDataDouble {
-    pub image_x: usize,
-    pub image_y: usize,
-    pub iteration: usize,
-    pub delta_centre: ComplexFixed<f64>,
-    pub delta_reference: ComplexFixed<f64>,
-    pub delta_approximation: ComplexFixed<f64>,
-    pub delta_current: ComplexFixed<f64>,
-    pub derivative_approximation: ComplexFixed<f64>,
-    pub derivative_current: ComplexFixed<f64>,
-    pub glitched: bool,
-    pub escaped: bool,
-}
-
-#[derive(Clone)]
-pub struct PixelDataExtended {
-    pub image_x: usize,
-    pub image_y: usize,
-    pub iteration: usize,
-    pub p_initial: i32,
-    pub p_current: i32,
-    pub delta_reference: ComplexFixed<f64>,
-    pub delta_current: ComplexFixed<f64>,
-    pub derivative_current: ComplexFixed<f64>,
-    pub glitched: bool,
-    pub escaped: bool,
-}
-
-#[derive(Clone)]
 pub struct PixelData {
     pub image_x: usize,
     pub image_y: usize,
     pub iteration: usize,
+    pub delta_centre: ComplexExtended,
     pub delta_reference: ComplexExtended,
+    pub delta_start: ComplexExtended,
     pub delta_current: ComplexExtended,
     pub derivative_current: ComplexFixed<f64>,
     pub glitched: bool,
