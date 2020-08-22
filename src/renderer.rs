@@ -2,7 +2,7 @@ use crate::util::{image::Image, ComplexFixed, ComplexArbitrary, PixelData, compl
 use crate::math::{SeriesApproximation, Perturbation};
 
 use std::time::Instant;
-use std::cmp::max;
+use std::cmp::{min, max};
 use std::f64::consts::LOG2_10;
 
 use rand::seq::SliceRandom;
@@ -46,6 +46,13 @@ impl FractalRenderer {
             precision as u32,
             ComplexArbitrary::parse("(".to_owned() + center_real + "," + center_imag + ")").expect("Location is not valid!"));
 
+        let auto_approximation = if approximation_order == 0 {
+            let auto = (((image_width * image_height) as f64).log(1e6).powi(2) * 21.0f64) as usize;
+            min(max(auto, 3), 64)
+        } else {
+            approximation_order
+        };
+
         FractalRenderer {
             image_width,
             image_height,
@@ -53,7 +60,7 @@ impl FractalRenderer {
             zoom,
             center_location,
             maximum_iteration,
-            approximation_order,
+            approximation_order: auto_approximation,
             glitch_tolerance,
             image: Image::new(image_width, image_height, display_glitches)
         }
