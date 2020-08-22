@@ -8,7 +8,7 @@ use std::mem::swap;
 pub struct SeriesApproximation {
     pub current_iteration: usize,
     maximum_iteration: usize,
-    delta_pixel: FloatExtended,
+    delta_pixel_square: FloatExtended,
     z: ComplexArbitrary,
     c: ComplexArbitrary,
     pub order: usize,
@@ -22,7 +22,7 @@ pub struct SeriesApproximation {
 }
 
 impl SeriesApproximation {
-    pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel: FloatExtended, delta_top_left: ComplexExtended) -> Self {
+    pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended) -> Self {
         let mut coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1];
 
         coefficients[0] = to_extended(&c);
@@ -32,7 +32,7 @@ impl SeriesApproximation {
         SeriesApproximation {
             current_iteration: 1,
             maximum_iteration,
-            delta_pixel,
+            delta_pixel_square,
             z: c.clone(),
             c,
             order,
@@ -95,8 +95,8 @@ impl SeriesApproximation {
                 derivative_probe += self.next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
-            let relative_error = (self.current_probes[i] - series_probe).norm();
-            let mut derivative = derivative_probe.norm();
+            let relative_error = (self.current_probes[i] - series_probe).norm_square();
+            let mut derivative = derivative_probe.norm_square();
 
             // Check to make sure that the derivative is greater than or equal to 1
             if derivative.to_float() < 1.0 {
@@ -104,7 +104,7 @@ impl SeriesApproximation {
             }
 
             // Check that the error over the derivative is less than the pixel spacing
-            if relative_error / derivative > self.delta_pixel {
+            if relative_error / derivative > self.delta_pixel_square {
                 self.z -= &self.c;
                 self.z.sqrt_mut();
                 return false;
@@ -146,7 +146,7 @@ impl SeriesApproximation {
         delta_probe_n_derivative_2.push(ComplexExtended::new2(1.0, 0.0, 0));
 
         for i in 1..=self.order {
-            delta_probe_n_derivative_2.push((delta_probe_n * (i + 1) as f64));
+            delta_probe_n_derivative_2.push(delta_probe_n * (i + 1) as f64);
             delta_probe_n *= delta_probe;
             delta_probe_n_2.push(delta_probe_n);
         }
