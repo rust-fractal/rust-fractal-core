@@ -87,7 +87,6 @@ impl AddAssign for ComplexExtended {
                 self.mantissa += other.mantissa;
             }
         }
-        // self.reduce();
     }
 }
 
@@ -103,7 +102,6 @@ impl SubAssign for ComplexExtended {
             self.exponent = other.exponent;
             self.mantissa -= other.mantissa;
         }
-        self.reduce();
     }
 }
 
@@ -112,7 +110,6 @@ impl MulAssign<ComplexExtended> for ComplexExtended {
     fn mul_assign(&mut self, other: Self) {
         self.mantissa *= other.mantissa;
         self.exponent += other.exponent;
-        // self.reduce();
     }
 }
 

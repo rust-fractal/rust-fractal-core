@@ -53,13 +53,13 @@ fn main() {
     println!("Zoom: {}", zoom);
 
     let mut renderer = FractalRenderer::new(
-        2000,
-        2000,
+        1000,
+        1000,
         zoom,
         iterations.parse::<usize>().unwrap(),
         center_re,
         center_im,
-        0.001,
+        0.01,
         false,
         32
     );
