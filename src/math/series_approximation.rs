@@ -61,9 +61,9 @@ impl SeriesApproximation {
 
         // Calculate the new coefficents
         for k in 2..=self.order {
-            let mut sum = ComplexExtended::new2(0.0, 0.0, 0);
+            let mut sum = self.coefficients[0] * self.coefficients[k];
 
-            for j in 0..=((k - 1) / 2) {
+            for j in 1..=((k - 1) / 2) {
                 sum += self.coefficients[j] * self.coefficients[k - j];
             }
             sum *= 2.0;
@@ -80,21 +80,19 @@ impl SeriesApproximation {
         // this section takes about half of the time
         for i in 0..self.original_probes.len() {
             // step the probe points using perturbation
-            self.current_probes[i] = self.coefficients[0] * self.current_probes[i] * 2.0 + self.current_probes[i] * self.current_probes[i] + self.original_probes[i];
+            self.current_probes[i] = self.current_probes[i] * (self.coefficients[0] * 2.0 + self.current_probes[i]);
+            self.current_probes[i] += self.original_probes[i];
+
+            // TODO this probably does not need to be done every iteration
             self.current_probes[i].reduce();
 
             // get the new approximations
-            let mut series_probe = ComplexExtended::new2(0.0, 0.0, 0);
-            let mut derivative_probe = ComplexExtended::new2(0.0, 0.0, 0);
+            let mut series_probe = self.next_coefficients[1] * self.approximation_probes[i][0];
+            let mut derivative_probe = self.next_coefficients[1] * self.approximation_probes_derivative[i][0];
 
-            for k in 1..=self.order {
+            for k in 2..=self.order {
                 series_probe += self.next_coefficients[k] * self.approximation_probes[i][k - 1];
-                derivative_probe += self.next_coefficients[k] * self.approximation_probes_derivative[i][k - 1] * k as f64;
-
-                if k % 16 == 0{
-                    series_probe.reduce();
-                    derivative_probe.reduce();
-                }
+                derivative_probe += self.next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
             };
 
             let relative_error = (self.current_probes[i] - series_probe).norm();
@@ -138,24 +136,23 @@ impl SeriesApproximation {
         self.original_probes.push(delta_probe);
         self.current_probes.push(delta_probe);
 
-        let mut delta_probe_n = Vec::with_capacity(self.order + 1);
-        let mut delta_probe_n_derivative = Vec::with_capacity(self.order + 1);
+        let mut delta_probe_n = delta_probe;
+
+        let mut delta_probe_n_2 = Vec::with_capacity(self.order + 1);
+        let mut delta_probe_n_derivative_2 = Vec::with_capacity(self.order + 1);
 
         // The first element will be 1, in order for the derivative to be calculated
-        delta_probe_n.push(delta_probe);
-        delta_probe_n_derivative.push(ComplexExtended::new2(1.0, 0.0, 0));
+        delta_probe_n_2.push(delta_probe_n);
+        delta_probe_n_derivative_2.push(ComplexExtended::new2(1.0, 0.0, 0));
 
         for i in 1..=self.order {
-            let mut delta_probe1 = delta_probe_n[i - 1] * delta_probe;
-            let mut delta_probe2 = delta_probe_n_derivative[i - 1] * delta_probe;
-            delta_probe1.reduce();
-            delta_probe2.reduce();
-            delta_probe_n.push(delta_probe1);
-            delta_probe_n_derivative.push(delta_probe2);
+            delta_probe_n_derivative_2.push((delta_probe_n * (i + 1) as f64));
+            delta_probe_n *= delta_probe;
+            delta_probe_n_2.push(delta_probe_n);
         }
 
-        self.approximation_probes.push(delta_probe_n);
-        self.approximation_probes_derivative.push(delta_probe_n_derivative);
+        self.approximation_probes.push(delta_probe_n_2);
+        self.approximation_probes_derivative.push(delta_probe_n_derivative_2);
     }
 
     // Get the current reference, and the current number of iterations done
@@ -181,31 +178,43 @@ impl SeriesApproximation {
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended) -> ComplexExtended {
-        let mut approximation = self.coefficients[1] * point_delta;
-        let mut original_point_n = point_delta * point_delta;
+        // 1907 ms packing opus 4K
+        // Horner's rule
+        let mut approximation = self.coefficients[self.order];
 
-        for k in 2..=self.order {
-            approximation += self.coefficients[k] * original_point_n;
-            original_point_n *= point_delta;
+        for k in (1..=(self.order - 1)).rev() {
+            approximation *= point_delta;
+            approximation += self.coefficients[k];
+        }
 
-            if k % 16 == 0 {
-                approximation.reduce();
-                original_point_n.reduce();
-            }
-        };
-
+        approximation *= point_delta;
+        approximation.reduce();
         approximation
     }
 
-    // pub fn evaluate_derivative(&self, point_delta: ComplexFixed<f64>) -> ComplexFixed<f64> {
+    // pub fn evaluate_derivative(&self, point_delta: ComplexExtended) -> FloatExtended {
     //     let mut original_point_derivative_n = ComplexExtended::new(1.0, 0, 0.0, 0);
     //     let mut approximation_derivative = ComplexExtended::new(0.0, 0, 0.0, 0);
-    //
+    
     //     for k in 1..=self.order {
     //         approximation_derivative += k as f64 * self.coefficients[k] * original_point_derivative_n;
     //         original_point_derivative_n *= ComplexExtended::new(point_delta.re, 0, point_delta.im, 0);
     //     };
-    //
+    
     //     approximation_derivative.to_float()
+
+
+    //     let mut approximation_derivative = self.coefficients[self.order] * self.order as f64;
+
+    //     for k in (1..=(self.order - 1)).rev() {
+    //         approximation *= point_delta;
+    //         approximation += self.coefficients[k] * k as f64;
+    //     }
+
+    //     approximation *= point_delta;
+    //     approximation.reduce();
+    //     approximation
+
+
     // }
 }

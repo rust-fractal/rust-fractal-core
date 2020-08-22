@@ -69,6 +69,8 @@ impl FractalRenderer {
 
         println!("Rendering...");
 
+        // Series approximation currently has some overskipping issues
+        // this can be resolved by root finding and adding new probe points
         let mut series_approximation = SeriesApproximation::new(
             self.center_location.clone(),
             self.approximation_order,
@@ -120,8 +122,10 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
         let time = Instant::now();
-        Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &reference);
+        Colouring::IterationSmooth.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &reference);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
+
+        let time = Instant::now();
 
         // Remove all non-glitched points from the remaining points
         pixel_data.retain(|packet| {
@@ -157,7 +161,7 @@ impl FractalRenderer {
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
-            Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &r);
+            Colouring::IterationSmooth.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &r);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
