@@ -1,15 +1,17 @@
 use crate::util::image::Image;
 use crate::util::PixelData;
+use crate::math::Reference;
 
 pub enum Colouring {
     Iteration,
     IterationSquareRoot,
-    Histogram,
+    IterationSmooth,
+    IterationHistogram,
     // Distance
 }
 
 impl Colouring {
-    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, _delta_pixel: f64) {
+    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, _delta_pixel: f64, reference: &Reference) {
         // Palette is temporarily here
         let mut colours = Vec::new();
 
@@ -55,10 +57,10 @@ impl Colouring {
             colours.push((red, green, blue))
         }
 
+        let escape_radius_ln = 1e16f64.ln();
+
         match self {
             Colouring::Iteration => {
-                // No smooth colouring at the moment
-
                 for pixel in pixel_data {
                     let (r, g, b) = if pixel.glitched && image.display_glitches {
                         (255, 0, 0)
@@ -66,7 +68,7 @@ impl Colouring {
                         (0, 0, 0)
                     } else {
                         // 0.1656
-                        let hue = (250.0f64 * pixel.iteration as f64) as usize % 8192;
+                        let hue = (250 * pixel.iteration) % 8192;
 
                         let colour = colours[hue];
 
@@ -94,7 +96,28 @@ impl Colouring {
                     image.plot(pixel.image_x, pixel.image_y, r, g, b);
                 }
             },
-            Colouring::Histogram => {
+            Colouring::IterationSmooth => {
+                for pixel in pixel_data {
+                    let (r, g, b) = if pixel.glitched && image.display_glitches {
+                        (255, 0, 0)
+                    } else if pixel.iteration >= maximum_iteration {
+                        (0, 0, 0)
+                    } else {
+                        let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr();
+                        let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+
+                        // 0.1656
+                        let hue = (250.0f64 * (pixel.iteration as f64 + smooth)) as usize % 8192;
+
+                        let colour = colours[hue];
+
+                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
+                    };
+
+                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
+                }
+            },
+            Colouring::IterationHistogram => {
                 let mut iteration_counts = vec![0usize; maximum_iteration + 2];
 
                 for pixel in pixel_data {

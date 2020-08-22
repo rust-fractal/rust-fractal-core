@@ -22,13 +22,13 @@ impl Perturbation {
 
                             if z_norm < reference.data[pixel.iteration - reference.start_iteration].z_tolerance {
                                 pixel.glitched = true;
-                                pixel.delta_current.reduce();
                                 break;
                             }
     
                             if z_norm > 1e16 {
                                 pixel.escaped = true;
-                                pixel.delta_current.reduce();
+                                pixel.delta_current.mantissa = pixel.delta_current.to_float();
+                                pixel.delta_current.exponent = 0;
                                 break;
                             }
                         }
