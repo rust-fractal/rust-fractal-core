@@ -69,13 +69,15 @@ impl FractalRenderer {
 
         println!("Rendering...");
 
+        let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
+
         // Series approximation currently has some overskipping issues
         // this can be resolved by root finding and adding new probe points
         let mut series_approximation = SeriesApproximation::new(
             self.center_location.clone(),
             self.approximation_order,
             self.maximum_iteration,
-            FloatExtended::new(delta_pixel, -self.zoom.exponent),
+            delta_pixel_extended * delta_pixel_extended,
             ComplexExtended::new(delta_top_left, -self.zoom.exponent),
         );
 

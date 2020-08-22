@@ -23,7 +23,7 @@ impl Reference {
             maximum_iteration,
             z,
             c,
-            data: Vec::new()
+            data: Vec::with_capacity(1000)
         }
     }
 
