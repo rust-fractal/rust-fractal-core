@@ -46,7 +46,7 @@ impl FractalRenderer {
             ComplexArbitrary::parse("(".to_owned() + center_real + "," + center_imag + ")").expect("Location is not valid!"));
 
         let auto_approximation = if approximation_order == 0 {
-            let auto = (((image_width * image_height) as f64).log(1e6).powi(2) * 21.0f64) as usize;
+            let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
             min(max(auto, 3), 64)
         } else {
             approximation_order
