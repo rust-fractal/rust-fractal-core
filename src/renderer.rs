@@ -6,7 +6,6 @@ use std::cmp::{min, max};
 use std::f64::consts::LOG2_10;
 
 use rand::seq::SliceRandom;
-use itertools::Itertools;
 use rayon::prelude::*;
 
 pub struct FractalRenderer {
@@ -102,12 +101,10 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        let indices = (0..self.image_width).cartesian_product(0..self.image_height).collect::<Vec<(usize, usize)>>();
-
-        let mut pixel_data = Vec::with_capacity(self.image_width * self.image_height);
-
-        pixel_data = indices.into_par_iter()
-            .map(|(i, j)| {
+        let mut pixel_data = (0..(self.image_width * self.image_height)).into_par_iter()
+            .map(|index| {
+                let i = index % self.image_width;
+                let j = index / self.image_width;
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = series_approximation.evaluate(point_delta);
@@ -157,17 +154,15 @@ impl FractalRenderer {
 
             // this can be made faster, without having to do the series approximation again
             // this is done by storing more data in pixeldata2
-            pixel_data.chunks_mut(1)
-                        .for_each(|pixel_data| {
-                            for data in pixel_data {
-                                data.iteration = reference.start_iteration;
-                                data.glitched = false;
-                                data.delta_current = data.delta_start - delta_z;
-                                data.delta_reference = data.delta_centre - reference_wrt_sa;
-                                // might not need the evaluate here as if we store it separately, there is no need
-                                // data.derivative_current = ComplexFixed::new(1.0, 0.0);
-                            }
-                        });
+            pixel_data.par_iter_mut()
+                .for_each(|pixel| {
+                    pixel.iteration = reference.start_iteration;
+                    pixel.glitched = false;
+                    pixel.delta_current = pixel.delta_start - delta_z;
+                    pixel.delta_reference = pixel.delta_centre - reference_wrt_sa;
+                        // might not need the evaluate here as if we store it separately, there is no need
+                        // data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                });
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
