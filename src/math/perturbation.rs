@@ -1,4 +1,4 @@
-use crate::util::PixelData;
+use crate::util::{PixelData, FloatExp};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
@@ -7,12 +7,12 @@ pub struct Perturbation {}
 
 impl Perturbation {
     pub fn iterate(pixel_data: &mut Vec<PixelData>, reference: &Reference, reference_current_iteration: usize) {
-        pixel_data.par_chunks_mut(4)
+        pixel_data.par_chunks_mut(64)
             .for_each(|pixel_data| {
                 for pixel in pixel_data {
                     let mut scaled_iterations = 0;
-                    let mut scaled_scale_factor_1 = 2.0f64.powi(pixel.delta_current.exponent);
-                    let mut scaled_delta_reference = 2.0f64.powi(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
+                    let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
+                    let mut scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
                     while pixel.iteration < reference_current_iteration {
                         let delta_current_float = scaled_scale_factor_1 * pixel.delta_current.mantissa;
@@ -43,8 +43,8 @@ impl Perturbation {
                                 // reset the scaled counter
                                 pixel.delta_current.reduce();
 
-                                scaled_scale_factor_1 = 2.0f64.powi(pixel.delta_current.exponent);
-                                scaled_delta_reference = 2.0f64.powi(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
+                                scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
+                                scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
                                 scaled_iterations = 0;
                             },
@@ -61,8 +61,8 @@ impl Perturbation {
                                 if scaled_iterations > 250 {
                                     pixel.delta_current.reduce();
 
-                                    scaled_scale_factor_1 = 2.0f64.powi(pixel.delta_current.exponent);
-                                    scaled_delta_reference = 2.0f64.powi(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
+                                    scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
+                                    scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
                                     scaled_iterations = 0;
                                 }
