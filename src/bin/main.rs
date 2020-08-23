@@ -59,9 +59,9 @@ fn main() {
         iterations.parse::<usize>().unwrap(),
         center_re,
         center_im,
-        0.1,
-        true,
-        0
+        0.01,
+        false,
+        16
     );
 
     let time = Instant::now();

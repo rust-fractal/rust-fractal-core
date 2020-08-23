@@ -132,7 +132,7 @@ impl Sub<ComplexExtended> for ComplexExtended {
         if self.exponent > other.exponent {
             ComplexExtended::new(self.mantissa - other.mantissa * 1.0f64.ldexp(other.exponent - self.exponent), self.exponent)
         } else {
-            ComplexExtended::new(other.mantissa - self.mantissa * 1.0f64.ldexp(self.exponent - other.exponent), other.exponent)
+            ComplexExtended::new(self.mantissa * 1.0f64.ldexp(self.exponent - other.exponent) - other.mantissa, other.exponent)
         }
     }
 }
