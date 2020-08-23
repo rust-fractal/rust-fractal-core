@@ -136,23 +136,23 @@ impl SeriesApproximation {
         self.original_probes.push(delta_probe);
         self.current_probes.push(delta_probe);
 
-        let mut delta_probe_n = delta_probe;
+        let mut current_value = delta_probe;
 
-        let mut delta_probe_n_2 = Vec::with_capacity(self.order + 1);
-        let mut delta_probe_n_derivative_2 = Vec::with_capacity(self.order + 1);
+        let mut delta_n = Vec::with_capacity(self.order + 1);
+        let mut delta_derivative_n = Vec::with_capacity(self.order + 1);
 
         // The first element will be 1, in order for the derivative to be calculated
-        delta_probe_n_2.push(delta_probe_n);
-        delta_probe_n_derivative_2.push(ComplexExtended::new2(1.0, 0.0, 0));
+        delta_n.push(current_value);
+        delta_derivative_n.push(ComplexExtended::new2(1.0, 0.0, 0));
 
         for i in 1..=self.order {
-            delta_probe_n_derivative_2.push(delta_probe_n * (i + 1) as f64);
-            delta_probe_n *= delta_probe;
-            delta_probe_n_2.push(delta_probe_n);
+            delta_derivative_n.push(current_value * (i + 1) as f64);
+            current_value *= delta_probe;
+            delta_n.push(current_value);
         }
 
-        self.approximation_probes.push(delta_probe_n_2);
-        self.approximation_probes_derivative.push(delta_probe_n_derivative_2);
+        self.approximation_probes.push(delta_n);
+        self.approximation_probes_derivative.push(delta_derivative_n);
     }
 
     // Get the current reference, and the current number of iterations done
@@ -181,21 +181,6 @@ impl SeriesApproximation {
         // 1907 ms packing opus 4K
         // Horner's rule
         let mut approximation = self.coefficients[self.order];
-
-        for k in (1..=(self.order - 1)).rev() {
-            approximation *= point_delta;
-            approximation += self.coefficients[k];
-        }
-
-        approximation *= point_delta;
-        approximation.reduce();
-        approximation
-    }
-
-    fn evaluate_next(&self, point_delta: ComplexExtended) -> ComplexExtended {
-        // 1907 ms packing opus 4K
-        // Horner's rule
-        let mut approximation = self.next_coefficients[self.order];
 
         for k in (1..=(self.order - 1)).rev() {
             approximation *= point_delta;
