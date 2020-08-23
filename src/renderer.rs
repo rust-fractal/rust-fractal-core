@@ -102,27 +102,29 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        let indices = (0..self.image_width).cartesian_product(0..self.image_height);
+        let indices = (0..self.image_width).cartesian_product(0..self.image_height).collect::<Vec<(usize, usize)>>();
 
-        let mut pixel_data = indices.into_iter().par_bridge()
-                            .map(|(i, j)| {
-                                let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
-                                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                                let new_delta = series_approximation.evaluate(point_delta);
+        let mut pixel_data = Vec::with_capacity(self.image_width * self.image_height);
 
-                                PixelData {
-                                    image_x: i,
-                                    image_y: j,
-                                    iteration: reference.start_iteration,
-                                    delta_centre: point_delta,
-                                    delta_reference: point_delta,
-                                    delta_start: new_delta,
-                                    delta_current: new_delta,
-                                    derivative_current: ComplexFixed::new(1.0, 0.0),
-                                    glitched: false,
-                                    escaped: false
-                                }
-                            }).collect::<Vec<PixelData>>();
+        pixel_data = indices.into_par_iter()
+            .map(|(i, j)| {
+                let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
+                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                let new_delta = series_approximation.evaluate(point_delta);
+
+                PixelData {
+                    image_x: i,
+                    image_y: j,
+                    iteration: reference.start_iteration,
+                    delta_centre: point_delta,
+                    delta_reference: point_delta,
+                    delta_start: new_delta,
+                    delta_current: new_delta,
+                    derivative_current: ComplexFixed::new(1.0, 0.0),
+                    glitched: false,
+                    escaped: false
+                }
+            }).collect::<Vec<PixelData>>();
 
         println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
 
@@ -131,7 +133,7 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
         let time = Instant::now();
-        Colouring::IterationSmooth.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &reference);
+        Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &reference);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
         let time = Instant::now();
@@ -160,17 +162,16 @@ impl FractalRenderer {
                             for data in pixel_data {
                                 data.iteration = reference.start_iteration;
                                 data.glitched = false;
-                                data.escaped = false;
                                 data.delta_current = data.delta_start - delta_z;
                                 data.delta_reference = data.delta_centre - reference_wrt_sa;
                                 // might not need the evaluate here as if we store it separately, there is no need
-                                data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                                // data.derivative_current = ComplexFixed::new(1.0, 0.0);
                             }
                         });
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
-            Colouring::IterationSmooth.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &r);
+            Colouring::Iteration.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &r);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
