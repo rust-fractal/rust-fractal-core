@@ -67,6 +67,8 @@ impl SeriesApproximation {
 
             self.next_coefficients[0] = to_extended(&self.z);
             self.next_coefficients[1] = self.coefficients[0] * self.coefficients[1] * 2.0 + add_value;
+            self.next_coefficients[0].reduce();
+            self.next_coefficients[1].reduce();
 
             // Calculate the new coefficents
             for k in 2..=self.order {
@@ -109,7 +111,8 @@ impl SeriesApproximation {
 
                 // Check to make sure that the derivative is greater than or equal to 1
                 if derivative.to_float() < 1.0 {
-                    derivative = FloatExtended::new(1.0, 0);
+                    derivative.mantissa = 1.0;
+                    derivative.exponent = 0;
                 }
 
                 // Check that the error over the derivative is less than the pixel spacing
@@ -178,6 +181,21 @@ impl SeriesApproximation {
         // 1907 ms packing opus 4K
         // Horner's rule
         let mut approximation = self.coefficients[self.order];
+
+        for k in (1..=(self.order - 1)).rev() {
+            approximation *= point_delta;
+            approximation += self.coefficients[k];
+        }
+
+        approximation *= point_delta;
+        approximation.reduce();
+        approximation
+    }
+
+    fn evaluate_next(&self, point_delta: ComplexExtended) -> ComplexExtended {
+        // 1907 ms packing opus 4K
+        // Horner's rule
+        let mut approximation = self.next_coefficients[self.order];
 
         for k in (1..=(self.order - 1)).rev() {
             approximation *= point_delta;

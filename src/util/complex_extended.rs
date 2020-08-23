@@ -11,25 +11,20 @@ pub struct ComplexExtended {
 }
 
 impl ComplexExtended {
-    // maybe set up different versions for these function if the reduce is needed
     #[inline]
     pub fn new(mantissa: Complex<f64>, exponent: i32) -> Self {
-        let mut temp = ComplexExtended {
+        ComplexExtended {
             mantissa,
             exponent
-        };
-        temp.reduce();
-        temp
+        }
     }
 
     #[inline]
     pub fn new2(re: f64, im: f64, exponent: i32) -> Self {
-        let mut temp = ComplexExtended {
+        ComplexExtended {
             mantissa: Complex::<f64>::new(re, im),
             exponent
-        };
-        temp.reduce();
-        temp
+        }
     }
 
     #[inline]
