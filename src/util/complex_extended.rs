@@ -10,22 +10,26 @@ pub struct ComplexExtended {
     pub exponent: i32,
 }
 
-// TODO we can make a struct with shared exponent
 impl ComplexExtended {
+    // maybe set up different versions for these function if the reduce is needed
     #[inline]
     pub fn new(mantissa: Complex<f64>, exponent: i32) -> Self {
-        ComplexExtended {
+        let mut temp = ComplexExtended {
             mantissa,
             exponent
-        }
+        };
+        temp.reduce();
+        temp
     }
 
     #[inline]
     pub fn new2(re: f64, im: f64, exponent: i32) -> Self {
-        ComplexExtended {
+        let mut temp = ComplexExtended {
             mantissa: Complex::<f64>::new(re, im),
             exponent
-        }
+        };
+        temp.reduce();
+        temp
     }
 
     #[inline]
