@@ -10,28 +10,21 @@ pub struct ComplexExtended {
     pub exponent: i32,
 }
 
-// TODO we can make a struct with shared exponent
 impl ComplexExtended {
     #[inline]
     pub fn new(mantissa: Complex<f64>, exponent: i32) -> Self {
-        let mut temp = ComplexExtended {
+        ComplexExtended {
             mantissa,
             exponent
-        };
-
-        temp.reduce();
-        temp
+        }
     }
 
     #[inline]
     pub fn new2(re: f64, im: f64, exponent: i32) -> Self {
-        let mut temp = ComplexExtended {
+        ComplexExtended {
             mantissa: Complex::<f64>::new(re, im),
             exponent
-        };
-
-        temp.reduce();
-        temp
+        }
     }
 
     #[inline]
@@ -49,7 +42,7 @@ impl ComplexExtended {
 
     #[inline]
     pub fn to_float(&self) -> Complex<f64> {
-        self.mantissa * 2.0f64.powi(self.exponent)
+        self.mantissa * 1.0f64.ldexp(self.exponent)
     }
 
     #[inline]
@@ -71,21 +64,12 @@ impl ComplexExtended {
 impl AddAssign for ComplexExtended {
     #[inline]
     fn add_assign(&mut self, other: Self) {
-        if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
-            self.mantissa = other.mantissa;
-            self.exponent = other.exponent;
-        } else if other.mantissa.re == 0.0 && other.mantissa.im == 0.0 {
-            return;
+        if self.exponent > other.exponent {
+            self.mantissa += other.mantissa * 1.0f64.ldexp(other.exponent - self.exponent);
         } else {
-            if self.exponent == other.exponent {
-                self.mantissa += other.mantissa;
-            } else if self.exponent > other.exponent {
-                self.mantissa += other.mantissa / 2.0f64.powi(self.exponent - other.exponent);
-            } else {
-                self.mantissa /= 2.0f64.powi(other.exponent - self.exponent);
-                self.exponent = other.exponent;
-                self.mantissa += other.mantissa;
-            }
+            self.mantissa *= 1.0f64.ldexp(self.exponent - other.exponent);
+            self.mantissa += other.mantissa;
+            self.exponent = other.exponent;
         }
     }
 }
@@ -93,14 +77,12 @@ impl AddAssign for ComplexExtended {
 impl SubAssign for ComplexExtended {
     #[inline]
     fn sub_assign(&mut self, other: Self) {
-        if self.exponent == other.exponent {
-            self.mantissa -= other.mantissa;
-        } else if self.exponent > other.exponent {
-            self.mantissa -= other.mantissa / 2.0f64.powi(self.exponent - other.exponent);
+        if self.exponent > other.exponent {
+            self.mantissa -= other.mantissa * 1.0f64.ldexp(other.exponent - self.exponent);
         } else {
-            self.mantissa /= 2.0f64.powi(other.exponent - self.exponent);
-            self.exponent = other.exponent;
+            self.mantissa *= 1.0f64.ldexp(self.exponent - other.exponent);
             self.mantissa -= other.mantissa;
+            self.exponent = other.exponent;
         }
     }
 }
@@ -125,7 +107,6 @@ impl DivAssign for ComplexExtended {
     fn div_assign(&mut self, other: Self) {
         self.mantissa /= other.mantissa;
         self.exponent -= other.exponent;
-        self.reduce();
     }
 }
 
@@ -134,19 +115,10 @@ impl Add<ComplexExtended> for ComplexExtended {
 
     #[inline]
     fn add(self, other: Self) -> Self::Output {
-        if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
-            other
-        } else if other.mantissa.re == 0.0 && other.mantissa.im == 0.0 {
-            self
+        if self.exponent > other.exponent {
+            ComplexExtended::new(self.mantissa + other.mantissa * 1.0f64.ldexp(other.exponent - self.exponent), self.exponent)
         } else {
-            let (new_mantissa, new_exponent) = if self.exponent == other.exponent {
-                (self.mantissa + other.mantissa, self.exponent)
-            } else if self.exponent > other.exponent {
-                (self.mantissa + other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent)
-            } else {
-                (other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
-            };
-            ComplexExtended::new(new_mantissa, new_exponent)
+            ComplexExtended::new(other.mantissa + self.mantissa * 1.0f64.ldexp(self.exponent - other.exponent), other.exponent)
         }
     }
 }
@@ -156,19 +128,10 @@ impl Sub<ComplexExtended> for ComplexExtended {
 
     #[inline]
     fn sub(self, other: Self) -> Self::Output {
-        if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
-            ComplexExtended::new(-other.mantissa, other.exponent)
-        } else if other.mantissa.re == 0.0 && other.mantissa.im == 0.0 {
-            self
+        if self.exponent > other.exponent {
+            ComplexExtended::new(self.mantissa - other.mantissa * 1.0f64.ldexp(other.exponent - self.exponent), self.exponent)
         } else {
-            let (new_mantissa, new_exponent) = if self.exponent == other.exponent {
-                (self.mantissa - other.mantissa, self.exponent)
-            } else if self.exponent > other.exponent {
-                (self.mantissa - other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent)
-            } else {
-                (-1.0 * other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
-            };
-            ComplexExtended::new(new_mantissa, new_exponent)
+            ComplexExtended::new(self.mantissa * 1.0f64.ldexp(self.exponent - other.exponent) - other.mantissa, other.exponent)
         }
     }
 }

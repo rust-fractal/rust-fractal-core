@@ -2,3 +2,6 @@
 **/*.rs.bk
 .idea
 *.kfr
+*.svg
+*.data
+*.old
