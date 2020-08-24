@@ -2,21 +2,58 @@ use crate::util::image::Image;
 use crate::util::PixelData;
 use crate::math::Reference;
 
-pub enum Colouring {
-    Iteration,
-    IterationSquareRoot,
-    IterationSmooth,
-    IterationHistogram,
-    // Distance
+pub enum DataExport {
+    PNG,
+    EXR,
+    BOTH
 }
 
-impl Colouring {
-    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, _delta_pixel: f64, reference: &Reference) {
+impl DataExport {
+    pub fn run(&self, pixel_data: &Vec<PixelData>, image: &mut Image, maximum_iteration: usize, reference: &Reference) {
         // Palette is temporarily here
-        let mut colours = Vec::new();
 
-        for i in 0..8192 {
-            let value = i as f32 / 8192 as f32;
+        match self {
+            DataExport::PNG => {
+                let colours = self.generate_colour_palette();
+
+                for pixel in pixel_data {
+                    let (r, g, b) = if pixel.glitched && image.display_glitches {
+                        (255, 0, 0)
+                    } else if pixel.iteration >= maximum_iteration {
+                        (0, 0, 0)
+                    } else {
+                        // 0.1656
+                        let hue = (40 * pixel.iteration) % 1024;
+
+                        let colour = colours[hue];
+
+                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
+                    };
+
+                    image.plot_jpg(pixel.image_x, pixel.image_y, r, g, b);
+                }
+            },
+            DataExport::EXR => {
+                let escape_radius_ln = 1e16f32.ln();
+
+                for pixel in pixel_data {
+                    let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+
+                    image.plot_exr(pixel.image_x, pixel.image_y, pixel.iteration as u32, smooth);
+                }
+            },
+            DataExport::BOTH => {
+                return;
+            }
+        }
+    }
+
+    fn generate_colour_palette(&self) -> Vec<(f32, f32, f32)> {
+        let mut colours = Vec::with_capacity(1024);
+
+        for i in 0..1024 {
+            let value = i as f32 / 1024 as f32;
 
             let red;
             let green;
@@ -57,118 +94,6 @@ impl Colouring {
             colours.push((red, green, blue))
         }
 
-        let escape_radius_ln = 1e16f64.ln();
-
-        match self {
-            Colouring::Iteration => {
-                for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && image.display_glitches {
-                        (255, 0, 0)
-                    } else if pixel.iteration >= maximum_iteration {
-                        (0, 0, 0)
-                    } else {
-                        // 0.1656
-                        let hue = (250 * pixel.iteration) % 8192;
-
-                        let colour = colours[hue];
-
-                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
-                    };
-
-                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
-                }
-            },
-            Colouring::IterationSquareRoot => {
-                for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && image.display_glitches {
-                        (255, 0, 0)
-                    } else if pixel.iteration >= maximum_iteration {
-                        (0, 0, 0)
-                    } else {
-                        // 0.1656
-                        let hue = (7.0f64 * pixel.iteration as f64).sqrt() as usize % 8192;
-
-                        let colour = colours[hue];
-
-                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
-                    };
-
-                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
-                }
-            },
-            Colouring::IterationSmooth => {
-                for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && image.display_glitches {
-                        (255, 0, 0)
-                    } else if pixel.iteration >= maximum_iteration {
-                        (0, 0, 0)
-                    } else {
-                        let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr();
-                        let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
-                        // 0.1656
-                        let hue = (250.0f64 * (pixel.iteration as f64 + smooth)) as usize % 8192;
-
-                        let colour = colours[hue];
-
-                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
-                    };
-
-                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
-                }
-            },
-            Colouring::IterationHistogram => {
-                let mut iteration_counts = vec![0usize; maximum_iteration + 2];
-
-                for pixel in pixel_data {
-                    iteration_counts[pixel.iteration as usize] += 1
-                }
-
-                for i in 1..iteration_counts.len() {
-                    iteration_counts[i] += iteration_counts[i - 1];
-                }
-
-                // Don't count the pixels that are inside the set
-                let total = iteration_counts[maximum_iteration - 1];
-
-
-                for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && image.display_glitches {
-                        (255, 0, 0)
-                    } else if pixel.iteration >= maximum_iteration {
-                        (0, 0, 0)
-                    } else {
-                        let v1 = iteration_counts[pixel.iteration] as f32 / total as f32;
-
-                        // the hue is used to smooth the histogram bins. The hue is in the range 0.0-1.0
-                        let hue = (v1 * 8192.0) as usize;
-
-                        let colour = colours[hue % 8192];
-
-                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
-                    };
-
-                    image.plot(pixel.image_x, pixel.image_y, r, g, b);
-                }
-            },
-            // Colouring::Distance => {
-            //     // At the moment distance has a white-black gradient
-            //     for pixel in pixel_data {
-            //         let (r, g, b) = if pixel.glitched && image.display_glitches {
-            //             (255, 0, 0)
-            //         } else {
-            //             if pixel.escaped {
-            //                 let de = 2.0 * pixel.delta_current.norm() * pixel.delta_current.norm().ln() / pixel.derivative_current.norm();
-            //                 let out = (255.0 * (de / delta_pixel).tanh()) as u8;
-            //                 (out, out, out)
-            //             } else {
-            //                 (0, 0, 0)
-            //             }
-            //         };
-
-            //         image.plot(pixel.image_x, pixel.image_y, r, g, b);
-            //     }
-            // }
-        }
+        colours
     }
 }
