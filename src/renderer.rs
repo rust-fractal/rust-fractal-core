@@ -1,4 +1,4 @@
-use crate::util::{image::Image, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, colouring::Colouring};
+use crate::util::{image::Image, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, colouring::DataExport};
 use crate::math::{SeriesApproximation, Perturbation};
 
 use std::time::Instant;
@@ -130,7 +130,7 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
         let time = Instant::now();
-        Colouring::IterationSmooth.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &reference);
+        DataExport::EXR.run(&pixel_data, &mut self.image, self.maximum_iteration, &reference);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
         let time = Instant::now();
@@ -166,7 +166,7 @@ impl FractalRenderer {
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
-            Colouring::IterationSmooth.run(&pixel_data, &mut self.image, self.maximum_iteration, delta_pixel, &r);
+            DataExport::EXR.run(&pixel_data, &mut self.image, self.maximum_iteration, &r);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
@@ -177,8 +177,15 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         
         let time = Instant::now();
-        self.image.save();
+        self.image.save_exr();
         println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
         return;
+    }
+
+    pub fn render_sequence(&mut self, scale_factor: f64) {
+        for i in 1..20 {
+            self.render();
+            // self.zoom
+        }
     }
 }

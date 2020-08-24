@@ -11,6 +11,8 @@ num-complex = "^0.2.4"
 rayon = "1.3.1"
 rug = "1.9.0"
 itertools = "^0.9.0"
+exr = "^0.8.0"
+smallvec = "^1.4.2"
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 [profile.release]
