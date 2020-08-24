@@ -35,11 +35,11 @@ impl Image {
         self.smooth[k] = smooth;
     }
 
-    pub fn save_jpg(&mut self) {
-        image::save_buffer("output.jpg", &self.rgb, self.width as u32, self.height as u32, image::ColorType::Rgb8).unwrap();
+    pub fn save_jpg(&mut self, filename: &String) {
+        image::save_buffer(filename, &self.rgb, self.width as u32, self.height as u32, image::ColorType::Rgb8).unwrap();
     }
 
-    pub fn save_exr(&mut self) {
+    pub fn save_exr(&mut self, filename: &String) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F32(self.smooth.clone()));
 
@@ -49,6 +49,6 @@ impl Image {
 
         let image = simple_image::Image::new_from_single_layer(layer);
 
-        image.write_to_file("output.exr", simple_image::write_options::high()).unwrap();
+        image.write_to_file(filename, simple_image::write_options::high()).unwrap();
     }
 }
