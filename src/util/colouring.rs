@@ -3,7 +3,7 @@ use crate::util::PixelData;
 use crate::math::Reference;
 
 pub enum DataExport {
-    PNG,
+    JPG,
     EXR,
     BOTH
 }
@@ -13,7 +13,7 @@ impl DataExport {
         // Palette is temporarily here
 
         match self {
-            DataExport::PNG => {
+            DataExport::JPG => {
                 let colours = self.generate_colour_palette();
 
                 for pixel in pixel_data {

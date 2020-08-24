@@ -65,7 +65,7 @@ impl FractalRenderer {
         }
     }
 
-    pub fn render(&mut self) {
+    pub fn render(&mut self, filename: &String) {
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
 
         // this should be the delta relative to the image, without the big zoom factor applied.
@@ -73,7 +73,7 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        println!("Rendering...");
+        println!("Rendering; Zoom: {}", self.zoom);
 
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
@@ -177,15 +177,18 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         
         let time = Instant::now();
-        self.image.save_exr();
+        self.image.save_exr(&filename.to_owned());
         println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
         return;
     }
 
     pub fn render_sequence(&mut self, scale_factor: f64) {
-        for i in 1..20 {
-            self.render();
-            // self.zoom
+        let mut count = 0;
+        while self.zoom.to_float() > 1.0 {
+            self.render(&format!("output/keyframe_{:08}.jpg", count));
+            self.zoom.mantissa /= scale_factor;
+            self.zoom.reduce();
+            count += 1;
         }
     }
 }
