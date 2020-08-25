@@ -80,8 +80,10 @@ impl SeriesApproximation {
             // Calculate the new coefficents
             for k in 2..=self.order {
                 let mut sum = self.coefficients[0] * self.coefficients[k];
+                sum.reduce();
 
                 for j in 1..=((k - 1) / 2) {
+                    sum.reduce();
                     sum += self.coefficients[j] * self.coefficients[k - j];
                 }
                 sum *= 2.0;
@@ -126,6 +128,11 @@ impl SeriesApproximation {
                 if relative_error / derivative > self.delta_pixel_square {
                     self.z -= &self.c;
                     self.z.sqrt_mut();
+
+                    for coefficient in &self.coefficients {
+                        println!("{}", coefficient);
+                    }
+
                     return;
                 }
             }
