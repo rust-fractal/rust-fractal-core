@@ -36,6 +36,7 @@ impl FractalRenderer {
         let zoom = string_to_extended(&initial_zoom);
 
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
+
         let radius = delta_pixel * image_width as f64;
         let precision = max(64, -radius.exponent + 64);
 
@@ -105,8 +106,13 @@ impl FractalRenderer {
                 let j = index / self.image_width;
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let mut point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                point_delta.reduce();
                 let new_delta = series_approximation.evaluate(point_delta);
+
+                if index == 0 {
+                    println!("{}, {}", new_delta, point_delta);
+
+                };
+
 
                 PixelData {
                     image_x: i,
