@@ -29,7 +29,7 @@ impl FractalRenderer {
         let initial_zoom = settings.get_str("zoom").unwrap();
         let center_real = settings.get_str("real").unwrap();
         let center_imag = settings.get_str("imag").unwrap();
-        let approximation_order = 0;
+        let approximation_order = 32;
         let glitch_tolerance = 0.01;
         let display_glitches = false;
 
