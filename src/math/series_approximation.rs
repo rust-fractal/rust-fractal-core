@@ -65,6 +65,7 @@ impl SeriesApproximation {
 
         // Can be changed later into a better loop - this function could also return some more information
         while self.current_iteration < self.maximum_iteration {
+            let test = self.z.clone();
             self.z.square_mut();
             self.z += &self.c;
 
@@ -128,13 +129,7 @@ impl SeriesApproximation {
 
                 // Check that the error over the derivative is less than the pixel spacing
                 if relative_error / derivative > self.delta_pixel_square {
-                    self.z -= &self.c;
-                    self.z.sqrt_mut();
-
-                    for coefficient in &self.coefficients {
-                        println!("{}", coefficient);
-                    }
-
+                    self.z = test.clone();
                     return;
                 }
             }

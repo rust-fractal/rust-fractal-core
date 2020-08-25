@@ -43,6 +43,7 @@ fn main() {
 
     let time = Instant::now();
     // renderer.render_sequence(2.0);
-    renderer.render("output.exr".to_owned());
+    // renderer.render("output/output".to_owned());
+    renderer.render_sequence(2.0);
     println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
 }
