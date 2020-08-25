@@ -108,7 +108,7 @@ impl FractalRenderer {
                 let mut point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = series_approximation.evaluate(point_delta);
 
-                if index == 0 {
+                if index == 250250 {
                     println!("{}, {}", new_delta, point_delta);
 
                 };
