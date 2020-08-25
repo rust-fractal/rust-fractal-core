@@ -1,4 +1,4 @@
-use crate::util::{image::Image, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, colouring::DataExport};
+use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended};
 use crate::math::{SeriesApproximation, Perturbation};
 
 use std::time::Instant;
@@ -7,6 +7,7 @@ use std::f64::consts::LOG2_10;
 
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
+use config::Config;
 
 pub struct FractalRenderer {
     image_width: usize,
@@ -17,23 +18,22 @@ pub struct FractalRenderer {
     maximum_iteration: usize,
     approximation_order: usize,
     glitch_tolerance: f64,
-    image: Image,
+    data_export: DataExport,
 }
 
 impl FractalRenderer {
-    pub fn new(image_width: usize,
-               image_height: usize,
-               initial_zoom: &str,
-               maximum_iteration: usize,
-               center_real: &str,
-               center_imag: &str,
-               glitch_tolerance: f64,
-               display_glitches: bool,
-               approximation_order: usize) -> Self {
+    pub fn new(settings: Config) -> Self {
+        let image_width = settings.get_int("image_width").unwrap() as usize;
+        let image_height = settings.get_int("image_height").unwrap() as usize;
+        let maximum_iteration = settings.get_int("iterations").unwrap() as usize;
+        let initial_zoom = settings.get_str("zoom").unwrap();
+        let center_real = settings.get_str("real").unwrap();
+        let center_imag = settings.get_str("imag").unwrap();
+        let approximation_order = 0;
+        let glitch_tolerance = 0.01;
+        let display_glitches = false;
 
         let aspect = image_width as f64 / image_height as f64;
-        let image_width = image_width;
-        let image_height = image_height;
         let temp: Vec<&str> = initial_zoom.split('E').collect();
         let zoom = FloatExtended::new(temp[0].parse::<f64>().unwrap() * 2.0_f64.powf((temp[1].parse::<f64>().unwrap() * LOG2_10).fract()), (temp[1].parse::<f64>().unwrap() * LOG2_10).floor() as i32);
 
@@ -43,7 +43,7 @@ impl FractalRenderer {
 
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
-            ComplexArbitrary::parse("(".to_owned() + center_real + "," + center_imag + ")").expect("Location is not valid!"));
+            ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
 
         let auto_approximation = if approximation_order == 0 {
             let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
@@ -61,11 +61,11 @@ impl FractalRenderer {
             maximum_iteration,
             approximation_order: auto_approximation,
             glitch_tolerance,
-            image: Image::new(image_width, image_height, display_glitches)
+            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::BOTH)
         }
     }
 
-    pub fn render(&mut self, filename: &String) {
+    pub fn render(&mut self, _filename: String) {
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
 
         // this should be the delta relative to the image, without the big zoom factor applied.
@@ -73,7 +73,7 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        println!("Rendering; Zoom: {}", self.zoom);
+        println!("Zoom: {}", self.zoom);
 
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
@@ -130,7 +130,7 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
 
         let time = Instant::now();
-        DataExport::EXR.run(&pixel_data, &mut self.image, self.maximum_iteration, &reference);
+        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &reference);
         println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
 
         let time = Instant::now();
@@ -166,7 +166,7 @@ impl FractalRenderer {
 
             Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
 
-            DataExport::EXR.run(&pixel_data, &mut self.image, self.maximum_iteration, &r);
+            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &r);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
@@ -177,7 +177,7 @@ impl FractalRenderer {
         println!("{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
         
         let time = Instant::now();
-        self.image.save_exr(&filename.to_owned());
+        self.data_export.save();
         println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
         return;
     }
@@ -185,7 +185,7 @@ impl FractalRenderer {
     pub fn render_sequence(&mut self, scale_factor: f64) {
         let mut count = 0;
         while self.zoom.to_float() > 1.0 {
-            self.render(&format!("output/keyframe_{:08}.jpg", count));
+            self.render(format!("output/keyframe_{:08}.jpg", count));
             self.zoom.mantissa /= scale_factor;
             self.zoom.reduce();
             count += 1;
