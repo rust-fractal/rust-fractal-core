@@ -61,6 +61,8 @@ impl SeriesApproximation {
         
         let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
+        // 0d939ed92a is working
+
         // Can be changed later into a better loop - this function could also return some more information
         while self.current_iteration < self.maximum_iteration {
             self.z.square_mut();
