@@ -74,7 +74,7 @@ impl DataExport {
                             self.rgb[k + 1] = 0;
                             self.rgb[k + 2] = 0;
                         } else {
-                            let colour = self.palette[pixel.iteration % 1024];
+                            let colour = self.palette[10 * pixel.iteration % 1024];
                             self.rgb[k] = colour.0 as u8;
                             self.rgb[k + 1] = colour.1 as u8;
                             self.rgb[k + 2] = colour.2 as u8;
@@ -84,7 +84,7 @@ impl DataExport {
                         self.rgb[k + 1] = 0;
                         self.rgb[k + 2] = 0;
                     } else {
-                        let colour = self.palette[pixel.iteration % 1024];
+                        let colour = self.palette[10 * pixel.iteration % 1024];
                         self.rgb[k] = colour.0 as u8;
                         self.rgb[k + 1] = colour.1 as u8;
                         self.rgb[k + 2] = colour.2 as u8;

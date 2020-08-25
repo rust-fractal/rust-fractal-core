@@ -1,7 +1,7 @@
 use std::time::Instant;
 use rust_fractal::renderer::FractalRenderer;
-
 use clap::{crate_version, crate_name, crate_authors, crate_description, App, Arg};
+use config::{Config, File};
 
 
 fn main() {
@@ -29,21 +29,21 @@ fn main() {
         ).get_matches();
 
 
-    let mut settings = config::Config::default();
+    let mut settings = Config::default();
 
     if let Some(l) = matches.value_of("location") {
-        settings.merge(config::File::with_name(l).required(true)).unwrap();
+        settings.merge(File::with_name(l).required(true)).unwrap();
     };
 
     if let Some(p) = matches.value_of("parameters") {
-        settings.merge(config::File::with_name(p).required(true)).unwrap();
+        settings.merge(File::with_name(p).required(true)).unwrap();
     };
 
     let mut renderer = FractalRenderer::new(settings);
 
     let time = Instant::now();
+
+    renderer.render("output/output".to_owned());
     // renderer.render_sequence(2.0);
-    // renderer.render("output/output".to_owned());
-    renderer.render_sequence(2.0);
     println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
 }
