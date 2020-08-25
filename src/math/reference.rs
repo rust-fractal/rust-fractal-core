@@ -69,7 +69,7 @@ impl Reference {
         let z_tolerance = 1e-6 * z_fixed.norm_sqr();
 
         // This is if we need to use the extended precision for the reference
-        if z_fixed.re.abs() < 1e300 && z_fixed.im.abs() < 1e300 {
+        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
             self.data.push(
                 ReferenceIteration {
                     z_fixed,

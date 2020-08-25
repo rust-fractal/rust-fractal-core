@@ -122,7 +122,7 @@ impl DataExport {
                             self.rgb[k + 2] = 0;
                             self.iterations[k / 3] = 0x00000000
                         } else {
-                            let colour = self.palette[pixel.iteration % 1024];
+                            let colour = self.palette[10 * pixel.iteration % 1024];
                             self.rgb[k] = colour.0 as u8;
                             self.rgb[k + 1] = colour.1 as u8;
                             self.rgb[k + 2] = colour.2 as u8;
@@ -134,7 +134,7 @@ impl DataExport {
                         self.rgb[k + 2] = 0;
                         self.iterations[k / 3] = 0xFFFFFFFF;
                     } else {
-                        let colour = self.palette[pixel.iteration % 1024];
+                        let colour = self.palette[10 * pixel.iteration % 1024];
                         self.rgb[k] = colour.0 as u8;
                         self.rgb[k + 1] = colour.1 as u8;
                         self.rgb[k + 2] = colour.2 as u8;
@@ -148,26 +148,26 @@ impl DataExport {
         }
     }
 
-    pub fn save(&mut self) {
+    pub fn save(&mut self, filename: &String) {
         match self.data_type {
             DataType::COLOUR => {
-                self.save_colour();
+                self.save_colour(filename);
             },
             DataType::RAW => {
-                self.save_raw();
+                self.save_raw(filename);
             },
             DataType::BOTH => {
-                self.save_colour();
-                self.save_raw();
+                self.save_colour(filename);
+                self.save_raw(filename);
             }
         }
     }
 
-    fn save_colour(&mut self) {
-        image::save_buffer("output.jpg", &self.rgb, self.image_height as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
+    fn save_colour(&mut self, filename: &String) {
+        image::save_buffer(filename.to_owned() + ".jpg", &self.rgb, self.image_height as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
     }
 
-    fn save_raw(&mut self) {
+    fn save_raw(&mut self, filename: &String) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F32(self.smooth.clone()));
 
@@ -177,7 +177,7 @@ impl DataExport {
 
         let image = simple_image::Image::new_from_single_layer(layer);
 
-        image.write_to_file("output.exr", simple_image::write_options::high()).unwrap();
+        image.write_to_file(filename.to_owned() + ".exr", simple_image::write_options::high()).unwrap();
     }
 
     fn generate_colour_palette() -> Vec<(f32, f32, f32)> {
