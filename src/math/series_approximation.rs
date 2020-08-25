@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, to_extended, to_fixed};
+use crate::util::{ComplexArbitrary, to_extended};
 use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
 use rug::Float;
@@ -10,6 +10,7 @@ pub struct SeriesApproximation {
     maximum_iteration: usize,
     delta_pixel_square: FloatExtended,
     z: ComplexArbitrary,
+    z_prev: ComplexArbitrary,
     c: ComplexArbitrary,
     pub order: usize,
     coefficients: Vec<ComplexExtended>,
@@ -34,6 +35,7 @@ impl SeriesApproximation {
             maximum_iteration,
             delta_pixel_square,
             z: c.clone(),
+            z_prev: c.clone(),
             c,
             order,
             coefficients: coefficients.clone(),
@@ -65,15 +67,9 @@ impl SeriesApproximation {
 
         // Can be changed later into a better loop - this function could also return some more information
         while self.current_iteration < self.maximum_iteration {
-            let test = self.z.clone();
+            self.z_prev = self.z.clone();
             self.z.square_mut();
             self.z += &self.c;
-
-            let z_fixed = to_fixed(&self.z);
-
-            if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-                println!("found slow at: {}", self.current_iteration);
-            }
 
             self.next_coefficients[0] = to_extended(&self.z);
             self.next_coefficients[1] = self.coefficients[0] * self.coefficients[1] * 2.0 + add_value;
@@ -129,7 +125,7 @@ impl SeriesApproximation {
 
                 // Check that the error over the derivative is less than the pixel spacing
                 if relative_error / derivative > self.delta_pixel_square {
-                    self.z = test.clone();
+                    self.z = self.z_prev.clone();
                     return;
                 }
             }

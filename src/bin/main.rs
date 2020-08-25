@@ -1,4 +1,3 @@
-use std::time::Instant;
 use rust_fractal::renderer::FractalRenderer;
 use clap::{crate_version, crate_name, crate_authors, crate_description, App, Arg};
 use config::{Config, File};
@@ -40,10 +39,6 @@ fn main() {
     };
 
     let mut renderer = FractalRenderer::new(settings);
-
-    let time = Instant::now();
-
-    renderer.render("output/output".to_owned());
-    // renderer.render_sequence(2.0);
-    println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
+    // renderer.render("output/output".to_owned());
+    renderer.render();
 }
