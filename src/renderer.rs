@@ -1,5 +1,5 @@
 use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string};
-use crate::math::{SeriesApproximation, Perturbation};
+use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
 use std::cmp::{min, max};
@@ -18,18 +18,27 @@ pub struct FractalRenderer {
     approximation_order: usize,
     glitch_tolerance: f64,
     data_export: DataExport,
+    start_render_time: Instant,
+    remaining_frames: usize,
+    zoom_scale_factor: f64,
+    center_reference: Reference,
 }
 
 impl FractalRenderer {
     pub fn new(settings: Config) -> Self {
-        let image_width = settings.get_int("image_width").unwrap() as usize;
-        let image_height = settings.get_int("image_height").unwrap() as usize;
-        let maximum_iteration = settings.get_int("iterations").unwrap() as usize;
-        let initial_zoom = settings.get_str("zoom").unwrap();
-        let center_real = settings.get_str("real").unwrap();
-        let center_imag = settings.get_str("imag").unwrap();
-        let approximation_order = 8;
-        let glitch_tolerance = 0.01;
+        // Print out the status information
+        println!("{:<6}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Reference [ms]", "Packing [ms]", "Iteration [ms]", "Colouring [ms]", "Correct [ms]", "Saving [ms]", "TOTAL [ms]");
+
+        let image_width = settings.get_int("image_width").unwrap_or(1000) as usize;
+        let image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
+        let maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
+        let initial_zoom = settings.get_str("zoom").unwrap_or("1E0".to_string());
+        let center_real = settings.get_str("real").unwrap_or("-0.75".to_string());
+        let center_imag = settings.get_str("imag").unwrap_or("0.0".to_string());
+        let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
+        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.01);
+        let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
+        let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = false;
 
         let aspect = image_width as f64 / image_height as f64;
@@ -56,15 +65,34 @@ impl FractalRenderer {
             image_height,
             aspect,
             zoom,
-            center_location,
+            center_location: center_location.clone(),
             maximum_iteration,
             approximation_order: auto_approximation,
             glitch_tolerance,
-            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::BOTH)
+            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::BOTH),
+            start_render_time: Instant::now(),
+            remaining_frames,
+            zoom_scale_factor,
+            center_reference: Reference::new(center_location.clone(), center_location, 1, maximum_iteration)
         }
     }
 
-    pub fn render(&mut self, filename: String) {
+    pub fn render_frame(&mut self, index: usize, filename: String) {
+        print!("{:<6}", index);
+        let frame_time = Instant::now();
+
+        // If we are on the first frame
+        // if index == 0 {
+        //     self.center_reference.run();
+        //     println!("{}", self.center_reference.current_iteration);
+        // }
+
+
+
+
+
+
+
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
 
         // this should be the delta relative to the image, without the big zoom factor applied.
@@ -72,7 +100,7 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        println!("{:<7}{:>16}", "Zoom", extended_to_string(self.zoom));
+        print!("| {:<14}", extended_to_string(self.zoom));
 
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
@@ -88,15 +116,15 @@ impl FractalRenderer {
 
         series_approximation.run();
 
-        println!("{:<14}{:>6} ms", "Approximation", time.elapsed().as_millis());
-        println!("{:<10}{:>13} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
+        print!("| {:<14}", time.elapsed().as_millis());
+        print!("| {:<14}", series_approximation.current_iteration);
 
         let time = Instant::now();
 
         let mut reference = series_approximation.get_reference(ComplexExtended::new2(0.0, 0.0, 0));
         reference.run();
 
-        println!("{:<14}{:>6} ms (precision {}, iterations {})", "Reference", time.elapsed().as_millis(), self.center_location.prec().0, reference.current_iteration);
+        print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
 
@@ -122,15 +150,15 @@ impl FractalRenderer {
                 }
             }).collect::<Vec<PixelData>>();
 
-        println!("{:<14}{:>6} ms", "Packing", time.elapsed().as_millis());
+        print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
         Perturbation::iterate(&mut pixel_data, &reference, reference.current_iteration);
-        println!("{:<14}{:>6} ms", "Iteration", time.elapsed().as_millis());
+        print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &reference);
-        println!("{:<14}{:>6} ms", "Coloring", time.elapsed().as_millis());
+        print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
 
@@ -173,20 +201,21 @@ impl FractalRenderer {
             });
         }
 
-        println!("{:<14}{:>6} ms (remaining {})", "Fixing", time.elapsed().as_millis(), pixel_data.len());
+        print!("| {:<14}", time.elapsed().as_millis());
         
         let time = Instant::now();
         self.data_export.save(&filename);
-        println!("{:<14}{:>6} ms", "Saving", time.elapsed().as_millis());
-        return;
+        print!("| {:<14}", time.elapsed().as_millis());
+        println!("| {:<8} {:<8}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
     }
 
-    pub fn render_sequence(&mut self, scale_factor: f64) {
+    pub fn render(&mut self) {
         let mut count = 0;
-        while self.zoom.to_float() > 0.5 {
-            self.render(format!("output/keyframe_{:08}", count));
-            self.zoom.mantissa /= scale_factor;
+        while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
+            self.render_frame(count, format!("output/keyframe_{:08}", count));
+            self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
+            self.remaining_frames -= 1;
             count += 1;
         }
     }

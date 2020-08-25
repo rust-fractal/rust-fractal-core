@@ -37,8 +37,7 @@ impl Reference {
 
         // This is if we need to use the extended precision for the reference
         if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-        // if true {
-            println!("found slow at: {}", self.current_iteration);
+            // println!("found slow at: {}", self.current_iteration);
             let mut temp = to_extended(&self.z);
             temp.reduce();
             self.data.push(

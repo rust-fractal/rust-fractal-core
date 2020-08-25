@@ -7,7 +7,7 @@ pub struct Perturbation {}
 
 impl Perturbation {
     pub fn iterate(pixel_data: &mut Vec<PixelData>, reference: &Reference, reference_current_iteration: usize) {
-        pixel_data.par_chunks_mut(64)
+        pixel_data.par_chunks_mut(8)
             .for_each(|pixel_data| {
                 for pixel in pixel_data {
                     let mut scaled_iterations = 0;
