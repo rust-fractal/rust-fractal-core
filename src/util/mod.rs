@@ -1,5 +1,4 @@
-pub mod image;
-pub mod colouring;
+pub mod data_export;
 pub mod float_extended;
 pub mod complex_extended;
 

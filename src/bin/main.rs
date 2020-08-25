@@ -1,71 +1,48 @@
 use std::time::Instant;
 use rust_fractal::renderer::FractalRenderer;
-use std::fs;
-use std::io::{stdout, stdin, Write};
+
+use clap::{crate_version, crate_name, crate_authors, crate_description, App, Arg};
+
 
 fn main() {
-    println!("Mandelbrot Renderer");
+    let matches = App::new(crate_name!())
+        .about(crate_description!())
+        .version(crate_version!())
+        .author(crate_authors!())
+        .arg(
+            Arg::new("location")
+                .short('l')
+                .long("location")
+                .value_name("FILE")
+                .about("Sets the location file to use.")
+                .takes_value(true)
+                .required(true)
+        )
+        .arg(
+            Arg::new("parameters")
+                .short('p')
+                .long("parameters")
+                .value_name("FILE")
+                .about("Sets the parameters file to use.")
+                .takes_value(true)
+                .required(true)
+        ).get_matches();
 
-    // TODO on some images, we may need to check the imaginary part of the floatexp to make sure that is not too large.
 
-    let mut s = String::new();
-    print!("File to render: ");
-    let _ = stdout().flush();
-    stdin().read_line(&mut s).expect("User did not enter a correct string.");
+    let mut settings = config::Config::default();
 
-    s.pop();
-
-    if !s.ends_with(".kfr") {
-        s.push_str(".kfr")
+    if let Some(l) = matches.value_of("location") {
+        settings.merge(config::File::with_name(l).required(true)).unwrap();
     };
 
-    println!("Reading: {}", s);
+    if let Some(p) = matches.value_of("parameters") {
+        settings.merge(config::File::with_name(p).required(true)).unwrap();
+    };
 
-    let data = fs::read_to_string(s).expect("Unable to read file.");
-
-    let mut center_re = "-0.75";
-    let mut center_im  = "0.0";
-    let mut zoom = "1E0";
-    let mut iterations = "1000";
-
-    for line in data.lines() {
-        let mut parts = line.split_whitespace();
-        // println!("{}", line);
-        let temp = parts.next().unwrap();
-
-        match temp {
-            "Re:" => {
-                center_re = parts.next().unwrap();
-            },
-            "Im:" => {
-                center_im = parts.next().unwrap();
-            }
-            "Zoom:" => {
-                zoom = parts.next().unwrap();
-            },
-            "Iterations:" => {
-                iterations = parts.next().unwrap();
-            }
-            _ => {}
-        }
-    }
-
-    println!("Zoom: {}", zoom);
-
-    let mut renderer = FractalRenderer::new(
-        3840,
-        2160,
-        zoom,
-        iterations.parse::<usize>().unwrap(),
-        center_re,
-        center_im,
-        0.01,
-        false,
-        0
-    );
+    let mut renderer = FractalRenderer::new(settings);
 
     let time = Instant::now();
     // renderer.render_sequence(2.0);
-    renderer.render(&"output.exr".to_owned());
+    renderer.render("output.exr".to_owned());
     println!("{:<14}{:>6} ms", "TOTAL", time.elapsed().as_millis());
 }
