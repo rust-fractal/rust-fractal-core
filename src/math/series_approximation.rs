@@ -47,11 +47,18 @@ impl SeriesApproximation {
     }
 
     pub fn run(&mut self) {
+        // Corners
         self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
 
+        // Middle edges
+        // self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, 0.0, self.delta_top_left.exponent));
+        // self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, 0.0, self.delta_top_left.exponent));
+        // self.add_probe(ComplexExtended::new2(0.0, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        // self.add_probe(ComplexExtended::new2(0.0, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        
         let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
         // Can be changed later into a better loop - this function could also return some more information

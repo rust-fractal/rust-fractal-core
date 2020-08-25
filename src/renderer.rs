@@ -1,9 +1,8 @@
-use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended};
+use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string};
 use crate::math::{SeriesApproximation, Perturbation};
 
 use std::time::Instant;
 use std::cmp::{min, max};
-use std::f64::consts::LOG2_10;
 
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
@@ -29,13 +28,12 @@ impl FractalRenderer {
         let initial_zoom = settings.get_str("zoom").unwrap();
         let center_real = settings.get_str("real").unwrap();
         let center_imag = settings.get_str("imag").unwrap();
-        let approximation_order = 32;
+        let approximation_order = 16;
         let glitch_tolerance = 0.01;
         let display_glitches = false;
 
         let aspect = image_width as f64 / image_height as f64;
-        let temp: Vec<&str> = initial_zoom.split('E').collect();
-        let zoom = FloatExtended::new(temp[0].parse::<f64>().unwrap() * 2.0_f64.powf((temp[1].parse::<f64>().unwrap() * LOG2_10).fract()), (temp[1].parse::<f64>().unwrap() * LOG2_10).floor() as i32);
+        let zoom = string_to_extended(&initial_zoom);
 
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
         let radius = delta_pixel * image_width as f64;
@@ -73,7 +71,7 @@ impl FractalRenderer {
 
         let time = Instant::now();
 
-        println!("Zoom: {}", self.zoom);
+        println!("{:<7}{:>16}", "Zoom", extended_to_string(self.zoom));
 
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
@@ -90,7 +88,7 @@ impl FractalRenderer {
         series_approximation.run();
 
         println!("{:<14}{:>6} ms", "Approximation", time.elapsed().as_millis());
-        println!("{:<16}{:>6} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
+        println!("{:<10}{:>13} (order {})", "Skipped", series_approximation.current_iteration, series_approximation.order);
 
         let time = Instant::now();
 
@@ -106,7 +104,8 @@ impl FractalRenderer {
                 let i = index % self.image_width;
                 let j = index / self.image_width;
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
-                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                let mut point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                point_delta.reduce();
                 let new_delta = series_approximation.evaluate(point_delta);
 
                 PixelData {
