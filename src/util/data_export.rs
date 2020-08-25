@@ -66,64 +66,83 @@ impl DataExport {
         match self.data_type {
             DataType::COLOUR => {
                 for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && self.display_glitches {
-                        (255, 0, 0)
-                    } else if pixel.iteration >= maximum_iteration {
-                        (0, 0, 0)
-                    } else {
-                        // 0.1656
-                        let hue = (40 * pixel.iteration) % 1024;
-
-                        let colour = self.palette[hue];
-
-                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
-                    };
-
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
-                    self.rgb[k] = r;
-                    self.rgb[k + 1] = g;
-                    self.rgb[k + 2] = b;
+
+                    if pixel.glitched {
+                        if self.display_glitches {
+                            self.rgb[k] = 255;
+                            self.rgb[k + 1] = 0;
+                            self.rgb[k + 2] = 0;
+                        } else {
+                            let colour = self.palette[(40 * pixel.iteration) % 1024];
+                            self.rgb[k] = colour.0 as u8;
+                            self.rgb[k + 1] = colour.1 as u8;
+                            self.rgb[k + 2] = colour.2 as u8;
+                        }
+                    } else if pixel.iteration >= maximum_iteration {
+                        self.rgb[k] = 0;
+                        self.rgb[k + 1] = 0;
+                        self.rgb[k + 2] = 0;
+                    } else {
+                        let colour = self.palette[(40 * pixel.iteration) % 1024];
+                        self.rgb[k] = colour.0 as u8;
+                        self.rgb[k + 1] = colour.1 as u8;
+                        self.rgb[k + 2] = colour.2 as u8;
+                    };
                 }
             },
             DataType::RAW => {
                 let escape_radius_ln = 1e16f32.ln();
 
                 for pixel in pixel_data {
-                    let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+                    let k = pixel.image_y * self.image_width + pixel.image_x;
 
-                    let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
-                    self.iterations[k] = pixel.iteration as u32;
-                    self.smooth[k] = smooth;
+                    self.iterations[k] = if pixel.glitched {
+                        0x00000000
+                    } else if pixel.iteration >= maximum_iteration {
+                        0xFFFFFFFF
+                    } else {
+                        pixel.iteration as u32
+                    };
+
+                    let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             },
             DataType::BOTH => {
                 let escape_radius_ln = 1e16f32.ln();
 
                 for pixel in pixel_data {
-                    let (r, g, b) = if pixel.glitched && self.display_glitches {
-                        (255, 0, 0)
+                    let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
+
+                    if pixel.glitched {
+                        if self.display_glitches {
+                            self.rgb[k] = 255;
+                            self.rgb[k + 1] = 0;
+                            self.rgb[k + 2] = 0;
+                            self.iterations[k / 3] = 0x00000000
+                        } else {
+                            let colour = self.palette[(40 * pixel.iteration) % 1024];
+                            self.rgb[k] = colour.0 as u8;
+                            self.rgb[k + 1] = colour.1 as u8;
+                            self.rgb[k + 2] = colour.2 as u8;
+                            self.iterations[k / 3] = 0x00000000
+                        }
                     } else if pixel.iteration >= maximum_iteration {
-                        (0, 0, 0)
+                        self.rgb[k] = 0;
+                        self.rgb[k + 1] = 0;
+                        self.rgb[k + 2] = 0;
+                        self.iterations[k / 3] = 0xFFFFFFFF;
                     } else {
-                        // 0.1656
-                        let hue = (40 * pixel.iteration) % 1024;
-
-                        let colour = self.palette[hue];
-
-                        (colour.0 as u8, colour.1 as u8, colour.2 as u8)
+                        let colour = self.palette[(40 * pixel.iteration) % 1024];
+                        self.rgb[k] = colour.0 as u8;
+                        self.rgb[k + 1] = colour.1 as u8;
+                        self.rgb[k + 2] = colour.2 as u8;
+                        self.iterations[k / 3] = pixel.iteration as u32;
                     };
 
-                    let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
-                    self.rgb[k] = r;
-                    self.rgb[k + 1] = g;
-                    self.rgb[k + 2] = b;
-
                     let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
-                    self.iterations[k / 3] = pixel.iteration as u32;
-                    self.smooth[k / 3] = smooth;
+                    self.smooth[k / 3] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             }
         }
