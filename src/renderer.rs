@@ -79,28 +79,13 @@ impl FractalRenderer {
 
     pub fn render_frame(&mut self, index: usize, filename: String) {
         print!("{:<6}", index);
+        print!("| {:<14}", extended_to_string(self.zoom));
         let frame_time = Instant::now();
-
-        // If we are on the first frame
-        // if index == 0 {
-        //     self.center_reference.run();
-        //     println!("{}", self.center_reference.current_iteration);
-        // }
-
-
-
-
-
-
-
+        let time = Instant::now();
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
 
         // this should be the delta relative to the image, without the big zoom factor applied.
         let delta_top_left = ComplexFixed::new((4.0 / self.image_width as f64 - 2.0) / self.zoom.mantissa * self.aspect as f64, (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa);
-
-        let time = Instant::now();
-
-        print!("| {:<14}", extended_to_string(self.zoom));
 
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
