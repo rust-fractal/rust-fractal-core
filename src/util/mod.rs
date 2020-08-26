@@ -57,7 +57,7 @@ pub fn to_extended(value: &ComplexArbitrary) -> ComplexExtended {
     ComplexExtended::new2(re, im, exponent)
 }
 
-pub fn string_to_extended(string: &String) -> FloatExtended {
+pub fn string_to_extended(string: &str) -> FloatExtended {
     // Split on E as the exponent
     let temp: Vec<&str> = string.split('E').collect();
 
