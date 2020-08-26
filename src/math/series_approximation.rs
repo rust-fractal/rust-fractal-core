@@ -6,15 +6,15 @@ use crate::util::float_extended::FloatExtended;
 use std::mem::swap;
 
 pub struct SeriesApproximation {
-    maximum_iteration: usize,
-    delta_pixel_square: FloatExtended,
+    pub maximum_iteration: usize,
+    pub delta_pixel_square: FloatExtended,
     pub order: usize,
     coefficients: Vec<Vec<ComplexExtended>>,
     original_probes: Vec<ComplexExtended>,
     current_probes: Vec<ComplexExtended>,
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
-    delta_top_left: ComplexExtended,
+    pub delta_top_left: ComplexExtended,
     valid_coefficients: Vec<ComplexExtended>,
     pub valid_iteration: usize,
 }
@@ -81,6 +81,11 @@ impl SeriesApproximation {
     }
 
     pub fn check_approximation(&mut self) {
+        self.original_probes = Vec::new();
+        self.current_probes = Vec::new();
+        self.approximation_probes = Vec::new();
+        self.approximation_probes_derivative = Vec::new();
+
         self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
