@@ -70,7 +70,7 @@ impl FractalRenderer {
             zoom,
             maximum_iteration,
             glitch_tolerance,
-            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::RAW),
+            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::COLOUR),
             start_render_time: Instant::now(),
             remaining_frames,
             zoom_scale_factor,
@@ -112,6 +112,7 @@ impl FractalRenderer {
                 let j = index / self.image_width;
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+
                 let new_delta = self.series_approximation.evaluate(point_delta, None);
 
                 PixelData {

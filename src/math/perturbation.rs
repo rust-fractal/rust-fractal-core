@@ -60,6 +60,8 @@ impl Perturbation {
 
                                 // check the counter, if it is > 250, do a normalisation
                                 if scaled_iterations > 250 {
+                                    pixel.delta_current.reduce();
+
                                     scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                                     scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 

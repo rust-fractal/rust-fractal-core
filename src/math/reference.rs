@@ -100,6 +100,7 @@ impl Reference {
             )
         }
 
+        // only needed on central reference
         self.approximation_data.push(z_extended);
 
         if self.start_iteration == 1 {

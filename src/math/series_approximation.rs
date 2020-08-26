@@ -14,7 +14,7 @@ pub struct SeriesApproximation {
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
     pub delta_top_left: ComplexExtended,
-    valid_coefficients: Vec<ComplexExtended>,
+    pub valid_coefficients: Vec<ComplexExtended>,
     pub valid_iteration: usize,
 }
 
@@ -57,10 +57,8 @@ impl SeriesApproximation {
             // Calculate the new coefficents
             for k in 2..=self.order {
                 let mut sum = coefficients[0] * coefficients[k];
-                sum.reduce();
 
                 for j in 1..=((k - 1) / 2) {
-                    sum.reduce();
                     sum += coefficients[j] * coefficients[k - j];
                 }
                 sum *= 2.0;
