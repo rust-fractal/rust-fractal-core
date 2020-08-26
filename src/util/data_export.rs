@@ -164,7 +164,7 @@ impl DataExport {
     }
 
     fn save_colour(&mut self, filename: &String) {
-        image::save_buffer(filename.to_owned() + ".jpg", &self.rgb, self.image_height as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
+        image::save_buffer(filename.to_owned() + ".jpg", &self.rgb, self.image_width as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
     }
 
     fn save_raw(&mut self, filename: &String) {
