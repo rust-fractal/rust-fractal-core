@@ -6,50 +6,83 @@ use crate::util::float_extended::FloatExtended;
 use std::mem::swap;
 
 pub struct SeriesApproximation {
-    pub current_iteration: usize,
     maximum_iteration: usize,
     delta_pixel_square: FloatExtended,
-    z: ComplexArbitrary,
-    z_prev: ComplexArbitrary,
-    c: ComplexArbitrary,
     pub order: usize,
-    coefficients: Vec<ComplexExtended>,
-    next_coefficients: Vec<ComplexExtended>,
+    coefficients: Vec<Vec<ComplexExtended>>,
     original_probes: Vec<ComplexExtended>,
     current_probes: Vec<ComplexExtended>,
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
-    delta_top_left: ComplexExtended
+    delta_top_left: ComplexExtended,
+    valid_coefficients: Vec<ComplexExtended>,
+    pub valid_iteration: usize,
+    center_reference: &Reference,
 }
 
 impl SeriesApproximation {
-    pub fn new(c: ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended) -> Self {
-        let mut coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1];
+    pub fn new(center_reference: &Reference, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended) -> Self {
+        let mut coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1]; 1];
 
-        coefficients[0] = to_extended(&c);
-        coefficients[1] = ComplexExtended::new2(1.0, 0.0, 0);
+        coefficients[0][0] = to_extended(&center_reference.c);
+        coefficients[0][1] = ComplexExtended::new2(1.0, 0.0, 0);
 
         // The current iteration is set to 1 as we set z = c
         SeriesApproximation {
-            current_iteration: 1,
             maximum_iteration,
             delta_pixel_square,
-            z: c.clone(),
-            z_prev: c.clone(),
-            c,
             order,
-            coefficients: coefficients.clone(),
-            next_coefficients: coefficients,
+            coefficients,
             original_probes: Vec::new(),
             current_probes: Vec::new(),
             approximation_probes: Vec::new(),
             approximation_probes_derivative: Vec::new(),
-            delta_top_left
+            delta_top_left,
+            valid_coefficients: Vec::new(),
+            valid_iteration: 1,
+            center_reference
         }
     }
 
-    pub fn run(&mut self) {
-        // Corners
+    pub fn generate_approximation(&mut self) {
+        let add_value = ComplexExtended::new2(1.0, 0.0, 0);
+
+        // Can be changed later into a better loop - this function could also return some more information
+        for i in 1..self.maximum_iteration {
+            let coefficients = &self.coefficients[i - 1];
+            let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
+
+            // This is checking if the approximation can step forward so takes the next iteration
+            next_coefficients[0] = self.center_reference.approximation_data[i];
+            next_coefficients[1] = coefficients[0] * coefficients[1] * 2.0 + add_value;
+            next_coefficients[0].reduce();
+            next_coefficients[1].reduce();
+
+            // Calculate the new coefficents
+            for k in 2..=self.order {
+                let mut sum = coefficients[0] * coefficients[k];
+                sum.reduce();
+
+                for j in 1..=((k - 1) / 2) {
+                    sum.reduce();
+                    sum += coefficients[j] * coefficients[k - j];
+                }
+                sum *= 2.0;
+
+                // If even, we include the mid term as well
+                if k % 2 == 0 {
+                    sum += coefficients[k / 2] * coefficients[k / 2];
+                }
+
+                sum.reduce();
+                next_coefficients[k] = sum;
+            }
+
+            self.coefficients.push(next_coefficients);
+        }
+    }
+
+    pub fn check_approximation(&mut self) {
         self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
@@ -60,58 +93,29 @@ impl SeriesApproximation {
         // self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, 0.0, self.delta_top_left.exponent));
         // self.add_probe(ComplexExtended::new2(0.0, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         // self.add_probe(ComplexExtended::new2(0.0, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
-        
-        let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
-        // 0d939ed92a is working
+        self.valid_iteration = 1;
 
-        // Can be changed later into a better loop - this function could also return some more information
-        while self.current_iteration < self.maximum_iteration {
-            self.z_prev = self.z.clone();
-            self.z.square_mut();
-            self.z += &self.c;
-
-            self.next_coefficients[0] = to_extended(&self.z);
-            self.next_coefficients[1] = self.coefficients[0] * self.coefficients[1] * 2.0 + add_value;
-            self.next_coefficients[0].reduce();
-            self.next_coefficients[1].reduce();
-
-            // Calculate the new coefficents
-            for k in 2..=self.order {
-                let mut sum = self.coefficients[0] * self.coefficients[k];
-                sum.reduce();
-
-                for j in 1..=((k - 1) / 2) {
-                    sum.reduce();
-                    sum += self.coefficients[j] * self.coefficients[k - j];
-                }
-                sum *= 2.0;
-
-                // If even, we include the mid term as well
-                if k % 2 == 0 {
-                    sum += self.coefficients[k / 2] * self.coefficients[k / 2];
-                }
-
-                sum.reduce();
-                self.next_coefficients[k] = sum;
-            }
+        while self.valid_iteration < self.maximum_iteration {
+            let coefficients = &self.coefficients[self.valid_iteration - 1];
+            let next_coefficients = &self.coefficients[self.valid_iteration];
 
             // this section takes about half of the time
             for i in 0..self.original_probes.len() {
                 // step the probe points using perturbation
-                self.current_probes[i] = self.current_probes[i] * (self.coefficients[0] * 2.0 + self.current_probes[i]);
+                self.current_probes[i] = self.current_probes[i] * (coefficients[0] * 2.0 + self.current_probes[i]);
                 self.current_probes[i] += self.original_probes[i];
 
                 // TODO this probably does not need to be done every iteration
                 self.current_probes[i].reduce();
 
                 // get the new approximations
-                let mut series_probe = self.next_coefficients[1] * self.approximation_probes[i][0];
-                let mut derivative_probe = self.next_coefficients[1] * self.approximation_probes_derivative[i][0];
+                let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
+                let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
 
                 for k in 2..=self.order {
-                    series_probe += self.next_coefficients[k] * self.approximation_probes[i][k - 1];
-                    derivative_probe += self.next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                    series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                    derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
                 };
 
                 let relative_error = (self.current_probes[i] - series_probe).norm_square();
@@ -125,16 +129,13 @@ impl SeriesApproximation {
 
                 // Check that the error over the derivative is less than the pixel spacing
                 if relative_error / derivative > self.delta_pixel_square {
-                    self.z = self.z_prev.clone();
+                    self.valid_coefficients = coefficients.clone();
                     return;
                 }
             }
 
             // If the approximation is valid, continue
-            self.current_iteration += 1;
-
-            // Swap the two coefficients buffers
-            swap(&mut self.coefficients, &mut self.next_coefficients);
+            self.valid_iteration += 1;
         }
     }
 
@@ -164,15 +165,17 @@ impl SeriesApproximation {
 
     // Get the current reference, and the current number of iterations done
     pub fn get_reference(&self, reference_delta: ComplexExtended) -> Reference {
-        let mut reference_c = self.c.clone();
-        let temp = Float::with_val(self.c.real().prec(), reference_delta.exponent).exp2();
-        let temp2 = Float::with_val(self.c.real().prec(), reference_delta.mantissa.re);
-        let temp3 = Float::with_val(self.c.real().prec(), reference_delta.mantissa.im);
+        let mut reference_c = self.center_reference.c.clone();
+        let temp = Float::with_val(self.center_reference.c.real().prec(), reference_delta.exponent).exp2();
+        let temp2 = Float::with_val(self.center_reference.c.real().prec(), reference_delta.mantissa.re);
+        let temp3 = Float::with_val(self.center_reference.c.real().prec(), reference_delta.mantissa.im);
 
         *reference_c.mut_real() += &temp2 * &temp;
         *reference_c.mut_imag() += &temp3 * &temp;
 
-        let mut reference_z = self.z.clone();
+        // let mut reference_z = self.center_reference.approximation_data[self.valid_iteration].clone();
+        let mut reference_z = self.center_reference.approximation_data[self.valid_iteration]
+
         let temp4 = self.evaluate(reference_delta);
         let temp = Float::with_val(self.c.real().prec(), temp4.exponent).exp2();
         let temp2 = Float::with_val(self.c.real().prec(), temp4.mantissa.re);
@@ -181,17 +184,19 @@ impl SeriesApproximation {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
+        
+
         Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended) -> ComplexExtended {
         // 1907 ms packing opus 4K
         // Horner's rule
-        let mut approximation = self.coefficients[self.order];
+        let mut approximation = self.valid_coefficients[self.order];
 
         for k in (1..=(self.order - 1)).rev() {
             approximation *= point_delta;
-            approximation += self.coefficients[k];
+            approximation += self.valid_coefficients[k];
         }
 
         approximation *= point_delta;

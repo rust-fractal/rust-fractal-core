@@ -6,7 +6,7 @@ use crate::math::reference::Reference;
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate(pixel_data: &mut Vec<PixelData>, reference: &Reference, reference_current_iteration: usize) {
+    pub fn iterate(pixel_data: &mut Vec<PixelData>, reference: &Reference) {
         pixel_data.par_chunks_mut(8)
             .for_each(|pixel_data| {
                 for pixel in pixel_data {
@@ -14,14 +14,14 @@ impl Perturbation {
                     let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                     let mut scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
-                    while pixel.iteration < reference_current_iteration {
+                    while pixel.iteration < reference.current_iteration {
                         let delta_current_float = scaled_scale_factor_1 * pixel.delta_current.mantissa;
 
                         if pixel.delta_current.exponent > -500 {
-                            let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float).norm_sqr();
+                            let z_norm = (reference.perturbation_data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float).norm_sqr();
                             // let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.to_float()).norm_sqr();
 
-                            if z_norm < reference.data[pixel.iteration - reference.start_iteration].z_tolerance {
+                            if z_norm < reference.perturbation_data[pixel.iteration - reference.start_iteration].z_tolerance {
                                 pixel.glitched = true;
                                 break;
                             }
@@ -34,7 +34,7 @@ impl Perturbation {
                             }
                         }
 
-                        match reference.data[pixel.iteration - reference.start_iteration].z_extended {
+                        match reference.perturbation_data[pixel.iteration - reference.start_iteration].z_extended {
                             // If the reference is small, use the slow extended method
                             Some(z_extended) => {
                                 // do the slow 
@@ -53,7 +53,7 @@ impl Perturbation {
                             None => {
                                 // pixel.delta_current.mantissa = 2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + temp * pixel.delta_current.mantissa + scaled_delta_reference;
 
-                                pixel.delta_current.mantissa *= 2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float;
+                                pixel.delta_current.mantissa *= 2.0 * reference.perturbation_data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float;
                                 pixel.delta_current.mantissa += scaled_delta_reference;
 
                                 scaled_iterations += 1;

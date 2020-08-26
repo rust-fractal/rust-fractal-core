@@ -79,19 +79,14 @@ impl FractalRenderer {
 
     pub fn render_frame(&mut self, index: usize, filename: String) {
         print!("{:<6}", index);
+        print!("| {:<14}", extended_to_string(self.zoom));
         let frame_time = Instant::now();
 
         // If we are on the first frame
-        // if index == 0 {
-        //     self.center_reference.run();
-        //     println!("{}", self.center_reference.current_iteration);
-        // }
-
-
-
-
-
-
+        if index == 0 {
+            self.center_reference.run();
+            println!("reference has {} iterations", self.center_reference.current_iteration);
+        }
 
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
 
@@ -99,32 +94,23 @@ impl FractalRenderer {
         let delta_top_left = ComplexFixed::new((4.0 / self.image_width as f64 - 2.0) / self.zoom.mantissa * self.aspect as f64, (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa);
 
         let time = Instant::now();
-
-        print!("| {:<14}", extended_to_string(self.zoom));
-
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
         // Series approximation currently has some overskipping issues
         // this can be resolved by root finding and adding new probe points
         let mut series_approximation = SeriesApproximation::new(
-            self.center_location.clone(),
+            &self.center_reference,
             self.approximation_order,
-            self.maximum_iteration,
+            self.center_reference.current_iteration,
             delta_pixel_extended * delta_pixel_extended,
             ComplexExtended::new(delta_top_left, -self.zoom.exponent),
         );
 
-        series_approximation.run();
+        series_approximation.generate_approximation(&self.center_reference);
+        series_approximation.check_approximation();
 
         print!("| {:<14}", time.elapsed().as_millis());
-        print!("| {:<14}", series_approximation.current_iteration);
-
-        let time = Instant::now();
-
-        let mut reference = series_approximation.get_reference(ComplexExtended::new2(0.0, 0.0, 0));
-        reference.run();
-
-        print!("| {:<14}", time.elapsed().as_millis());
+        print!("| {:<14}", series_approximation.valid_iteration);
 
         let time = Instant::now();
 
@@ -139,7 +125,7 @@ impl FractalRenderer {
                 PixelData {
                     image_x: i,
                     image_y: j,
-                    iteration: reference.start_iteration,
+                    iteration: series_approximation.valid_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
                     delta_start: new_delta,
@@ -153,16 +139,18 @@ impl FractalRenderer {
         print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
-        Perturbation::iterate(&mut pixel_data, &reference, reference.current_iteration);
+
+        // This one has no offset because it is not a glitch resolving reference
+        Perturbation::iterate(&mut pixel_data, &self.center_reference);
         print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
-        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &reference);
+        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
         print!("| {:<14}", time.elapsed().as_millis());
 
         let time = Instant::now();
 
-        // Remove all non-glitched points from the remaining points
+        // // Remove all non-glitched points from the remaining points
         pixel_data.retain(|packet| {
             packet.glitched
         });
@@ -191,7 +179,7 @@ impl FractalRenderer {
                         // data.derivative_current = ComplexFixed::new(1.0, 0.0);
                 });
 
-            Perturbation::iterate(&mut pixel_data, &r, r.current_iteration);
+            Perturbation::iterate(&mut pixel_data, &r);
 
             self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &r);
 
