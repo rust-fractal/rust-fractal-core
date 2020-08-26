@@ -13,9 +13,7 @@ pub struct FractalRenderer {
     image_height: usize,
     aspect: f64,
     zoom: FloatExtended,
-    center_location: ComplexArbitrary,
     maximum_iteration: usize,
-    approximation_order: usize,
     glitch_tolerance: f64,
     data_export: DataExport,
     start_render_time: Instant,
@@ -27,9 +25,6 @@ pub struct FractalRenderer {
 
 impl FractalRenderer {
     pub fn new(settings: Config) -> Self {
-        // Print out the status information
-        println!("{:<6}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}| {:<14}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Reference [ms]", "Packing [ms]", "Iteration [ms]", "Colouring [ms]", "Correct [ms]", "Saving [ms]", "TOTAL [ms]");
-
         let image_width = settings.get_int("image_width").unwrap_or(1000) as usize;
         let image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
         let maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
@@ -55,61 +50,61 @@ impl FractalRenderer {
             ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
 
         let auto_approximation = if approximation_order == 0 {
-            let auto = (((image_width * image_height * remaining_frames) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
+            let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
             min(max(auto, 3), 64)
         } else {
             approximation_order
         };
 
         let reference = Reference::new(center_location.clone(), center_location.clone(), 1, maximum_iteration);
+        let series_approximation = SeriesApproximation::new_central(&center_location, 
+            auto_approximation, 
+            maximum_iteration, 
+            FloatExtended::new(0.0, 0), 
+            ComplexExtended::new2(0.0, 0.0, 0));
 
         FractalRenderer {
             image_width,
             image_height,
             aspect,
             zoom,
-            center_location: center_location.clone(),
             maximum_iteration,
-            approximation_order: auto_approximation,
             glitch_tolerance,
             data_export: DataExport::new(image_width, image_height, display_glitches, DataType::BOTH),
             start_render_time: Instant::now(),
             remaining_frames,
             zoom_scale_factor,
-            center_reference: reference.clone(),
-            series_approximation: SeriesApproximation::new(&reference, auto_approximation, maximum_iteration, FloatExtended::new(0.0, 0), ComplexExtended::new2(0.0, 0.0, 0))
+            center_reference: reference,
+            series_approximation,
         }
     }
 
     pub fn render_frame(&mut self, index: usize, filename: String) {
         print!("{:<6}", index);
-        print!("| {:<14}", extended_to_string(self.zoom));
+        print!("| {:<15}", extended_to_string(self.zoom));
         let frame_time = Instant::now();
+        let approximation_time = Instant::now();
 
-        // If we are on the first frame
+        // If we are on the first frame we need to run the central reference calculation
         if index == 0 {
             self.center_reference.run();
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference);
         }
-
+        
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
-
         // this should be the delta relative to the image, without the big zoom factor applied.
         let delta_top_left = ComplexFixed::new((4.0 / self.image_width as f64 - 2.0) / self.zoom.mantissa * self.aspect as f64, (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa);
-
-        let time = Instant::now();
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
         self.series_approximation.delta_pixel_square = delta_pixel_extended * delta_pixel_extended;
         self.series_approximation.delta_top_left = ComplexExtended::new(delta_top_left, -self.zoom.exponent);
-        
         self.series_approximation.check_approximation();
 
-        print!("| {:<14}", time.elapsed().as_millis());
-        print!("| {:<14}", self.series_approximation.valid_iteration);
+        print!("| {:<15}", approximation_time.elapsed().as_millis());
+        print!("| {:<15}", self.series_approximation.valid_iteration);
 
-        let time = Instant::now();
+        let packing_time = Instant::now();
 
         let mut pixel_data = (0..(self.image_width * self.image_height)).into_par_iter()
             .map(|index| {
@@ -125,7 +120,6 @@ impl FractalRenderer {
                     iteration: self.series_approximation.valid_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
-                    delta_start: new_delta,
                     delta_current: new_delta,
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
@@ -133,56 +127,41 @@ impl FractalRenderer {
                 }
             }).collect::<Vec<PixelData>>();
 
-        print!("| {:<14}", time.elapsed().as_millis());
+        print!("| {:<15}", packing_time.elapsed().as_millis());
 
-        let time = Instant::now();
+        let iteration_time = Instant::now();
 
         // This one has no offset because it is not a glitch resolving reference
         Perturbation::iterate(&mut pixel_data, &self.center_reference);
-        print!("| {:<14}", time.elapsed().as_millis());
-
-        let time = Instant::now();
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
-        print!("| {:<14}", time.elapsed().as_millis());
+        print!("| {:<15}", iteration_time.elapsed().as_millis());
 
-        let time = Instant::now();
+        let correction_time = Instant::now();
 
-        // // Remove all non-glitched points from the remaining points
+        // Remove all non-glitched points from the remaining points
         pixel_data.retain(|packet| {
             packet.glitched
         });
 
         while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
             // delta_c is the difference from the next reference from the previous one
-            let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
-            let element = ComplexFixed::new(delta_c.image_x as f64 * delta_pixel + delta_top_left.re, delta_c.image_y as f64 * delta_pixel + delta_top_left.im);
+            let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
 
-            let reference_delta_from_centre = ComplexExtended::new(element, -self.zoom.exponent);
+            let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
+            glitch_reference.run();
 
-            let mut r = self.series_approximation.get_reference(reference_delta_from_centre, &self.center_reference);
-            r.run();
+            let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, Some(glitch_reference.start_iteration));
 
-            let delta_z = self.series_approximation.evaluate(reference_delta_from_centre, Some(r.start_iteration));
-
-            // this can be made faster, without having to do the series approximation again
-            // this is done by storing more data in pixeldata2
             pixel_data.par_iter_mut()
                 .for_each(|pixel| {
-
-                    // pixel.delta_start = series_approximation.evaluate(pixel.delta_centre, Some(r.start_iteration));
-
-                    pixel.iteration = r.start_iteration;
+                    pixel.iteration = glitch_reference.start_iteration;
                     pixel.glitched = false;
-                    pixel.delta_start = self.series_approximation.evaluate( pixel.delta_centre, Some(r.start_iteration));
-                    pixel.delta_current = pixel.delta_start - delta_z;
-                    pixel.delta_reference = pixel.delta_centre - reference_delta_from_centre;
-                        // might not need the evaluate here as if we store it separately, there is no need
-                        // data.derivative_current = ComplexFixed::new(1.0, 0.0);
+                    pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, Some(glitch_reference.start_iteration)) - delta_current_reference;
+                    pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
                 });
 
-            Perturbation::iterate(&mut pixel_data, &r);
-
-            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &r);
+            Perturbation::iterate(&mut pixel_data, &glitch_reference);
+            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
@@ -190,15 +169,18 @@ impl FractalRenderer {
             });
         }
 
-        print!("| {:<14}", time.elapsed().as_millis());
+        print!("| {:<15}", correction_time.elapsed().as_millis());
         
-        let time = Instant::now();
+        let saving_time = Instant::now();
         self.data_export.save(&filename);
-        print!("| {:<14}", time.elapsed().as_millis());
-        println!("| {:<8} {:<8}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
+        print!("| {:<15}", saving_time.elapsed().as_millis());
+        println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
     }
 
     pub fn render(&mut self) {
+        // Print out the status information
+        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+
         let mut count = 0;
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
             self.render_frame(count, format!("output/keyframe_{:08}", count));
