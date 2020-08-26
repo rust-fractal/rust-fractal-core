@@ -1,5 +1,6 @@
-pub mod image;
-pub mod colouring;
+use std::f64::consts::{LOG2_10, LOG10_2};
+
+pub mod data_export;
 pub mod float_extended;
 pub mod complex_extended;
 
@@ -56,6 +57,23 @@ pub fn to_extended(value: &ComplexArbitrary) -> ComplexExtended {
     ComplexExtended::new2(re, im, exponent)
 }
 
+pub fn string_to_extended(string: &String) -> FloatExtended {
+    // Split on E as the exponent
+    let temp: Vec<&str> = string.split('E').collect();
+
+    let first = temp[0].parse::<f64>().unwrap();
+    let second = temp[1].parse::<f64>().unwrap() * LOG2_10;
+
+    FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
+}
+
+pub fn extended_to_string(value: FloatExtended) -> String {
+    let first = value.mantissa;
+    let second = value.exponent as f64 * LOG10_2;
+
+    format!("{:.2}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
+}
+
 #[derive(Clone)]
 pub struct PixelData {
     pub image_x: usize,
@@ -63,7 +81,6 @@ pub struct PixelData {
     pub iteration: usize,
     pub delta_centre: ComplexExtended,
     pub delta_reference: ComplexExtended,
-    pub delta_start: ComplexExtended,
     pub delta_current: ComplexExtended,
     pub derivative_current: ComplexFixed<f64>,
     pub glitched: bool,
