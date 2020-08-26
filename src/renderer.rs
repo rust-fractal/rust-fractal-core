@@ -54,7 +54,7 @@ impl FractalRenderer {
             ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
 
         let auto_approximation = if approximation_order == 0 {
-            let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
+            let auto = (((image_width * image_height * remaining_frames) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
             min(max(auto, 3), 64)
         } else {
             approximation_order
@@ -85,7 +85,6 @@ impl FractalRenderer {
         // If we are on the first frame
         if index == 0 {
             self.center_reference.run();
-            println!("reference has {} iterations", self.center_reference.current_iteration);
         }
 
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
@@ -120,7 +119,7 @@ impl FractalRenderer {
                 let j = index / self.image_width;
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                let new_delta = series_approximation.evaluate(point_delta);
+                let new_delta = series_approximation.evaluate(point_delta, None);
 
                 PixelData {
                     image_x: i,
@@ -160,21 +159,24 @@ impl FractalRenderer {
             let delta_c = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
             let element = ComplexFixed::new(delta_c.image_x as f64 * delta_pixel + delta_top_left.re, delta_c.image_y as f64 * delta_pixel + delta_top_left.im);
 
-            let reference_wrt_sa = ComplexExtended::new(element, -self.zoom.exponent);
+            let reference_delta_from_centre = ComplexExtended::new(element, -self.zoom.exponent);
 
-            let delta_z = series_approximation.evaluate(reference_wrt_sa);
-
-            let mut r = series_approximation.get_reference(reference_wrt_sa);
+            let mut r = series_approximation.get_reference(reference_delta_from_centre, &self.center_reference);
             r.run();
+
+            let delta_z = series_approximation.evaluate(reference_delta_from_centre, Some(r.start_iteration));
 
             // this can be made faster, without having to do the series approximation again
             // this is done by storing more data in pixeldata2
             pixel_data.par_iter_mut()
                 .for_each(|pixel| {
-                    pixel.iteration = reference.start_iteration;
+
+                    // pixel.delta_start = series_approximation.evaluate(pixel.delta_centre, Some(r.start_iteration));
+
+                    pixel.iteration = r.start_iteration;
                     pixel.glitched = false;
-                    pixel.delta_current = pixel.delta_start - delta_z;
-                    pixel.delta_reference = pixel.delta_centre - reference_wrt_sa;
+                    pixel.delta_current = series_approximation.evaluate( pixel.delta_centre, Some(r.start_iteration)) - delta_z;
+                    pixel.delta_reference = pixel.delta_centre - reference_delta_from_centre;
                         // might not need the evaluate here as if we store it separately, there is no need
                         // data.derivative_current = ComplexFixed::new(1.0, 0.0);
                 });

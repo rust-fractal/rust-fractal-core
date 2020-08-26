@@ -17,7 +17,6 @@ pub struct SeriesApproximation {
     delta_top_left: ComplexExtended,
     valid_coefficients: Vec<ComplexExtended>,
     pub valid_iteration: usize,
-    center_reference: &Reference,
 }
 
 impl SeriesApproximation {
@@ -40,11 +39,10 @@ impl SeriesApproximation {
             delta_top_left,
             valid_coefficients: Vec::new(),
             valid_iteration: 1,
-            center_reference
         }
     }
 
-    pub fn generate_approximation(&mut self) {
+    pub fn generate_approximation(&mut self, center_reference: &Reference) {
         let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
         // Can be changed later into a better loop - this function could also return some more information
@@ -53,7 +51,7 @@ impl SeriesApproximation {
             let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
 
             // This is checking if the approximation can step forward so takes the next iteration
-            next_coefficients[0] = self.center_reference.approximation_data[i];
+            next_coefficients[0] = center_reference.approximation_data[i];
             next_coefficients[1] = coefficients[0] * coefficients[1] * 2.0 + add_value;
             next_coefficients[0].reduce();
             next_coefficients[1].reduce();
@@ -93,7 +91,6 @@ impl SeriesApproximation {
         // self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, 0.0, self.delta_top_left.exponent));
         // self.add_probe(ComplexExtended::new2(0.0, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
         // self.add_probe(ComplexExtended::new2(0.0, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
-
         self.valid_iteration = 1;
 
         while self.valid_iteration < self.maximum_iteration {
@@ -164,44 +161,59 @@ impl SeriesApproximation {
     }
 
     // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self, reference_delta: ComplexExtended) -> Reference {
-        let mut reference_c = self.center_reference.c.clone();
-        let temp = Float::with_val(self.center_reference.c.real().prec(), reference_delta.exponent).exp2();
-        let temp2 = Float::with_val(self.center_reference.c.real().prec(), reference_delta.mantissa.re);
-        let temp3 = Float::with_val(self.center_reference.c.real().prec(), reference_delta.mantissa.im);
+    pub fn get_reference(&self, reference_delta: ComplexExtended, center_reference: &Reference) -> Reference {
+        let precision = center_reference.c.real().prec();
+        let iteration_reference = 100 * (self.valid_iteration / 100) + 1;
+
+        let mut reference_c = center_reference.c.clone();
+        let temp = Float::with_val(precision, reference_delta.exponent).exp2();
+        let temp2 = Float::with_val(precision, reference_delta.mantissa.re);
+        let temp3 = Float::with_val(precision, reference_delta.mantissa.im);
 
         *reference_c.mut_real() += &temp2 * &temp;
         *reference_c.mut_imag() += &temp3 * &temp;
 
         // let mut reference_z = self.center_reference.approximation_data[self.valid_iteration].clone();
-        let mut reference_z = self.center_reference.approximation_data[self.valid_iteration]
+        let mut reference_z = center_reference.high_precision_data[(self.valid_iteration - 1) / 100].clone();
 
-        let temp4 = self.evaluate(reference_delta);
-        let temp = Float::with_val(self.c.real().prec(), temp4.exponent).exp2();
-        let temp2 = Float::with_val(self.c.real().prec(), temp4.mantissa.re);
-        let temp3 = Float::with_val(self.c.real().prec(), temp4.mantissa.im);
+        let temp4 = self.evaluate(reference_delta, Some(iteration_reference));
+        let temp = Float::with_val(precision, temp4.exponent).exp2();
+        let temp2 = Float::with_val(precision, temp4.mantissa.re);
+        let temp3 = Float::with_val(precision, temp4.mantissa.im);
 
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        
-
-        Reference::new(reference_z, reference_c, self.current_iteration, self.maximum_iteration)
+        Reference::new(reference_z, reference_c, iteration_reference, self.maximum_iteration)
     }
 
-    pub fn evaluate(&self, point_delta: ComplexExtended) -> ComplexExtended {
-        // 1907 ms packing opus 4K
-        // Horner's rule
-        let mut approximation = self.valid_coefficients[self.order];
+    pub fn evaluate(&self, point_delta: ComplexExtended, iteration: Option<usize>) -> ComplexExtended {
+        if iteration == None {
+            // Horner's rule
+            let mut approximation = self.valid_coefficients[self.order];
 
-        for k in (1..=(self.order - 1)).rev() {
+            for k in (1..=(self.order - 1)).rev() {
+                approximation *= point_delta;
+                approximation += self.valid_coefficients[k];
+            }
+
             approximation *= point_delta;
-            approximation += self.valid_coefficients[k];
-        }
+            approximation.reduce();
+            approximation
+        } else {
+            let new_coefficients = &self.coefficients[iteration.unwrap() - 1];
+            // Horner's rule
+            let mut approximation = new_coefficients[self.order];
 
-        approximation *= point_delta;
-        approximation.reduce();
-        approximation
+            for k in (1..=(self.order - 1)).rev() {
+                approximation *= point_delta;
+                approximation += new_coefficients[k];
+            }
+
+            approximation *= point_delta;
+            approximation.reduce();
+            approximation
+        }
     }
 
     // pub fn evaluate_derivative(&self, point_delta: ComplexExtended) -> FloatExtended {

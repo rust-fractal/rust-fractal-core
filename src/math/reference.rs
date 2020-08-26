@@ -7,7 +7,10 @@ pub struct Reference {
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
     pub perturbation_data: Vec<ReferenceIteration>,
-    pub approximation_data: Vec<ComplexExtended>
+    pub approximation_data: Vec<ComplexExtended>,
+    // This is for every 100th iteration, when we do glitch correction the new references will be spawed from these values
+    // Storing every iteration is memory intensive.
+    pub high_precision_data: Vec<ComplexArbitrary>
 }
 
 pub struct ReferenceIteration {
@@ -25,7 +28,8 @@ impl Reference {
             z,
             c,
             perturbation_data: Vec::with_capacity(1000),
-            approximation_data: Vec::with_capacity(1000)
+            approximation_data: Vec::with_capacity(1000),
+            high_precision_data: Vec::with_capacity(1000)
         }
     }
 
@@ -96,11 +100,25 @@ impl Reference {
 
         self.approximation_data.push(z_extended);
 
-        while self.current_iteration < self.maximum_iteration {
-            if !self.step() {
-                break;
-            }
-        };
+        if self.start_iteration == 1 {
+            // Add the first value for iterations 0-100
+            self.high_precision_data.push(self.z.clone());
+
+            while self.current_iteration < self.maximum_iteration {
+                if !self.step() {
+                    break;
+                };
+                if self.current_iteration % 100 == 1 {
+                    self.high_precision_data.push(self.z.clone());
+                }
+            };
+        } else {
+            while self.current_iteration < self.maximum_iteration {
+                if !self.step() {
+                    break;
+                }
+            };
+        }
     }
 }
 
