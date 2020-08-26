@@ -62,7 +62,7 @@ impl DataExport {
         }
     }
 
-    pub fn export_pixels(&mut self, pixel_data: &Vec<PixelData>, maximum_iteration: usize, reference: &Reference) {
+    pub fn export_pixels(&mut self, pixel_data: &[PixelData], maximum_iteration: usize, reference: &Reference) {
         match self.data_type {
             DataType::COLOUR => {
                 for pixel in pixel_data {
@@ -148,7 +148,7 @@ impl DataExport {
         }
     }
 
-    pub fn save(&mut self, filename: &String) {
+    pub fn save(&mut self, filename: &str) {
         match self.data_type {
             DataType::COLOUR => {
                 self.save_colour(filename);
@@ -163,11 +163,11 @@ impl DataExport {
         }
     }
 
-    fn save_colour(&mut self, filename: &String) {
+    fn save_colour(&mut self, filename: &str) {
         image::save_buffer(filename.to_owned() + ".jpg", &self.rgb, self.image_width as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
     }
 
-    fn save_raw(&mut self, filename: &String) {
+    fn save_raw(&mut self, filename: &str) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F32(self.smooth.clone()));
 
@@ -184,7 +184,7 @@ impl DataExport {
         let mut colours = Vec::with_capacity(1024);
 
         for i in 0..1024 {
-            let value = i as f32 / 1024 as f32;
+            let value = i as f32 / 1024.0;
 
             let red;
             let green;
@@ -213,11 +213,11 @@ impl DataExport {
 
                 red = 255.0 + factor * (0.0 - 255.0);
                 green = 170.0 + factor * (2.0 - 170.0);
-                blue = 0.0 + factor * (0.0 - 0.0);
+                blue = 0.0;
             } else {
                 let factor = (value - 0.8575) / (1.0 - 0.8575);
 
-                red = 0.0 + factor * (0.0 - 0.0);
+                red = 0.0;
                 green = 2.0 + factor * (7.0 - 2.0);
                 blue = 0.0 + factor * (100.0 - 0.0);
             }

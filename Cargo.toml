@@ -19,6 +19,6 @@ config = "0.9"
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 [profile.release]
-#lto = "fat"
-#codegen-units = 1
+lto = "fat"
+codegen-units = 1
 #debug = true
