@@ -70,7 +70,7 @@ impl FractalRenderer {
             zoom,
             maximum_iteration,
             glitch_tolerance,
-            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::BOTH),
+            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::RAW),
             start_render_time: Instant::now(),
             remaining_frames,
             zoom_scale_factor,
@@ -183,7 +183,7 @@ impl FractalRenderer {
 
         let mut count = 0;
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
-            self.render_frame(count, format!("output/keyframe_{:08}", count));
+            self.render_frame(count, format!("output/output_{:08}", count));
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
             self.remaining_frames -= 1;
