@@ -6,7 +6,8 @@ pub struct Reference {
     pub maximum_iteration: usize,
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
-    pub data: Vec<ReferenceIteration>
+    pub perturbation_data: Vec<ReferenceIteration>,
+    pub approximation_data: Vec<ComplexExtended>
 }
 
 pub struct ReferenceIteration {
@@ -23,7 +24,8 @@ impl Reference {
             maximum_iteration,
             z,
             c,
-            data: Vec::with_capacity(1000)
+            perturbation_data: Vec::with_capacity(1000),
+            approximation_data: Vec::with_capacity(1000)
         }
     }
 
@@ -35,20 +37,21 @@ impl Reference {
         let z_fixed = to_fixed(&self.z);
         let z_tolerance = 1e-6 * z_fixed.norm_sqr();
 
+        let mut z_extended = to_extended(&self.z);
+        z_extended.reduce();
+
         // This is if we need to use the extended precision for the reference
         if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
             // println!("found slow at: {}", self.current_iteration);
-            let mut temp = to_extended(&self.z);
-            temp.reduce();
-            self.data.push(
+            self.perturbation_data.push(
                 ReferenceIteration {
                     z_fixed,
-                    z_extended: Some(temp),
+                    z_extended: Some(z_extended),
                     z_tolerance
                 }
             )
         } else {
-            self.data.push(
+            self.perturbation_data.push(
                 ReferenceIteration {
                     z_fixed,
                     z_extended: None,
@@ -56,6 +59,8 @@ impl Reference {
                 }
             )
         }
+
+        self.approximation_data.push(z_extended);
 
         // If the value is not small we do the escape check, otherwise it has not escaped
         // as we do the check for 65536 on the perturbation, we need this to be more than that squared
@@ -63,21 +68,24 @@ impl Reference {
     }
 
 
-    pub fn run(&mut self) -> bool {
+    pub fn run(&mut self) {
         let z_fixed = to_fixed(&self.z);
         let z_tolerance = 1e-6 * z_fixed.norm_sqr();
 
+        let mut z_extended = to_extended(&self.z);
+        z_extended.reduce();
+
         // This is if we need to use the extended precision for the reference
         if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-            self.data.push(
+            self.perturbation_data.push(
                 ReferenceIteration {
                     z_fixed,
-                    z_extended: Some(to_extended(&self.z)),
+                    z_extended: Some(z_extended),
                     z_tolerance
                 }
             )
         } else {
-            self.data.push(
+            self.perturbation_data.push(
                 ReferenceIteration {
                     z_fixed,
                     z_extended: None,
@@ -86,13 +94,13 @@ impl Reference {
             )
         }
 
+        self.approximation_data.push(z_extended);
+
         while self.current_iteration < self.maximum_iteration {
             if !self.step() {
                 break;
             }
         };
-
-        self.current_iteration == self.maximum_iteration
     }
 }
 
