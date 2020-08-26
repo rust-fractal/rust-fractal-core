@@ -1,5 +1,6 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, to_fixed, to_extended};
 
+#[derive(Clone)]
 pub struct Reference {
     pub start_iteration: usize,
     pub current_iteration: usize,
@@ -13,6 +14,7 @@ pub struct Reference {
     pub high_precision_data: Vec<ComplexArbitrary>
 }
 
+#[derive(Clone)]
 pub struct ReferenceIteration {
     pub z_fixed: ComplexFixed<f64>,
     pub z_extended: Option<ComplexExtended>,
@@ -116,7 +118,7 @@ impl Reference {
             while self.current_iteration < self.maximum_iteration {
                 if !self.step() {
                     break;
-                }
+                };
             };
         }
     }

@@ -22,6 +22,7 @@ pub struct FractalRenderer {
     remaining_frames: usize,
     zoom_scale_factor: f64,
     center_reference: Reference,
+    series_approximation: SeriesApproximation
 }
 
 impl FractalRenderer {
@@ -60,6 +61,8 @@ impl FractalRenderer {
             approximation_order
         };
 
+        let reference = Reference::new(center_location.clone(), center_location.clone(), 1, maximum_iteration);
+
         FractalRenderer {
             image_width,
             image_height,
@@ -73,7 +76,8 @@ impl FractalRenderer {
             start_render_time: Instant::now(),
             remaining_frames,
             zoom_scale_factor,
-            center_reference: Reference::new(center_location.clone(), center_location, 1, maximum_iteration)
+            center_reference: reference.clone(),
+            series_approximation: SeriesApproximation::new(&reference, auto_approximation, maximum_iteration, FloatExtended::new(0.0, 0), ComplexExtended::new2(0.0, 0.0, 0))
         }
     }
 
@@ -85,6 +89,8 @@ impl FractalRenderer {
         // If we are on the first frame
         if index == 0 {
             self.center_reference.run();
+            self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
+            self.series_approximation.generate_approximation(&self.center_reference);
         }
 
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
@@ -95,21 +101,13 @@ impl FractalRenderer {
         let time = Instant::now();
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
-        // Series approximation currently has some overskipping issues
-        // this can be resolved by root finding and adding new probe points
-        let mut series_approximation = SeriesApproximation::new(
-            &self.center_reference,
-            self.approximation_order,
-            self.center_reference.current_iteration,
-            delta_pixel_extended * delta_pixel_extended,
-            ComplexExtended::new(delta_top_left, -self.zoom.exponent),
-        );
-
-        series_approximation.generate_approximation(&self.center_reference);
-        series_approximation.check_approximation();
+        self.series_approximation.delta_pixel_square = delta_pixel_extended * delta_pixel_extended;
+        self.series_approximation.delta_top_left = ComplexExtended::new(delta_top_left, -self.zoom.exponent);
+        
+        self.series_approximation.check_approximation();
 
         print!("| {:<14}", time.elapsed().as_millis());
-        print!("| {:<14}", series_approximation.valid_iteration);
+        print!("| {:<14}", self.series_approximation.valid_iteration);
 
         let time = Instant::now();
 
@@ -119,12 +117,12 @@ impl FractalRenderer {
                 let j = index / self.image_width;
                 let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                let new_delta = series_approximation.evaluate(point_delta, None);
+                let new_delta = self.series_approximation.evaluate(point_delta, None);
 
                 PixelData {
                     image_x: i,
                     image_y: j,
-                    iteration: series_approximation.valid_iteration,
+                    iteration: self.series_approximation.valid_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
                     delta_start: new_delta,
@@ -161,10 +159,10 @@ impl FractalRenderer {
 
             let reference_delta_from_centre = ComplexExtended::new(element, -self.zoom.exponent);
 
-            let mut r = series_approximation.get_reference(reference_delta_from_centre, &self.center_reference);
+            let mut r = self.series_approximation.get_reference(reference_delta_from_centre, &self.center_reference);
             r.run();
 
-            let delta_z = series_approximation.evaluate(reference_delta_from_centre, Some(r.start_iteration));
+            let delta_z = self.series_approximation.evaluate(reference_delta_from_centre, Some(r.start_iteration));
 
             // this can be made faster, without having to do the series approximation again
             // this is done by storing more data in pixeldata2
@@ -175,7 +173,8 @@ impl FractalRenderer {
 
                     pixel.iteration = r.start_iteration;
                     pixel.glitched = false;
-                    pixel.delta_current = series_approximation.evaluate( pixel.delta_centre, Some(r.start_iteration)) - delta_z;
+                    pixel.delta_start = self.series_approximation.evaluate( pixel.delta_centre, Some(r.start_iteration));
+                    pixel.delta_current = pixel.delta_start - delta_z;
                     pixel.delta_reference = pixel.delta_centre - reference_delta_from_centre;
                         // might not need the evaluate here as if we store it separately, there is no need
                         // data.derivative_current = ComplexFixed::new(1.0, 0.0);
