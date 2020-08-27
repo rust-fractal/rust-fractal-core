@@ -1,9 +1,9 @@
-use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string};
+use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string, get_approximation_terms, get_delta_top_left};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
-use std::cmp::{min, max};
 use std::io::Write;
+use std::cmp::max;
 
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
@@ -12,7 +12,7 @@ use config::Config;
 pub struct FractalRenderer {
     image_width: usize,
     image_height: usize,
-    aspect: f64,
+    rotate: f64,
     zoom: FloatExtended,
     maximum_iteration: usize,
     glitch_tolerance: f64,
@@ -28,6 +28,7 @@ impl FractalRenderer {
     pub fn new(settings: Config) -> Self {
         let image_width = settings.get_int("image_width").unwrap_or(1000) as usize;
         let image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
+        let rotate = settings.get_float("rotate").unwrap_or(0.0).to_radians();
         let maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
         let initial_zoom = settings.get_str("zoom").unwrap_or(String::from("1E0")).to_ascii_uppercase();
         let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
@@ -44,24 +45,14 @@ impl FractalRenderer {
         };
         let display_glitches = false;
 
-        let aspect = image_width as f64 / image_height as f64;
         let zoom = string_to_extended(&initial_zoom);
-
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
-
         let radius = delta_pixel * image_width as f64;
         let precision = max(64, -radius.exponent + 64);
-
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
             ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
-
-        let auto_approximation = if approximation_order == 0 {
-            let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
-            min(max(auto, 3), 64)
-        } else {
-            approximation_order
-        };
+        let auto_approximation = get_approximation_terms(approximation_order, image_width, image_height);
 
         let reference = Reference::new(center_location.clone(), center_location.clone(), 1, maximum_iteration);
         let series_approximation = SeriesApproximation::new_central(&center_location, 
@@ -73,7 +64,7 @@ impl FractalRenderer {
         FractalRenderer {
             image_width,
             image_height,
-            aspect,
+            rotate,
             zoom,
             maximum_iteration,
             glitch_tolerance,
@@ -100,12 +91,16 @@ impl FractalRenderer {
             self.series_approximation.generate_approximation(&self.center_reference);
         }
         
-        let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
-        // This should be the delta relative to the image, without the big zoom factor applied.
-        let delta_top_left = ComplexFixed::new((4.0 / self.image_width as f64 - 2.0) / self.zoom.mantissa * self.aspect as f64, (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa);
+        let cos_rotate = self.rotate.cos();
+        let sin_rotate = self.rotate.sin();
+        let delta_pixel = 4.0 / ((self.image_height - 1) as f64 * self.zoom.mantissa);
+        let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
+
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
         self.series_approximation.delta_pixel_square = delta_pixel_extended * delta_pixel_extended;
+
+        // Used for placing the probe points
         self.series_approximation.delta_top_left = ComplexExtended::new(delta_top_left, -self.zoom.exponent);
         self.series_approximation.check_approximation();
 
@@ -119,9 +114,13 @@ impl FractalRenderer {
             .map(|index| {
                 let i = index % self.image_width;
                 let j = index / self.image_width;
-                let element = ComplexFixed::new(i as f64 * delta_pixel + delta_top_left.re, j as f64 * delta_pixel + delta_top_left.im);
+                // This could be changed to account for rotation, and jittering if needed
+                let element = ComplexFixed::new(
+                    i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
+                    i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
+                );
+                
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-
                 let new_delta = self.series_approximation.evaluate(point_delta, None);
 
                 PixelData {
@@ -147,7 +146,6 @@ impl FractalRenderer {
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
         print!("| {:<15}", iteration_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
-
 
         let correction_time = Instant::now();
 
@@ -184,7 +182,6 @@ impl FractalRenderer {
 
         print!("| {:<15}", correction_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
-
         
         let saving_time = Instant::now();
         self.data_export.save(&filename);

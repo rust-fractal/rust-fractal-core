@@ -2,3 +2,4 @@ image_width = 1000
 image_height = 1000
 frames = 1
 export = "colour"
+rotate = 0
