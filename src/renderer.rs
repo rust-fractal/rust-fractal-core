@@ -3,6 +3,7 @@ use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
 use std::cmp::{min, max};
+use std::io::Write;
 
 use rand::seq::SliceRandom;
 use rayon::prelude::*;
@@ -28,13 +29,19 @@ impl FractalRenderer {
         let image_width = settings.get_int("image_width").unwrap_or(1000) as usize;
         let image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
         let maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
-        let initial_zoom = settings.get_str("zoom").unwrap_or("1E0".to_string());
-        let center_real = settings.get_str("real").unwrap_or("-0.75".to_string());
-        let center_imag = settings.get_str("imag").unwrap_or("0.0".to_string());
+        let initial_zoom = settings.get_str("zoom").unwrap_or(String::from("1E0")).to_ascii_uppercase();
+        let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
+        let center_imag = settings.get_str("imag").unwrap_or(String::from("0.0"));
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.01);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
+        let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "RAW" => DataType::RAW,
+            "COLOUR" => DataType::COLOUR,
+            "BOTH" => DataType::BOTH,
+            _ => DataType::COLOUR
+        };
         let display_glitches = false;
 
         let aspect = image_width as f64 / image_height as f64;
@@ -70,7 +77,7 @@ impl FractalRenderer {
             zoom,
             maximum_iteration,
             glitch_tolerance,
-            data_export: DataExport::new(image_width, image_height, display_glitches, DataType::COLOUR),
+            data_export: DataExport::new(image_width, image_height, display_glitches, data_type),
             start_render_time: Instant::now(),
             remaining_frames,
             zoom_scale_factor,
@@ -82,6 +89,7 @@ impl FractalRenderer {
     pub fn render_frame(&mut self, index: usize, filename: String) {
         print!("{:<6}", index);
         print!("| {:<15}", extended_to_string(self.zoom));
+        std::io::stdout().flush().unwrap();
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
@@ -93,7 +101,7 @@ impl FractalRenderer {
         }
         
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa) / self.image_height as f64;
-        // this should be the delta relative to the image, without the big zoom factor applied.
+        // This should be the delta relative to the image, without the big zoom factor applied.
         let delta_top_left = ComplexFixed::new((4.0 / self.image_width as f64 - 2.0) / self.zoom.mantissa * self.aspect as f64, (4.0 / self.image_height as f64 - 2.0) / self.zoom.mantissa);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
@@ -103,6 +111,7 @@ impl FractalRenderer {
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.valid_iteration);
+        std::io::stdout().flush().unwrap();
 
         let packing_time = Instant::now();
 
@@ -129,6 +138,7 @@ impl FractalRenderer {
             }).collect::<Vec<PixelData>>();
 
         print!("| {:<15}", packing_time.elapsed().as_millis());
+        std::io::stdout().flush().unwrap();
 
         let iteration_time = Instant::now();
 
@@ -136,6 +146,8 @@ impl FractalRenderer {
         Perturbation::iterate(&mut pixel_data, &self.center_reference);
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
         print!("| {:<15}", iteration_time.elapsed().as_millis());
+        std::io::stdout().flush().unwrap();
+
 
         let correction_time = Instant::now();
 
@@ -171,11 +183,14 @@ impl FractalRenderer {
         }
 
         print!("| {:<15}", correction_time.elapsed().as_millis());
+        std::io::stdout().flush().unwrap();
+
         
         let saving_time = Instant::now();
         self.data_export.save(&filename);
         print!("| {:<15}", saving_time.elapsed().as_millis());
         println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
+        std::io::stdout().flush().unwrap();
     }
 
     pub fn render(&mut self) {

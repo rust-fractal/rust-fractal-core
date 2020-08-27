@@ -96,7 +96,7 @@ impl SeriesApproximation {
         self.valid_iteration = (0..self.probe_start.len()).into_par_iter()
             .map(|i| {
                 let mut valid_iterations = 1;
-                let mut probe = self.probe_start[i].clone();
+                let mut probe = self.probe_start[i];
 
                 while valid_iterations < self.maximum_iteration {
                     let coefficients = &self.coefficients[valid_iterations - 1];

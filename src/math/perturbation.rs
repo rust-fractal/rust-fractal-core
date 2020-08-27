@@ -19,7 +19,6 @@ impl Perturbation {
 
                         if pixel.delta_current.exponent > -500 {
                             let z_norm = (reference.perturbation_data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float).norm_sqr();
-                            // let z_norm = (reference.data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.to_float()).norm_sqr();
 
                             if z_norm < reference.perturbation_data[pixel.iteration - reference.start_iteration].z_tolerance {
                                 pixel.glitched = true;
