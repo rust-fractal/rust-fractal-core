@@ -1,4 +1,5 @@
 use std::f64::consts::{LOG2_10, LOG10_2};
+use std::cmp::{min, max};
 
 pub mod data_export;
 pub mod float_extended;
@@ -73,6 +74,28 @@ pub fn extended_to_string(value: FloatExtended) -> String {
 
     format!("{:.2}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
 }
+
+pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: usize, cos_rotate: f64, sin_rotate: f64) -> ComplexFixed<f64> {
+    let aspect = image_width as f64 / image_height as f64;
+
+    let temp_real = -0.5 * (image_height - 1) as f64 * delta_pixel * aspect as f64;
+    let temp_imag = -0.5 * (image_height - 1) as f64 * delta_pixel;
+
+    ComplexFixed::new(
+        temp_real * cos_rotate - temp_imag * sin_rotate, 
+        temp_real * sin_rotate + temp_imag * cos_rotate)
+}
+
+pub fn get_approximation_terms(approximation_order: usize, image_width: usize, image_height: usize) -> usize {
+    if approximation_order == 0 {
+        let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
+        min(max(auto, 3), 64)
+    } else {
+        approximation_order
+    }
+}
+
+
 
 #[derive(Clone)]
 pub struct PixelData {
