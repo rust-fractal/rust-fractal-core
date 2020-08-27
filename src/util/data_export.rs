@@ -105,7 +105,7 @@ impl DataExport {
                         pixel.iteration as u32
                     };
 
-                    let z_norm = (reference.perturbation_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             },
@@ -141,7 +141,7 @@ impl DataExport {
                         self.iterations[k / 3] = pixel.iteration as u32;
                     };
 
-                    let z_norm = (reference.perturbation_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k / 3] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             }
