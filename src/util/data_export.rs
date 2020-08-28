@@ -1,11 +1,16 @@
 use crate::util::PixelData;
 use crate::math::Reference;
 
+use std::io::prelude::*;
+use std::fs::File;
+use std::slice;
+
 use exr::prelude::simple_image;
 
 pub enum DataType {
     COLOUR,
     RAW,
+    KFB,
     BOTH
 }
 
@@ -13,7 +18,7 @@ pub struct DataExport {
     image_width: usize,
     image_height: usize,
     rgb: Vec<u8>,
-    palette: Vec<(f32, f32, f32)>,
+    palette: Vec<(u8, u8, u8)>,
     iterations: Vec<u32>,
     smooth: Vec<f32>,
     pub display_glitches: bool,
@@ -35,7 +40,7 @@ impl DataExport {
                     data_type
                 }
             },
-            DataType::RAW => {
+            DataType::RAW | DataType::KFB => {
                 DataExport {
                     image_width,
                     image_height,
@@ -75,9 +80,9 @@ impl DataExport {
                             self.rgb[k + 2] = 0;
                         } else {
                             let colour = self.palette[10 * pixel.iteration % 1024];
-                            self.rgb[k] = colour.0 as u8;
-                            self.rgb[k + 1] = colour.1 as u8;
-                            self.rgb[k + 2] = colour.2 as u8;
+                            self.rgb[k] = colour.0;
+                            self.rgb[k + 1] = colour.1;
+                            self.rgb[k + 2] = colour.2;
                         }
                     } else if pixel.iteration >= maximum_iteration {
                         self.rgb[k] = 0;
@@ -85,13 +90,13 @@ impl DataExport {
                         self.rgb[k + 2] = 0;
                     } else {
                         let colour = self.palette[10 * pixel.iteration % 1024];
-                        self.rgb[k] = colour.0 as u8;
-                        self.rgb[k + 1] = colour.1 as u8;
-                        self.rgb[k + 2] = colour.2 as u8;
+                        self.rgb[k] = colour.0;
+                        self.rgb[k + 1] = colour.1;
+                        self.rgb[k + 2] = colour.2;
                     };
                 }
             },
-            DataType::RAW => {
+            DataType::RAW | DataType::KFB => {
                 let escape_radius_ln = 1e16f32.ln();
 
                 for pixel in pixel_data {
@@ -123,9 +128,9 @@ impl DataExport {
                             self.iterations[k / 3] = 0x00000000
                         } else {
                             let colour = self.palette[10 * pixel.iteration % 1024];
-                            self.rgb[k] = colour.0 as u8;
-                            self.rgb[k + 1] = colour.1 as u8;
-                            self.rgb[k + 2] = colour.2 as u8;
+                            self.rgb[k] = colour.0;
+                            self.rgb[k + 1] = colour.1;
+                            self.rgb[k + 2] = colour.2;
                             self.iterations[k / 3] = 0x00000000
                         }
                     } else if pixel.iteration >= maximum_iteration {
@@ -135,9 +140,9 @@ impl DataExport {
                         self.iterations[k / 3] = 0xFFFFFFFF;
                     } else {
                         let colour = self.palette[10 * pixel.iteration % 1024];
-                        self.rgb[k] = colour.0 as u8;
-                        self.rgb[k + 1] = colour.1 as u8;
-                        self.rgb[k + 2] = colour.2 as u8;
+                        self.rgb[k] = colour.0;
+                        self.rgb[k + 1] = colour.1;
+                        self.rgb[k + 2] = colour.2;
                         self.iterations[k / 3] = pixel.iteration as u32;
                     };
 
@@ -148,7 +153,7 @@ impl DataExport {
         }
     }
 
-    pub fn save(&mut self, filename: &str) {
+    pub fn save(&mut self, filename: &str, maximum_iteration: usize) {
         match self.data_type {
             DataType::COLOUR => {
                 self.save_colour(filename);
@@ -156,6 +161,9 @@ impl DataExport {
             DataType::RAW => {
                 self.save_raw(filename);
             },
+            DataType::KFB => {
+                self.save_kfb(filename, maximum_iteration);
+            }
             DataType::BOTH => {
                 self.save_colour(filename);
                 self.save_raw(filename);
@@ -180,7 +188,60 @@ impl DataExport {
         image.write_to_file(filename.to_owned() + ".exr", simple_image::write_options::high()).unwrap();
     }
 
-    fn generate_colour_palette() -> Vec<(f32, f32, f32)> {
+    fn save_kfb(&mut self, filename: &str, maximum_iteration: usize) {
+        let mut file = File::create(filename.to_owned() + ".kfb").unwrap();
+
+        file.write_all(b"KFB").unwrap();
+
+        let test1 = [self.image_width as u32];
+        let test2 = [self.image_height as u32];
+
+        // iteration division??
+        let test3 = [0.1f32];
+
+        // Colours in colourmap
+        let test5 = DataExport::generate_colour_palette();
+
+        // Number of colours in colourmap
+        let test4 = [test5.len() as u32];
+
+        // Maxmimum iteration
+        let test6 = [maximum_iteration as u32];
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(test1.as_ptr() as *const u8, 4)
+        }).unwrap();
+        file.write_all(unsafe {
+            slice::from_raw_parts(test2.as_ptr() as *const u8, 4)
+        }).unwrap();
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(self.iterations.as_ptr() as *const u8, self.iterations.len() * 4)
+        }).unwrap();
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(test3.as_ptr() as *const u8, 4)
+        }).unwrap();
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(test4.as_ptr() as *const u8, 4)
+        }).unwrap();
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(test5.as_ptr() as *const u8, 3 * test5.len())
+        }).unwrap();
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(test6.as_ptr() as *const u8, 4)
+        }).unwrap();
+
+        file.write_all(unsafe {
+            slice::from_raw_parts(self.smooth.as_ptr() as *const u8, self.iterations.len() * 4)
+        }).unwrap();
+
+    }
+
+    fn generate_colour_palette() -> Vec<(u8, u8, u8)> {
         let mut colours = Vec::with_capacity(1024);
 
         for i in 0..1024 {
@@ -222,7 +283,7 @@ impl DataExport {
                 blue = 0.0 + factor * (100.0 - 0.0);
             }
 
-            colours.push((red, green, blue))
+            colours.push((red as u8, green as u8, blue as u8))
         }
 
         colours
