@@ -96,11 +96,29 @@ impl DataExport {
                     };
                 }
             },
-            DataType::RAW | DataType::KFB => {
+            DataType::RAW => {
                 let escape_radius_ln = 1e16f32.ln();
 
                 for pixel in pixel_data {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
+
+                    self.iterations[k] = if pixel.glitched {
+                        0x00000000
+                    } else if pixel.iteration >= maximum_iteration {
+                        0xFFFFFFFF
+                    } else {
+                        pixel.iteration as u32
+                    };
+
+                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+                }
+            },
+            DataType::KFB => {
+                let escape_radius_ln = 1e16f32.ln();
+
+                for pixel in pixel_data {
+                    let k = pixel.image_x * self.image_height + pixel.image_y;
 
                     self.iterations[k] = if pixel.glitched {
                         0x00000000
@@ -197,7 +215,7 @@ impl DataExport {
         let test2 = [self.image_height as u32];
 
         // iteration division??
-        let test3 = [0.1f32];
+        let test3 = [1u32];
 
         // Colours in colourmap
         let test5 = DataExport::generate_colour_palette();
