@@ -1,5 +1,6 @@
-image_width = 1000
-image_height = 1000
-frames = 1
-export = "colour"
+image_width = 1920
+image_height = 1080
+frames = 50
+export = "kfb"
 rotate = 0
+glitch_tolerance = 0.000001
