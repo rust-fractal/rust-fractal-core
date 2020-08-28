@@ -40,6 +40,7 @@ impl FractalRenderer {
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" => DataType::RAW,
             "COLOUR" => DataType::COLOUR,
+            "KFB" => DataType::KFB,
             "BOTH" => DataType::BOTH,
             _ => DataType::COLOUR
         };
@@ -184,7 +185,7 @@ impl FractalRenderer {
         std::io::stdout().flush().unwrap();
         
         let saving_time = Instant::now();
-        self.data_export.save(&filename);
+        self.data_export.save(&filename, self.maximum_iteration);
         print!("| {:<15}", saving_time.elapsed().as_millis());
         println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
