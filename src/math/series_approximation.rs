@@ -49,7 +49,7 @@ impl SeriesApproximation {
             let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
 
             // This is checking if the approximation can step forward so takes the next iteration
-            next_coefficients[0] = center_reference.approximation_data[i];
+            next_coefficients[0] = center_reference.reference_data[i].z_extended;
             next_coefficients[1] = coefficients[0] * coefficients[1] * 2.0 + add_value;
             next_coefficients[0].reduce();
             next_coefficients[1].reduce();
