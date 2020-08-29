@@ -190,7 +190,7 @@ impl DataExport {
     }
 
     fn save_colour(&mut self, filename: &str) {
-        image::save_buffer(filename.to_owned() + ".jpg", &self.rgb, self.image_width as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
+        image::save_buffer(filename.to_owned() + ".png", &self.rgb, self.image_width as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
     }
 
     fn save_raw(&mut self, filename: &str) {
@@ -211,26 +211,19 @@ impl DataExport {
 
         file.write_all(b"KFB").unwrap();
 
-        let test1 = [self.image_width as u32];
-        let test2 = [self.image_height as u32];
-
-        // iteration division??
-        let test3 = [1u32];
+        let test1 = [self.image_width as u32, self.image_height as u32];
 
         // Colours in colourmap
         let test5 = DataExport::generate_colour_palette();
 
-        // Number of colours in colourmap
-        let test4 = [test5.len() as u32];
+        // iteration division??
+        let test3 = [1u32, test5.len() as u32];
 
         // Maxmimum iteration
         let test6 = [maximum_iteration as u32];
 
         file.write_all(unsafe {
             slice::from_raw_parts(test1.as_ptr() as *const u8, 4)
-        }).unwrap();
-        file.write_all(unsafe {
-            slice::from_raw_parts(test2.as_ptr() as *const u8, 4)
         }).unwrap();
 
         file.write_all(unsafe {
@@ -239,10 +232,6 @@ impl DataExport {
 
         file.write_all(unsafe {
             slice::from_raw_parts(test3.as_ptr() as *const u8, 4)
-        }).unwrap();
-
-        file.write_all(unsafe {
-            slice::from_raw_parts(test4.as_ptr() as *const u8, 4)
         }).unwrap();
 
         file.write_all(unsafe {
