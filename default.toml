@@ -1,6 +1,7 @@
 image_width = 1920
 image_height = 1080
-frames = 50
-export = "kfb"
+frames = 9999
+export = "colour"
 rotate = 0
 glitch_tolerance = 0.000001
+approximation_order = "32"
