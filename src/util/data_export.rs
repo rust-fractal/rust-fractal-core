@@ -17,10 +17,10 @@ pub enum DataType {
 pub struct DataExport {
     image_width: usize,
     image_height: usize,
-    rgb: Vec<u8>,
+    pub rgb: Vec<u8>,
     palette: Vec<(u8, u8, u8)>,
-    iterations: Vec<u32>,
-    smooth: Vec<f32>,
+    pub iterations: Vec<u32>,
+    pub smooth: Vec<f32>,
     pub display_glitches: bool,
     data_type: DataType,
 }
@@ -68,6 +68,8 @@ impl DataExport {
     }
 
     pub fn export_pixels(&mut self, pixel_data: &[PixelData], maximum_iteration: usize, reference: &Reference) {
+        let escape_radius_ln = 1e16f32.ln();
+
         match self.data_type {
             DataType::COLOUR => {
                 for pixel in pixel_data {
@@ -79,6 +81,8 @@ impl DataExport {
                             self.rgb[k + 1] = 0;
                             self.rgb[k + 2] = 0;
                         } else {
+                            // Pixel is glitched so the smooth won't do much
+
                             let colour = self.palette[10 * pixel.iteration % 1024];
                             self.rgb[k] = colour.0;
                             self.rgb[k + 1] = colour.1;
@@ -89,7 +93,11 @@ impl DataExport {
                         self.rgb[k + 1] = 0;
                         self.rgb[k + 2] = 0;
                     } else {
-                        let colour = self.palette[10 * pixel.iteration % 1024];
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+
+                        let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+
+                        let colour = self.palette[(10.0 * (pixel.iteration as f32 + smooth)) as usize % 1024];
                         self.rgb[k] = colour.0;
                         self.rgb[k + 1] = colour.1;
                         self.rgb[k + 2] = colour.2;
@@ -97,8 +105,6 @@ impl DataExport {
                 }
             },
             DataType::RAW => {
-                let escape_radius_ln = 1e16f32.ln();
-
                 for pixel in pixel_data {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
 
@@ -115,8 +121,6 @@ impl DataExport {
                 }
             },
             DataType::KFB => {
-                let escape_radius_ln = 1e16f32.ln();
-
                 for pixel in pixel_data {
                     let k = pixel.image_x * self.image_height + pixel.image_y;
 
@@ -133,8 +137,6 @@ impl DataExport {
                 }
             },
             DataType::BOTH => {
-                let escape_radius_ln = 1e16f32.ln();
-
                 for pixel in pixel_data {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
 
@@ -157,15 +159,17 @@ impl DataExport {
                         self.rgb[k + 2] = 0;
                         self.iterations[k / 3] = 0xFFFFFFFF;
                     } else {
-                        let colour = self.palette[10 * pixel.iteration % 1024];
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+
+                        let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+
+                        let colour = self.palette[(10.0 * (pixel.iteration as f32 + smooth)) as usize % 1024];
                         self.rgb[k] = colour.0;
                         self.rgb[k + 1] = colour.1;
                         self.rgb[k + 2] = colour.2;
                         self.iterations[k / 3] = pixel.iteration as u32;
+                        self.smooth[k / 3] = smooth
                     };
-
-                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    self.smooth[k / 3] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             }
         }
@@ -190,7 +194,12 @@ impl DataExport {
     }
 
     fn save_colour(&mut self, filename: &str) {
-        image::save_buffer(filename.to_owned() + ".png", &self.rgb, self.image_width as u32, self.image_height as u32, image::ColorType::Rgb8).unwrap();
+        image::save_buffer(
+            filename.to_owned() + ".png", 
+            &self.rgb, 
+            self.image_width as u32, 
+            self.image_height as u32, 
+            image::ColorType::Rgb8).unwrap();
     }
 
     fn save_raw(&mut self, filename: &str) {
@@ -294,5 +303,22 @@ impl DataExport {
         }
 
         colours
+    }
+
+    pub fn clear_buffers(&mut self) {
+        match self.data_type {
+            DataType::COLOUR => {
+                self.rgb = vec![0u8; self.image_width * self.image_height * 3];
+            }
+            DataType::RAW | DataType::KFB => {
+                self.iterations = vec![0u32; self.image_width * self.image_height];
+                self.smooth = vec![0.0f32; self.image_width * self.image_height];
+            }
+            DataType::BOTH => {
+                self.rgb = vec![0u8; self.image_width * self.image_height * 3];
+                self.iterations = vec![0u32; self.image_width * self.image_height];
+                self.smooth = vec![0.0f32; self.image_width * self.image_height];
+            }
+        }
     }
 }
