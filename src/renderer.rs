@@ -78,15 +78,15 @@ impl FractalRenderer {
         }
     }
 
-    pub fn render_frame(&mut self, index: usize, filename: String) {
-        print!("{:<6}", index);
+    pub fn render_frame(&mut self, frame_index: usize, filename: String) {
+        print!("{:<6}", frame_index);
         print!("| {:<15}", extended_to_string(self.zoom));
         std::io::stdout().flush().unwrap();
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
         // If we are on the first frame we need to run the central reference calculation
-        if index == 0 {
+        if frame_index == 0 {
             self.center_reference.run();
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference);
@@ -111,29 +111,45 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
+        if frame_index == 1 {
+            // This will remove the central pixels
+            self.data_export.clear_buffers();
+        }
+
+        // This could be optimised
         let mut pixel_data = (0..(self.image_width * self.image_height)).into_par_iter()
-            .map(|index| {
+            .filter_map(|index| {
                 let i = index % self.image_width;
                 let j = index / self.image_width;
-                // This could be changed to account for rotation, and jittering if needed
-                let element = ComplexFixed::new(
-                    i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
-                    i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
-                );
-                
-                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                let new_delta = self.series_approximation.evaluate(point_delta, None);
 
-                PixelData {
-                    image_x: i,
-                    image_y: j,
-                    iteration: self.series_approximation.valid_iteration,
-                    delta_centre: point_delta,
-                    delta_reference: point_delta,
-                    delta_current: new_delta,
-                    derivative_current: ComplexFixed::new(1.0, 0.0),
-                    glitched: false,
-                    escaped: false
+                // Add one to avoid rescaling artifacts
+                let val1 = (self.image_width as f64 * (0.5 - 0.5 / self.zoom_scale_factor)).ceil() as usize;
+                let val2 = (self.image_height as f64 * (0.5 - 0.5 / self.zoom_scale_factor)).ceil() as usize;
+
+                // Check if the pixel has already been covered in an earlier keyframe
+                if frame_index >= 1 && i > val1 && i < self.image_width - val1 && j > val2 && j < self.image_height - val2 {
+                    None
+                } else {
+                    // This could be changed to account for jittering if needed
+                    let element = ComplexFixed::new(
+                        i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
+                        i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
+                    );
+
+                    let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                    let new_delta = self.series_approximation.evaluate(point_delta, None);
+
+                    Some(PixelData {
+                        image_x: i,
+                        image_y: j,
+                        iteration: self.series_approximation.valid_iteration,
+                        delta_centre: point_delta,
+                        delta_reference: point_delta,
+                        delta_current: new_delta,
+                        derivative_current: ComplexFixed::new(1.0, 0.0),
+                        glitched: false,
+                        escaped: false
+                    })
                 }
             }).collect::<Vec<PixelData>>();
 
