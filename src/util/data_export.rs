@@ -311,12 +311,12 @@ impl DataExport {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
             }
             DataType::RAW | DataType::KFB => {
-                self.iterations = vec![0u32; self.image_width * self.image_height];
+                self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
             }
             DataType::BOTH => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
-                self.iterations = vec![0u32; self.image_width * self.image_height];
+                self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
             }
         }

@@ -1,2 +1,1 @@
-file 'segment_00000001.mp4'
 file 'segment_00000000.mp4'

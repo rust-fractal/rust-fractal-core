@@ -3,16 +3,16 @@ import numpy as np
 import time
 import os
 import math
+import glob
 
 from PIL import Image
 
-frames_between_keyframes = 8
-maximum_keyframe_number = 99
-zoom_scale = 1.1
+frames_between_keyframes = 30
+maximum_keyframe_number = 15
+zoom_scale = 1.4
 
 # log1.1 of 2 is 7.27
 # 60 / that is 8.25, so lets take 8 frames per keyframe
-
 
 # Arguments for ffmpeg
 kargs = {
@@ -32,8 +32,11 @@ framebuffer = []
 writer = imageio.get_writer(f"segment_{segment:08}.mp4", **kargs)
 segment_names.append(f"segment_{segment:08}.mp4")
 
+files = glob.glob("output/*.png")
+files.sort()
+
 # We start with the previous image, this is modified
-previous_keyframe = Image.open(f"output/output_00000000.png")
+previous_keyframe = Image.open(files[0])
 
 (width, height) = (previous_keyframe.width, previous_keyframe.height)
 (scaled_width, scaled_height) = (int(zoom_scale * width), int(zoom_scale * height))
@@ -54,7 +57,7 @@ for i in range(0, maximum_keyframe_number):
         writer = imageio.get_writer(f"segment_{segment:08}.mp4", **kargs)
         segment_names.append(f"segment_{segment:08}.mp4")
 
-    next_keyframe = Image.open(f"output/output_{i + 1:08}.png")
+    next_keyframe = Image.open(files[i + 1])
 
     scaled_keyframe = next_keyframe.resize((scaled_width, scaled_height), resample=Image.NEAREST)
     

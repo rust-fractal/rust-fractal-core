@@ -21,7 +21,8 @@ pub struct FractalRenderer {
     remaining_frames: usize,
     zoom_scale_factor: f64,
     center_reference: Reference,
-    series_approximation: SeriesApproximation
+    series_approximation: SeriesApproximation,
+    render_indices: Vec<usize>,
 }
 
 impl FractalRenderer {
@@ -61,6 +62,7 @@ impl FractalRenderer {
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
             ComplexExtended::new2(0.0, 0.0, 0));
+        let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         FractalRenderer {
             image_width,
@@ -75,6 +77,7 @@ impl FractalRenderer {
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
+            render_indices
         }
     }
 
@@ -114,43 +117,51 @@ impl FractalRenderer {
         if frame_index == 1 {
             // This will remove the central pixels
             self.data_export.clear_buffers();
+
+            let image_width = self.image_width;
+            let image_height = self.image_height;
+            let temp = 0.5 - 0.5 / self.zoom_scale_factor;
+
+            // Set up new render indices
+            self.render_indices.retain(|index| {
+                let i = index % image_width;
+                let j = index / image_width;
+
+                // Add one to avoid rescaling artifacts
+                let val1 = (image_width as f64 * temp).ceil() as usize;
+                let val2 = (image_height as f64 * temp).ceil() as usize;
+
+                i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
+            })
         }
 
-        // This could be optimised
-        let mut pixel_data = (0..(self.image_width * self.image_height)).into_par_iter()
+        let render_indices = &self.render_indices;
+
+        let mut pixel_data = render_indices.into_par_iter()
             .filter_map(|index| {
                 let i = index % self.image_width;
                 let j = index / self.image_width;
 
-                // Add one to avoid rescaling artifacts
-                let val1 = (self.image_width as f64 * (0.5 - 0.5 / self.zoom_scale_factor)).ceil() as usize;
-                let val2 = (self.image_height as f64 * (0.5 - 0.5 / self.zoom_scale_factor)).ceil() as usize;
+                // This could be changed to account for jittering if needed
+                let element = ComplexFixed::new(
+                    i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
+                    i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
+                );
 
-                // Check if the pixel has already been covered in an earlier keyframe
-                if frame_index >= 1 && i > val1 && i < self.image_width - val1 && j > val2 && j < self.image_height - val2 {
-                    None
-                } else {
-                    // This could be changed to account for jittering if needed
-                    let element = ComplexFixed::new(
-                        i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
-                        i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
-                    );
+                let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
+                let new_delta = self.series_approximation.evaluate(point_delta, None);
 
-                    let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                    let new_delta = self.series_approximation.evaluate(point_delta, None);
-
-                    Some(PixelData {
-                        image_x: i,
-                        image_y: j,
-                        iteration: self.series_approximation.valid_iteration,
-                        delta_centre: point_delta,
-                        delta_reference: point_delta,
-                        delta_current: new_delta,
-                        derivative_current: ComplexFixed::new(1.0, 0.0),
-                        glitched: false,
-                        escaped: false
-                    })
-                }
+                Some(PixelData {
+                    image_x: i,
+                    image_y: j,
+                    iteration: self.series_approximation.valid_iteration,
+                    delta_centre: point_delta,
+                    delta_reference: point_delta,
+                    delta_current: new_delta,
+                    derivative_current: ComplexFixed::new(1.0, 0.0),
+                    glitched: false,
+                    escaped: false
+                })
             }).collect::<Vec<PixelData>>();
 
         print!("| {:<15}", packing_time.elapsed().as_millis());
@@ -213,7 +224,7 @@ impl FractalRenderer {
 
         let mut count = 0;
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
-            self.render_frame(count, format!("output/output_{:08}", count));
+            self.render_frame(count, format!("output/{:08}_{}", count, extended_to_string(self.zoom)));
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
             self.remaining_frames -= 1;
