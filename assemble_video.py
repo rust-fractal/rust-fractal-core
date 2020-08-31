@@ -59,6 +59,7 @@ for i in range(0, maximum_keyframe_number):
 
     next_keyframe = Image.open(files[i + 1])
 
+    # This has to be nearest
     scaled_keyframe = next_keyframe.resize((scaled_width, scaled_height), resample=Image.NEAREST)
     
     scaled_keyframe.paste(previous_keyframe, placement_box)
