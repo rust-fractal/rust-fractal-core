@@ -6,6 +6,7 @@ use std::fs::File;
 use std::slice;
 
 use exr::prelude::simple_image;
+use half::f16;
 
 pub enum DataType {
     COLOUR,
@@ -20,7 +21,8 @@ pub struct DataExport {
     pub rgb: Vec<u8>,
     palette: Vec<(u8, u8, u8)>,
     pub iterations: Vec<u32>,
-    pub smooth: Vec<f32>,
+    pub smooth_f16: Vec<f16>,
+    pub smooth_f32: Vec<f32>,
     pub display_glitches: bool,
     data_type: DataType,
 }
@@ -34,20 +36,35 @@ impl DataExport {
                     image_height,
                     rgb: vec![0u8; image_width * image_height * 3],
                     palette: DataExport::generate_colour_palette(),
-                    iterations: Vec::new(),
-                    smooth: Vec::new(),
+                    iterations: vec![0u32; image_width * image_height],
+                    smooth_f16: Vec::new(),
+                    smooth_f32: Vec::new(),
                     display_glitches,
                     data_type
                 }
             },
-            DataType::RAW | DataType::KFB => {
+            DataType::RAW => {
                 DataExport {
                     image_width,
                     image_height,
                     rgb: Vec::new(),
                     palette: Vec::new(),
                     iterations: vec![0u32; image_width * image_height],
-                    smooth: vec![0.0f32; image_width * image_height],
+                    smooth_f16: vec![f16::ZERO; image_width * image_height],
+                    smooth_f32: Vec::new(),
+                    display_glitches,
+                    data_type
+                }
+            },
+            DataType::KFB => {
+                DataExport {
+                    image_width,
+                    image_height,
+                    rgb: Vec::new(),
+                    palette: Vec::new(),
+                    iterations: vec![0u32; image_width * image_height],
+                    smooth_f16: Vec::new(),
+                    smooth_f32: vec![0.0f32; image_width * image_height],
                     display_glitches,
                     data_type
                 }
@@ -59,7 +76,8 @@ impl DataExport {
                     rgb: vec![0u8; image_width * image_height * 3],
                     palette: DataExport::generate_colour_palette(),
                     iterations: vec![0u32; image_width * image_height],
-                    smooth: vec![0.0f32; image_width * image_height],
+                    smooth_f16: vec![f16::ZERO; image_width * image_height],
+                    smooth_f32: Vec::new(),
                     display_glitches,
                     data_type
                 }
@@ -102,6 +120,8 @@ impl DataExport {
                         self.rgb[k + 1] = colour.1;
                         self.rgb[k + 2] = colour.2;
                     };
+
+                    self.iterations[k / 3] = pixel.iteration as u32;
                 }
             },
             DataType::RAW => {
@@ -117,7 +137,7 @@ impl DataExport {
                     };
 
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+                    self.smooth_f16[k] = f16::from_f32(1.0 - (z_norm.ln() / escape_radius_ln).log2());
                 }
             },
             DataType::KFB => {
@@ -133,7 +153,7 @@ impl DataExport {
                     };
 
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+                    self.smooth_f32[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             },
             DataType::BOTH => {
@@ -168,7 +188,7 @@ impl DataExport {
                         self.rgb[k + 1] = colour.1;
                         self.rgb[k + 2] = colour.2;
                         self.iterations[k / 3] = pixel.iteration as u32;
-                        self.smooth[k / 3] = smooth
+                        self.smooth_f16[k / 3] = f16::from_f32(smooth)
                     };
                 }
             }
@@ -204,7 +224,7 @@ impl DataExport {
 
     fn save_raw(&mut self, filename: &str) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
-        let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F32(self.smooth.clone()));
+        let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F16(self.smooth_f16.clone()));
 
         let layer = simple_image::Layer::new(simple_image::Text::from("fractal_data").unwrap(), (self.image_width, self.image_height), smallvec::smallvec![iterations, smooth])
             .with_compression(simple_image::Compression::PXR24)
@@ -252,7 +272,7 @@ impl DataExport {
         }).unwrap();
 
         file.write_all(unsafe {
-            slice::from_raw_parts(self.smooth.as_ptr() as *const u8, self.iterations.len() * 4)
+            slice::from_raw_parts(self.smooth_f32.as_ptr() as *const u8, self.iterations.len() * 4)
         }).unwrap();
 
     }
@@ -310,14 +330,18 @@ impl DataExport {
             DataType::COLOUR => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
             }
-            DataType::RAW | DataType::KFB => {
+            DataType::RAW => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
-                self.smooth = vec![0.0f32; self.image_width * self.image_height];
-            }
+                self.smooth_f16 = vec![f16::ZERO; self.image_width * self.image_height];
+            },
+            DataType::KFB => {
+                self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
+                self.smooth_f32 = vec![0.0f32; self.image_width * self.image_height];
+            },
             DataType::BOTH => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
-                self.smooth = vec![0.0f32; self.image_width * self.image_height];
+                self.smooth_f16 = vec![f16::ZERO; self.image_width * self.image_height];
             }
         }
     }

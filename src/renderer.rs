@@ -14,6 +14,7 @@ pub struct FractalRenderer {
     image_height: usize,
     rotate: f64,
     zoom: FloatExtended,
+    auto_adjust_iterations: bool,
     maximum_iteration: usize,
     glitch_tolerance: f64,
     data_export: DataExport,
@@ -38,6 +39,8 @@ impl FractalRenderer {
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.01);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
+        let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
+        let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" => DataType::RAW,
             "COLOUR" => DataType::COLOUR,
@@ -45,7 +48,6 @@ impl FractalRenderer {
             "BOTH" => DataType::BOTH,
             _ => DataType::COLOUR
         };
-        let display_glitches = false;
 
         let zoom = string_to_extended(&initial_zoom);
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
@@ -69,6 +71,7 @@ impl FractalRenderer {
             image_height,
             rotate,
             zoom,
+            auto_adjust_iterations,
             maximum_iteration,
             glitch_tolerance,
             data_export: DataExport::new(image_width, image_height, display_glitches, data_type),
@@ -110,6 +113,7 @@ impl FractalRenderer {
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.valid_iteration);
+        print!("| {:<15}", self.maximum_iteration);
         std::io::stdout().flush().unwrap();
 
         let packing_time = Instant::now();
@@ -135,10 +139,8 @@ impl FractalRenderer {
             })
         }
 
-        let render_indices = &self.render_indices;
-
-        let mut pixel_data = render_indices.into_par_iter()
-            .filter_map(|index| {
+        let mut pixel_data = (&self.render_indices).into_par_iter()
+            .map(|index| {
                 let i = index % self.image_width;
                 let j = index / self.image_width;
 
@@ -151,7 +153,7 @@ impl FractalRenderer {
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, None);
 
-                Some(PixelData {
+                PixelData {
                     image_x: i,
                     image_y: j,
                     iteration: self.series_approximation.valid_iteration,
@@ -161,7 +163,7 @@ impl FractalRenderer {
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
                     escaped: false
-                })
+                }
             }).collect::<Vec<PixelData>>();
 
         print!("| {:<15}", packing_time.elapsed().as_millis());
@@ -220,13 +222,28 @@ impl FractalRenderer {
 
     pub fn render(&mut self) {
         // Print out the status information
-        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
 
         let mut count = 0;
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
             self.render_frame(count, format!("output/{:08}_{}", count, extended_to_string(self.zoom)));
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
+
+            if self.auto_adjust_iterations {
+                // test
+                let mut temp = self.data_export.iterations.clone();
+                temp.sort();
+
+                // let new_iteration_value = *(&self.data_export.iterations).into_iter().max().unwrap() as usize;
+                // Set to value of 0.1%
+                let value = 0.999 * temp.len() as f64;
+                let new_iteration_value = temp[value as usize] as usize;
+                self.center_reference.maximum_iteration = new_iteration_value;
+                self.center_reference.current_iteration = new_iteration_value;
+                self.maximum_iteration = new_iteration_value;
+            }
+            
             self.remaining_frames -= 1;
             count += 1;
         }

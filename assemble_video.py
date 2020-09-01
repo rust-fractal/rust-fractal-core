@@ -8,7 +8,7 @@ import glob
 from PIL import Image
 
 frames_between_keyframes = 30
-maximum_keyframe_number = 15
+maximum_keyframe_number = 1040
 zoom_scale = 1.4
 
 # log1.1 of 2 is 7.27
@@ -49,10 +49,14 @@ placement_box = (val1, val2, val1 + width, val2 + height)
 for i in range(0, maximum_keyframe_number):
     # Creates 10 second segments
     if (i * frames_between_keyframes) % 600 == 0 and i != 0:
+        # Add current_framebuffer frames
         for frame in reversed(framebuffer):
             writer.append_data(frame)
+        
         segment += 1
+
         framebuffer = []
+
         # Writer for adding frames to the video
         writer = imageio.get_writer(f"segment_{segment:08}.mp4", **kargs)
         segment_names.append(f"segment_{segment:08}.mp4")
@@ -78,28 +82,28 @@ for i in range(0, maximum_keyframe_number):
         temp3 = scaled_width - temp1
         temp4 = scaled_height - temp2
 
-        next_frame = scaled_keyframe.crop((temp1, temp2, temp3, temp4)).resize((width, height), resample=Image.HAMMING)
+        next_frame = scaled_keyframe.crop((temp1, temp2, temp3, temp4)).resize((width, height), resample=Image.LANCZOS)
 
         framebuffer.append(np.array(next_frame))
-        print(f"{i * frames_between_keyframes + j + 1}/{maximum_keyframe_number * frames_between_keyframes + 1} {time.time() - t0:.2f}s")
+
+        elapsed = time.time() - t0
+        print(f"{i * frames_between_keyframes + j + 1}/{maximum_keyframe_number * frames_between_keyframes + 1} {elapsed:.2f}s {((i * frames_between_keyframes + j + 1)/elapsed):.2f} fps")
 
     previous_keyframe = scaled_keyframe.resize((width, height), resample=Image.LANCZOS)
 
 
 framebuffer.append(np.array(previous_keyframe))
 
-print(f"{maximum_keyframe_number * frames_between_keyframes + 1}/{maximum_keyframe_number * frames_between_keyframes + 1} {time.time() - t0:.2f}s")
-
 for frame in reversed(framebuffer):
     writer.append_data(frame)
-
-# Command to split up into 
-# ffmpeg -i invid.mp4 -threads 3 -vcodec copy -f segment -segment_time 2 cam_out_h264%04d.mp4
 
 with open('segments.txt', 'w') as f:
     for segment in reversed(segment_names):
         f.write(f"file '{segment}'\n")
 
 writer.close()
+
+elapsed = time.time() - t0
+print(f"{maximum_keyframe_number * frames_between_keyframes + 1}/{maximum_keyframe_number * frames_between_keyframes + 1} {elapsed:.2f}s {((maximum_keyframe_number * frames_between_keyframes + 1)/elapsed):.2f} fps")
 
 os.system("ffmpeg -y -f concat -safe 0 -i segments.txt -c copy output.mp4")
