@@ -40,7 +40,7 @@ impl FractalRenderer {
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
-        let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
+        let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(false);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" => DataType::RAW,
             "COLOUR" => DataType::COLOUR,
@@ -173,6 +173,7 @@ impl FractalRenderer {
 
         // This one has no offset because it is not a glitch resolving reference
         Perturbation::iterate(&mut pixel_data, &self.center_reference);
+
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
         print!("| {:<15}", iteration_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
