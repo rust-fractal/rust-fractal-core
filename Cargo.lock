@@ -658,6 +658,7 @@ dependencies = [
  "clap",
  "config",
  "exr",
+ "half",
  "image",
  "num-complex",
  "rand",
