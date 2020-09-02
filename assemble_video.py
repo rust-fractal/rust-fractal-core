@@ -7,9 +7,9 @@ import glob
 
 from PIL import Image
 
-frames_between_keyframes = 30
-maximum_keyframe_number = 1040
-zoom_scale = 1.4
+frames_between_keyframes = 60
+maximum_keyframe_number = 135
+zoom_scale = 2.0
 
 # log1.1 of 2 is 7.27
 # 60 / that is 8.25, so lets take 8 frames per keyframe

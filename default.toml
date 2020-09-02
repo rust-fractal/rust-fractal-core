@@ -1,7 +1,8 @@
-image_width = 2000
-image_height = 2000
-frames = 1
+image_width = 1000
+image_height = 1000
+frames = 10
 export = "raw"
 rotate = 0
 glitch_tolerance = 0.000001
 zoom_scale = 2.0
+auto_adjust_iterations = true
