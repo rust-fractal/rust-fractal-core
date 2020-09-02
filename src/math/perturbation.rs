@@ -9,6 +9,9 @@ impl Perturbation {
     pub fn iterate(pixel_data: &mut Vec<PixelData>, reference: &Reference) {
         pixel_data.par_chunks_mut(8)
             .for_each(|pixel_data| {
+                // let reference_data_known = &reference.reference_data[]
+
+
                 for pixel in pixel_data {
                     let mut scaled_iterations = 0;
                     let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);

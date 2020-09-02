@@ -46,11 +46,7 @@ impl Reference {
         z_extended.reduce();
 
         // This is if we need to use the extended precision for the reference
-        let extended_precision_required = if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-            true
-        } else {
-            false
-        };
+        let extended_precision_required = z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300;
 
         self.reference_data.push(
             ReferenceIteration {
@@ -74,11 +70,7 @@ impl Reference {
         let mut z_extended = to_extended(&self.z);
         z_extended.reduce();
 
-        let extended_precision_required = if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-            true
-        } else {
-            false
-        };
+        let extended_precision_required = z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300;
 
         // This is if we need to use the extended precision for the reference
         // We could use only the complex extended and check if the exponent is zero
