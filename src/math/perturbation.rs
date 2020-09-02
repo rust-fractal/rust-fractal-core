@@ -15,10 +15,12 @@ impl Perturbation {
                     let mut scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
                     while pixel.iteration < reference.current_iteration {
-                        let delta_current_float = scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                        // 2 multiplications and 2 adds
+                        let z = reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + scaled_scale_factor_1 * pixel.delta_current.mantissa;
 
                         if pixel.delta_current.exponent > -500 {
-                            let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float).norm_sqr();
+                            // 2 multiplications and one add
+                            let z_norm = z.norm_sqr();
 
                             if z_norm < reference.reference_data[pixel.iteration - reference.start_iteration].z_tolerance {
                                 pixel.glitched = true;
@@ -50,7 +52,9 @@ impl Perturbation {
 
                             // pixel.delta_current.mantissa = 2.0 * reference.data[pixel.iteration - reference.start_iteration].z_fixed * pixel.delta_current.mantissa + temp * pixel.delta_current.mantissa + scaled_delta_reference;
 
-                            pixel.delta_current.mantissa *= 2.0 * reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + delta_current_float;
+                            // 4 multiplications and 2 additions
+                            pixel.delta_current.mantissa *= z + reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed;
+                            // 2 additions
                             pixel.delta_current.mantissa += scaled_delta_reference;
 
                             scaled_iterations += 1;
