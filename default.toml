@@ -1,6 +1,6 @@
 image_width = 1920
 image_height = 1080
-frames = 10
+frames = 9999
 export = "raw"
 rotate = 0
 glitch_tolerance = 0.000001
