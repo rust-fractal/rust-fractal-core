@@ -8,7 +8,7 @@ import glob
 from PIL import Image
 
 frames_between_keyframes = 60
-maximum_keyframe_number = 135
+maximum_keyframe_number = 728
 zoom_scale = 2.0
 
 # log1.1 of 2 is 7.27
@@ -19,7 +19,7 @@ kargs = {
     'macro_block_size': 8,
     'fps': 60,
     'format': 'FFMPEG',
-    'quality': 5
+    'quality': 8
 }
 
 t0 = time.time()
