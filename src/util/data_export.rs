@@ -4,6 +4,7 @@ use crate::math::Reference;
 use std::io::prelude::*;
 use std::fs::File;
 use std::slice;
+use std::collections::HashMap;
 
 use exr::prelude::simple_image;
 use half::f16;
@@ -226,9 +227,16 @@ impl DataExport {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F16(self.smooth_f16.clone()));
 
-        let layer = simple_image::Layer::new(simple_image::Text::from("fractal_data").unwrap(), (self.image_width, self.image_height), smallvec::smallvec![iterations, smooth])
+        let mut layer = simple_image::Layer::new(simple_image::Text::from("fractal_data").unwrap(), (self.image_width, self.image_height), smallvec::smallvec![iterations, smooth])
             .with_compression(simple_image::Compression::PXR24)
             .with_block_format(None, simple_image::attribute::LineOrder::Increasing);
+
+
+        let mut test = HashMap::new();
+        test.insert(simple_image::Text::from("IterationsBias").unwrap(), exr::meta::attribute::AttributeValue::I32(0));
+
+        layer.attributes = exr::meta::header::LayerAttributes::new(simple_image::Text::from("fractal_data").unwrap());
+        layer.attributes.custom = test;
 
         let image = simple_image::Image::new_from_single_layer(layer);
 
