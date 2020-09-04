@@ -14,6 +14,7 @@ pub struct FractalRenderer {
     image_height: usize,
     rotate: f64,
     zoom: FloatExtended,
+    auto_adjust_iterations: bool,
     maximum_iteration: usize,
     glitch_tolerance: f64,
     data_export: DataExport,
@@ -21,7 +22,8 @@ pub struct FractalRenderer {
     remaining_frames: usize,
     zoom_scale_factor: f64,
     center_reference: Reference,
-    series_approximation: SeriesApproximation
+    series_approximation: SeriesApproximation,
+    render_indices: Vec<usize>,
 }
 
 impl FractalRenderer {
@@ -37,6 +39,8 @@ impl FractalRenderer {
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.01);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
+        let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
+        let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(false);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" => DataType::RAW,
             "COLOUR" => DataType::COLOUR,
@@ -44,7 +48,6 @@ impl FractalRenderer {
             "BOTH" => DataType::BOTH,
             _ => DataType::COLOUR
         };
-        let display_glitches = false;
 
         let zoom = string_to_extended(&initial_zoom);
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
@@ -61,12 +64,14 @@ impl FractalRenderer {
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
             ComplexExtended::new2(0.0, 0.0, 0));
+        let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         FractalRenderer {
             image_width,
             image_height,
             rotate,
             zoom,
+            auto_adjust_iterations,
             maximum_iteration,
             glitch_tolerance,
             data_export: DataExport::new(image_width, image_height, display_glitches, data_type),
@@ -75,18 +80,19 @@ impl FractalRenderer {
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
+            render_indices
         }
     }
 
-    pub fn render_frame(&mut self, index: usize, filename: String) {
-        print!("{:<6}", index);
+    pub fn render_frame(&mut self, frame_index: usize, filename: String) {
+        print!("{:<6}", frame_index);
         print!("| {:<15}", extended_to_string(self.zoom));
         std::io::stdout().flush().unwrap();
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
         // If we are on the first frame we need to run the central reference calculation
-        if index == 0 {
+        if frame_index == 0 {
             self.center_reference.run();
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference);
@@ -107,20 +113,43 @@ impl FractalRenderer {
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.valid_iteration);
+        print!("| {:<15}", self.maximum_iteration);
         std::io::stdout().flush().unwrap();
 
         let packing_time = Instant::now();
 
-        let mut pixel_data = (0..(self.image_width * self.image_height)).into_par_iter()
+        if frame_index == 1 {
+            // This will remove the central pixels
+            self.data_export.clear_buffers();
+
+            let image_width = self.image_width;
+            let image_height = self.image_height;
+            let temp = 0.5 - 0.5 / self.zoom_scale_factor;
+
+            // Set up new render indices
+            self.render_indices.retain(|index| {
+                let i = index % image_width;
+                let j = index / image_width;
+
+                // Add one to avoid rescaling artifacts
+                let val1 = (image_width as f64 * temp).ceil() as usize;
+                let val2 = (image_height as f64 * temp).ceil() as usize;
+
+                i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
+            })
+        }
+
+        let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {
                 let i = index % self.image_width;
                 let j = index / self.image_width;
-                // This could be changed to account for rotation, and jittering if needed
+
+                // This could be changed to account for jittering if needed
                 let element = ComplexFixed::new(
                     i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
                     i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
                 );
-                
+
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, None);
 
@@ -144,6 +173,7 @@ impl FractalRenderer {
 
         // This one has no offset because it is not a glitch resolving reference
         Perturbation::iterate(&mut pixel_data, &self.center_reference);
+
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
         print!("| {:<15}", iteration_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
@@ -193,13 +223,33 @@ impl FractalRenderer {
 
     pub fn render(&mut self) {
         // Print out the status information
-        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
 
         let mut count = 0;
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
-            self.render_frame(count, format!("output/output_{:08}", count));
+            self.render_frame(count, format!("output/{:08}_{}", count, extended_to_string(self.zoom)));
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
+
+            if self.auto_adjust_iterations {
+                // test
+                // let mut temp = self.data_export.iterations.clone();
+                // temp.sort();
+
+                // let new_iteration_value = *(&self.data_export.iterations).into_iter().max().unwrap() as usize;
+                // Set to value of 0.1%
+                // let value = 0.999 * temp.len() as f64;
+                // let new_iteration_value = temp[value as usize] as usize;
+
+                if self.zoom.to_float() < 1e10 {
+                    let new_iteration_value = 10000;
+                    self.center_reference.maximum_iteration = new_iteration_value;
+                    self.center_reference.current_iteration = new_iteration_value;
+                    self.maximum_iteration = new_iteration_value;
+                }
+                
+            }
+            
             self.remaining_frames -= 1;
             count += 1;
         }
