@@ -1,5 +1,5 @@
-image_width = 4000
-image_height = 4000
+image_width = 1000
+image_height = 1000
 frames = 1
 export = "both"
 glitch_tolerance = 0.000001
