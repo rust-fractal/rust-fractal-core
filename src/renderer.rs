@@ -236,16 +236,7 @@ impl FractalRenderer {
             self.zoom.reduce();
 
             if self.auto_adjust_iterations {
-                // test
-                // let mut temp = self.data_export.iterations.clone();
-                // temp.sort();
-
-                // let new_iteration_value = *(&self.data_export.iterations).into_iter().max().unwrap() as usize;
-                // Set to value of 0.1%
-                // let value = 0.999 * temp.len() as f64;
-                // let new_iteration_value = temp[value as usize] as usize;
-
-                if self.zoom.to_float() < 1e10 {
+                if self.zoom.to_float() < 1e10 && self.maximum_iteration > 10000 {
                     let new_iteration_value = 10000;
 
                     if self.center_reference.current_iteration >= 10000 {

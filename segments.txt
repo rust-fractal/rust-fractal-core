@@ -1,1 +1,5 @@
+file 'segments/segment_00000004.mp4'
+file 'segments/segment_00000003.mp4'
+file 'segments/segment_00000002.mp4'
+file 'segments/segment_00000001.mp4'
 file 'segments/segment_00000000.mp4'
