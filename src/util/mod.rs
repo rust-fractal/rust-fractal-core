@@ -68,11 +68,18 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
     FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
 }
 
-pub fn extended_to_string(value: FloatExtended) -> String {
+pub fn extended_to_string_short(value: FloatExtended) -> String {
     let first = value.mantissa;
     let second = value.exponent as f64 * LOG10_2;
 
     format!("{:.2}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
+}
+
+pub fn extended_to_string_long(value: FloatExtended) -> String {
+    let first = value.mantissa;
+    let second = value.exponent as f64 * LOG10_2;
+
+    format!("{}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
 }
 
 pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: usize, cos_rotate: f64, sin_rotate: f64) -> ComplexFixed<f64> {
@@ -94,8 +101,6 @@ pub fn get_approximation_terms(approximation_order: usize, image_width: usize, i
         approximation_order
     }
 }
-
-
 
 #[derive(Clone)]
 pub struct PixelData {

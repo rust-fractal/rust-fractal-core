@@ -36,7 +36,7 @@ impl DataExport {
                     image_width,
                     image_height,
                     rgb: vec![0u8; image_width * image_height * 3],
-                    palette: DataExport::generate_colour_palette(),
+                    palette: DataExport::generate_default_palette(),
                     iterations: vec![0u32; image_width * image_height],
                     smooth_f16: Vec::new(),
                     smooth_f32: Vec::new(),
@@ -75,7 +75,7 @@ impl DataExport {
                     image_width,
                     image_height,
                     rgb: vec![0u8; image_width * image_height * 3],
-                    palette: DataExport::generate_colour_palette(),
+                    palette: DataExport::generate_default_palette(),
                     iterations: vec![0u32; image_width * image_height],
                     smooth_f16: vec![f16::ZERO; image_width * image_height],
                     smooth_f32: Vec::new(),
@@ -196,20 +196,20 @@ impl DataExport {
         }
     }
 
-    pub fn save(&mut self, filename: &str, maximum_iteration: usize) {
+    pub fn save(&mut self, filename: &str, maximum_iteration: usize, approximation_order: usize, zoom: &str) {
         match self.data_type {
             DataType::COLOUR => {
                 self.save_colour(filename);
             },
             DataType::RAW => {
-                self.save_raw(filename);
+                self.save_raw(filename, maximum_iteration, approximation_order, zoom);
             },
             DataType::KFB => {
                 self.save_kfb(filename, maximum_iteration);
             }
             DataType::BOTH => {
                 self.save_colour(filename);
-                self.save_raw(filename);
+                self.save_raw(filename, maximum_iteration, approximation_order, zoom);
             }
         }
     }
@@ -223,7 +223,7 @@ impl DataExport {
             image::ColorType::Rgb8).unwrap();
     }
 
-    fn save_raw(&mut self, filename: &str) {
+    fn save_raw(&mut self, filename: &str, maximum_iteration: usize, approximation_order: usize, zoom: &str) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F16(self.smooth_f16.clone()));
 
@@ -231,12 +231,14 @@ impl DataExport {
             .with_compression(simple_image::Compression::PXR24)
             .with_block_format(None, simple_image::attribute::LineOrder::Increasing);
 
-
-        let mut test = HashMap::new();
-        test.insert(simple_image::Text::from("IterationsBias").unwrap(), exr::meta::attribute::AttributeValue::I32(0));
+        let mut attributes = HashMap::new();
+        attributes.insert(simple_image::Text::from("IterationsBias").unwrap(), exr::meta::attribute::AttributeValue::I32(0));
+        attributes.insert(simple_image::Text::from("Iterations").unwrap(), exr::meta::attribute::AttributeValue::I32(maximum_iteration as i32));
+        attributes.insert(simple_image::Text::from("Zoom").unwrap(), exr::meta::attribute::AttributeValue::Text(simple_image::Text::from(zoom).unwrap()));
+        attributes.insert(simple_image::Text::from("approximation_order").unwrap(), exr::meta::attribute::AttributeValue::I32(approximation_order as i32));
 
         layer.attributes = exr::meta::header::LayerAttributes::new(simple_image::Text::from("fractal_data").unwrap());
-        layer.attributes.custom = test;
+        layer.attributes.custom = attributes;
 
         let image = simple_image::Image::new_from_single_layer(layer);
 
@@ -251,7 +253,7 @@ impl DataExport {
         let test1 = [self.image_width as u32, self.image_height as u32];
 
         // Colours in colourmap
-        let test5 = DataExport::generate_colour_palette();
+        let test5 = DataExport::generate_default_palette();
 
         // iteration division??
         let test3 = [1u32, test5.len() as u32];
@@ -285,7 +287,7 @@ impl DataExport {
 
     }
 
-    fn generate_colour_palette() -> Vec<(u8, u8, u8)> {
+    fn generate_default_palette() -> Vec<(u8, u8, u8)> {
         let mut colours = Vec::with_capacity(1024);
 
         for i in 0..1024 {
