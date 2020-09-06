@@ -1,4 +1,4 @@
-use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string, get_approximation_terms, get_delta_top_left};
+use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
@@ -86,7 +86,7 @@ impl FractalRenderer {
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
         print!("{:<6}", frame_index);
-        print!("| {:<15}", extended_to_string(self.zoom));
+        print!("| {:<15}", extended_to_string_short(self.zoom));
         std::io::stdout().flush().unwrap();
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
@@ -215,7 +215,7 @@ impl FractalRenderer {
         std::io::stdout().flush().unwrap();
         
         let saving_time = Instant::now();
-        self.data_export.save(&filename, self.maximum_iteration);
+        self.data_export.save(&filename, self.maximum_iteration, self.series_approximation.order, &extended_to_string_long(self.zoom));
         print!("| {:<15}", saving_time.elapsed().as_millis());
         println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
@@ -227,7 +227,7 @@ impl FractalRenderer {
 
         let mut count = 0;
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
-            self.render_frame(count, format!("output/{:08}_{}", count, extended_to_string(self.zoom)));
+            self.render_frame(count, format!("output/{:08}_{}", count, extended_to_string_short(self.zoom)));
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
 
