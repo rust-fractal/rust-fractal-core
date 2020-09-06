@@ -82,16 +82,20 @@ impl SeriesApproximation {
         self.approximation_probes = Vec::new();
         self.approximation_probes_derivative = Vec::new();
 
-        self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
-        self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
-        self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
-        self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        let probe_sampling = 3;
 
-        // Middle edges
-        // self.add_probe(ComplexExtended::new2(self.delta_top_left.mantissa.re, 0.0, self.delta_top_left.exponent));
-        // self.add_probe(ComplexExtended::new2(-self.delta_top_left.mantissa.re, 0.0, self.delta_top_left.exponent));
-        // self.add_probe(ComplexExtended::new2(0.0, self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
-        // self.add_probe(ComplexExtended::new2(0.0, -self.delta_top_left.mantissa.im, self.delta_top_left.exponent));
+        for i in 0..probe_sampling {
+            for j in 0..probe_sampling {
+                if probe_sampling % 2 == 1 && (i == probe_sampling / 2 && j == probe_sampling / 2) {
+                    continue;
+                } else {
+                    let real = (1.0 - 2.0 * (i as f64 / (probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
+                    let imag = (1.0 - 2.0 * (j as f64 / (probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
+
+                    self.add_probe(ComplexExtended::new2(real, imag, self.delta_top_left.exponent));
+                }
+            }
+        }
 
         self.valid_iteration = (0..self.probe_start.len()).into_par_iter()
             .map(|i| {
