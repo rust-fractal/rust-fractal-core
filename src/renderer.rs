@@ -20,6 +20,7 @@ pub struct FractalRenderer {
     data_export: DataExport,
     start_render_time: Instant,
     remaining_frames: usize,
+    frame_offset: usize,
     zoom_scale_factor: f64,
     center_reference: Reference,
     series_approximation: SeriesApproximation,
@@ -38,6 +39,7 @@ impl FractalRenderer {
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.01);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
+        let frame_offset = settings.get_int("frame_offset").unwrap_or(0) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
         let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(false);
@@ -77,6 +79,7 @@ impl FractalRenderer {
             data_export: DataExport::new(image_width, image_height, display_glitches, data_type),
             start_render_time: Instant::now(),
             remaining_frames,
+            frame_offset,
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
@@ -85,7 +88,7 @@ impl FractalRenderer {
     }
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
-        print!("{:<6}", frame_index);
+        print!("{:<6}", frame_index + self.frame_offset);
         print!("| {:<15}", extended_to_string_short(self.zoom));
         std::io::stdout().flush().unwrap();
         let frame_time = Instant::now();
@@ -226,8 +229,9 @@ impl FractalRenderer {
         println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
 
         let mut count = 0;
+
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
-            self.render_frame(count, format!("output/{:08}_{}", count, extended_to_string_short(self.zoom)));
+            self.render_frame(count, format!("output/{:08}_{}", count + self.frame_offset, extended_to_string_short(self.zoom)));
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
 
@@ -243,11 +247,14 @@ impl FractalRenderer {
 
                 if self.zoom.to_float() < 1e10 {
                     let new_iteration_value = 10000;
+
+                    if self.center_reference.current_iteration >= 10000 {
+                        self.center_reference.current_iteration = new_iteration_value;
+                    };
+
                     self.center_reference.maximum_iteration = new_iteration_value;
-                    self.center_reference.current_iteration = new_iteration_value;
                     self.maximum_iteration = new_iteration_value;
                 }
-                
             }
             
             self.remaining_frames -= 1;
