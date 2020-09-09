@@ -97,6 +97,24 @@ impl SeriesApproximation {
             }
         }
 
+        // Possible how to add the roots as probes
+
+        // lets say we check the first 1000 iterations for roots with periods 0-1000
+
+        // Each iteration, we NR the current SA polynomial??
+
+        // Maybe only needs to be done once for the entire zoom sequence??
+
+        // How do we know which probes to use??
+
+        // Maybe some kind of distance check, where the probes are chosen that are in the image, and are within some tolerance
+        // ~10 pixel spacing from others. 
+
+        // Possible loop once the roots have been calculated
+
+        // Get all of the root locations, and don't use any of them that are not in the image
+        // There might still be quite a few roots, so remove those which are close to each other
+
         self.valid_iteration = (0..self.probe_start.len()).into_par_iter()
             .map(|i| {
                 let mut valid_iterations = 1;
