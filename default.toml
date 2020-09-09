@@ -1,9 +1,9 @@
 image_width = 1920
 image_height = 1080
-frames = 17
+frames = 1
 export = "colour"
 glitch_tolerance = 0.001
 zoom_scale = 2.0
 auto_adjust_iterations = true
-approximation_order = 32
+approximation_order = 16
 frame_offset = 0
