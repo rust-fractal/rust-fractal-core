@@ -16,10 +16,11 @@ pub struct SeriesApproximation {
     pub delta_top_left: ComplexExtended,
     pub valid_coefficients: Vec<ComplexExtended>,
     pub valid_iteration: usize,
+    pub probe_sampling: usize,
 }
 
 impl SeriesApproximation {
-    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended) -> Self {
+    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize) -> Self {
         let mut coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1]; 1];
 
         coefficients[0][0] = to_extended(&c);
@@ -37,10 +38,17 @@ impl SeriesApproximation {
             delta_top_left,
             valid_coefficients: Vec::new(),
             valid_iteration: 1,
+            probe_sampling,
         }
     }
 
     pub fn generate_approximation(&mut self, center_reference: &Reference) {
+        // Reset the coefficients
+        self.coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1]; 1];
+
+        self.coefficients[0][0] = to_extended(&center_reference.c);
+        self.coefficients[0][1] = ComplexExtended::new2(1.0, 0.0, 0);
+
         let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
         // Can be changed later into a better loop - this function could also return some more information
@@ -82,15 +90,13 @@ impl SeriesApproximation {
         self.approximation_probes = Vec::new();
         self.approximation_probes_derivative = Vec::new();
 
-        let probe_sampling = 3;
-
-        for i in 0..probe_sampling {
-            for j in 0..probe_sampling {
-                if probe_sampling % 2 == 1 && (i == probe_sampling / 2 && j == probe_sampling / 2) {
+        for i in 0..self.probe_sampling {
+            for j in 0..self.probe_sampling {
+                if self.probe_sampling % 2 == 1 && (i == self.probe_sampling / 2 && j == self.probe_sampling / 2) {
                     continue;
                 } else {
-                    let real = (1.0 - 2.0 * (i as f64 / (probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
-                    let imag = (1.0 - 2.0 * (j as f64 / (probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
+                    let real = (1.0 - 2.0 * (i as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
+                    let imag = (1.0 - 2.0 * (j as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
 
                     self.add_probe(ComplexExtended::new2(real, imag, self.delta_top_left.exponent));
                 }
