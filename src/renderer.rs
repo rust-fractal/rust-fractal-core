@@ -43,6 +43,7 @@ impl FractalRenderer {
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
         let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(false);
+        let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" => DataType::RAW,
             "COLOUR" => DataType::COLOUR,
@@ -65,7 +66,8 @@ impl FractalRenderer {
             auto_approximation, 
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
-            ComplexExtended::new2(0.0, 0.0, 0));
+            ComplexExtended::new2(0.0, 0.0, 0),
+            probe_sampling);
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         FractalRenderer {
@@ -94,7 +96,6 @@ impl FractalRenderer {
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
-        // If we are on the first frame we need to run the central reference calculation
         if frame_index == 0 {
             self.center_reference.run();
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
@@ -116,6 +117,7 @@ impl FractalRenderer {
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.valid_iteration);
+        print!("| {:<6}", self.series_approximation.order);
         print!("| {:<15}", self.maximum_iteration);
         std::io::stdout().flush().unwrap();
 
@@ -226,17 +228,30 @@ impl FractalRenderer {
 
     pub fn render(&mut self) {
         // Print out the status information
-        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
 
         let mut count = 0;
 
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
-            self.render_frame(count, format!("output/{:08}_{}", count + self.frame_offset, extended_to_string_short(self.zoom)));
+            self.render_frame(count, 
+                format!("output/{:08}_{}", count + self.frame_offset, 
+                extended_to_string_short(self.zoom)));
+
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
 
-            if self.auto_adjust_iterations {
-                if self.zoom.to_float() < 1e10 && self.maximum_iteration > 10000 {
+            if self.zoom.to_float() < 1e10 {
+                // SA has some problems with precision with lots of terms at lot zoom levels
+                if self.series_approximation.order > 3 {
+                    // Overwrite the series approximation order
+                    self.series_approximation.order = 3;
+                    self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
+                    self.series_approximation.generate_approximation(&self.center_reference);
+                }
+
+                // Logic in here to automatically adjust the maximum number of iterations
+                // This is done arbitrarily and could be done in a config file if required
+                if self.auto_adjust_iterations && self.maximum_iteration > 10000 {
                     let new_iteration_value = 10000;
 
                     if self.center_reference.current_iteration >= 10000 {
