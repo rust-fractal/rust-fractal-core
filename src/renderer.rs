@@ -25,6 +25,7 @@ pub struct FractalRenderer {
     center_reference: Reference,
     series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
+    remove_centre: bool
 }
 
 impl FractalRenderer {
@@ -44,6 +45,7 @@ impl FractalRenderer {
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
         let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
+        let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" => DataType::RAW,
             "COLOUR" => DataType::COLOUR,
@@ -90,7 +92,8 @@ impl FractalRenderer {
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
-            render_indices
+            render_indices,
+            remove_centre,
         }
     }
 
@@ -128,7 +131,7 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
-        if frame_index == 1 {
+        if (frame_index + self.frame_offset) != 0 && self.remove_centre {
             // This will remove the central pixels
             self.data_export.clear_buffers();
 
@@ -146,7 +149,10 @@ impl FractalRenderer {
                 let val2 = (image_height as f64 * temp).ceil() as usize;
 
                 i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
-            })
+            });
+
+            // The centre has already been removed
+            self.remove_centre = false;
         }
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
