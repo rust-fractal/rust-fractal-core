@@ -134,8 +134,10 @@ impl SeriesApproximation {
                     probe = probe * (coefficients[0] * 2.0 + probe);
                     probe += self.probe_start[i];
 
-                    // TODO this probably does not need to be done every iteration
-                    probe.reduce();
+                    // This is not done on every iteration
+                    if valid_iterations % 250 == 0 {
+                        probe.reduce();
+                    }
 
                     // get the new approximations
                     let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
