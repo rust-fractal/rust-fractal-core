@@ -8,3 +8,4 @@ auto_adjust_iterations = true
 approximation_order = 64
 frame_offset = 0
 probe_sampling = 3
+remove_centre = true
