@@ -8,7 +8,6 @@ import glob
 from PIL import Image
 
 frames_between_keyframes = 60
-maximum_keyframe_number = 47
 zoom_scale = 2.0
 
 # log1.1 of 2 is 7.27
@@ -34,6 +33,8 @@ segment_names.append(f"segments/segment_{segment:08}.mp4")
 
 files = glob.glob("output/*.png")
 files.sort()
+
+maximum_keyframe_number = len(files) - 1
 
 # We start with the previous image, this is modified
 previous_keyframe = Image.open(files[0])
