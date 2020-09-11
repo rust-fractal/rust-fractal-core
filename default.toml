@@ -1,9 +1,10 @@
 image_width = 1000
 image_height = 1000
-frames = 999
+frames = 1
 export = "colour"
 glitch_tolerance = 0.001
 zoom_scale = 2.0
 auto_adjust_iterations = true
-approximation_order = 32
+approximation_order = 64
 frame_offset = 0
+probe_sampling = 3

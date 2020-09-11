@@ -52,7 +52,7 @@ impl FractalRenderer {
             _ => DataType::COLOUR
         };
 
-        let zoom = string_to_extended(&initial_zoom);
+        let mut zoom = string_to_extended(&initial_zoom);
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
         let radius = delta_pixel * image_width as f64;
         let precision = max(64, -radius.exponent + 64);
@@ -69,6 +69,11 @@ impl FractalRenderer {
             ComplexExtended::new2(0.0, 0.0, 0),
             probe_sampling);
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
+
+        for _ in 0..frame_offset {
+            zoom.mantissa /= zoom_scale_factor;
+            zoom.reduce();
+        }
 
         FractalRenderer {
             image_width,
