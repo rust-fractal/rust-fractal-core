@@ -8,7 +8,6 @@ import glob
 from PIL import Image
 
 frames_between_keyframes = 60
-maximum_keyframe_number = 728
 zoom_scale = 2.0
 
 # log1.1 of 2 is 7.27
@@ -29,11 +28,13 @@ segment_names = []
 
 framebuffer = []
 
-writer = imageio.get_writer(f"segment_{segment:08}.mp4", **kargs)
-segment_names.append(f"segment_{segment:08}.mp4")
+writer = imageio.get_writer(f"segments/segment_{segment:08}.mp4", **kargs)
+segment_names.append(f"segments/segment_{segment:08}.mp4")
 
 files = glob.glob("output/*.png")
 files.sort()
+
+maximum_keyframe_number = len(files) - 1
 
 # We start with the previous image, this is modified
 previous_keyframe = Image.open(files[0])
@@ -58,8 +59,8 @@ for i in range(0, maximum_keyframe_number):
         framebuffer = []
 
         # Writer for adding frames to the video
-        writer = imageio.get_writer(f"segment_{segment:08}.mp4", **kargs)
-        segment_names.append(f"segment_{segment:08}.mp4")
+        writer = imageio.get_writer(f"segments/segment_{segment:08}.mp4", **kargs)
+        segment_names.append(f"segments/segment_{segment:08}.mp4")
 
     next_keyframe = Image.open(files[i + 1])
 

@@ -1,16 +1,26 @@
 ![image](render.png)
 
 # rust-fractal
-A mandelbrot fractal image generator featuring perturbation theory and series approximation. A high precision reference point is iterated at arbitrary precision and the differences from this are calculated in machine precision. This allows for a large speedup in image generation specifically at high zoom levels. This generator features:
+A mandelbrot fractal renderer implementing both perturbation and series approximation. A reference point is iterated at high-precision, arbitrary precision and differences from this are calculated in machine precision. This allows for a large reduction in computation required to render and image, especially at high zoom levels. This generator features:
 
-- Perturbation based iteration count with glitch detection.
-- Glitch fixing through automatic reference movement and recalculation.
+- Perturbation based iteration with glitch detection.
+- Glitch correction through automatic reference movement and recalculation.
 - Series approximation calculation to skip (and approximate) large amounts of perturbation iterations.
-- Multithreading of core perturbation loops through rayon.
-- Multiple colouring methods including iteration, histogram and distance.
-- Utilises scaling and mantissa-exponent based extended precision to allow for arbitrary zoom, whilst maintaining good performance. Verified to be working at depths exceeding E20000. Theoretically, this is only limited by MPFR's precision.
+- Probe based method to determine series approximation skip.
+- Multithreading of core loops through rayon.
+- Configurable location and rendering options.
+- Multiple save formats including PNG, EXR and KFR.
+- Utilises scaling and mantissa-exponent based extended precision to allow for arbitrary zoom, whilst maintaining good performance. Verified to be working at depths exceeding E50000. Theoretically, this is only limited by MPFR's precision.
 
 ## Usage
-You need to be able to compile the 'rug' crate. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, change the settings in the ```main.rs``` file located in ```src/```. Build and run the crate with:
+You need to be able to compile the 'rug' crate which requires a rust GNU toolchain. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, build the crate with:
 
-```cargo run --release```
+```cargo build --release```
+
+The created binary can then be used with some of the config files provided. For help with the options do:
+
+```./target/release/main --help```
+
+By default, an image of the set is placed in the ```./output``` folder with it's specific details. A typical call with custom settings would look like:
+
+```./target/release/main -o default.toml locations/flake.toml```
