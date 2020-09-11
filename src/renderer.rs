@@ -38,12 +38,12 @@ impl FractalRenderer {
         let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
         let center_imag = settings.get_str("imag").unwrap_or(String::from("0.0"));
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
-        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.01);
+        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.001);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
         let frame_offset = settings.get_int("frame_offset").unwrap_or(0) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
-        let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(false);
+        let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
@@ -72,6 +72,7 @@ impl FractalRenderer {
             probe_sampling);
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
+        // Change the zoom level to the correct one for the frame offset
         for _ in 0..frame_offset {
             zoom.mantissa /= zoom_scale_factor;
             zoom.reduce();
