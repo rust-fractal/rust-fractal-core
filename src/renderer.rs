@@ -47,8 +47,8 @@ impl FractalRenderer {
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
-            "RAW" => DataType::RAW,
-            "COLOUR" => DataType::COLOUR,
+            "RAW" | "EXR" => DataType::RAW,
+            "COLOUR" | "PNG" => DataType::COLOUR,
             "KFB" => DataType::KFB,
             "BOTH" => DataType::BOTH,
             _ => DataType::COLOUR
