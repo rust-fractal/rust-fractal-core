@@ -254,9 +254,9 @@ impl FractalRenderer {
 
             if self.zoom.to_float() < 1e10 {
                 // SA has some problems with precision with lots of terms at lot zoom levels
-                if self.series_approximation.order > 3 {
+                if self.series_approximation.order > 8 {
                     // Overwrite the series approximation order
-                    self.series_approximation.order = 3;
+                    self.series_approximation.order = 8;
                     self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
                     self.series_approximation.generate_approximation(&self.center_reference);
                 }
