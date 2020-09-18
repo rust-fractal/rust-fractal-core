@@ -22,12 +22,9 @@ impl FloatExtended {
 
     #[inline]
     pub fn reduce(&mut self) {
-        // Check to make sure that the mantissa is outside of the new bounds
-        if self.mantissa < 0.5 || self.mantissa > 1.0 {
-            let (temp_mantissa, added_exponent) = self.mantissa.frexp();
-            self.mantissa = temp_mantissa;
-            self.exponent += added_exponent;
-        }
+        let (temp_mantissa, added_exponent) = self.mantissa.frexp();
+        self.mantissa = temp_mantissa;
+        self.exponent += added_exponent;
     }
 
     #[inline]
