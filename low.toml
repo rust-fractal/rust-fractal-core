@@ -1,13 +1,13 @@
-image_width = 1000
-image_height = 1000
+image_width = 500
+image_height = 500
 rotate = 0
-approximation_order = 0
+approximation_order = 16
 glitch_tolerance = 0.001
 frames = 1
 frame_offset = 0
 zoom_scale = 2.0
 display_glitches = false
 auto_adjust_iterations = true
-probe_sampling = 3
+probe_sampling = 2
 remove_centre = true
 export = "png"
