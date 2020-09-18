@@ -24,3 +24,11 @@ The created binary can then be used with some of the config files provided. For 
 By default, an image of the set is placed in the ```./output``` folder with it's specific details. A typical call with custom settings would look like:
 
 ```./target/release/main -o default.toml locations/flake.toml```
+
+## Acknowledgements
+- claude (blog, Kalles Fraktaler 2+)
+- pauldelbrot (glitch detection, nanoscope)
+- knightly (superMB)
+
+
+

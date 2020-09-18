@@ -28,12 +28,12 @@ fn main() {
 
     let mut settings = Config::default();
 
-    if let Some(l) = matches.value_of("INPUT") {
-        settings.merge(File::with_name(l).required(true)).unwrap();
-    };
-
     if let Some(p) = matches.value_of("options") {
         settings.merge(File::with_name(p).required(true)).unwrap();
+    };
+
+    if let Some(l) = matches.value_of("INPUT") {
+        settings.merge(File::with_name(l).required(true)).unwrap();
     };
 
     let mut renderer = FractalRenderer::new(settings);
