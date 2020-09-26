@@ -1,5 +1,5 @@
 use rust_fractal::renderer::FractalRenderer;
-use clap::{crate_version, crate_name, crate_authors, crate_description, App, Arg};
+use clap::{crate_version, crate_name, crate_description, App, Arg};
 use config::{Config, File};
 
 
@@ -7,7 +7,6 @@ fn main() {
     let matches = App::new(crate_name!())
         .about(crate_description!())
         .version(crate_version!())
-        .author(crate_authors!())
         .arg(
             Arg::new("INPUT")
                 .value_name("FILE")
