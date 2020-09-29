@@ -5,6 +5,8 @@ use rug::Float;
 use crate::util::float_extended::FloatExtended;
 use rayon::prelude::*;
 
+use std::cmp::max;
+
 pub struct SeriesApproximation {
     pub maximum_iteration: usize,
     pub delta_pixel_square: FloatExtended,
@@ -17,11 +19,13 @@ pub struct SeriesApproximation {
     pub min_valid_iteration: usize,
     pub valid_iterations: Vec<usize>,
     pub probe_sampling: usize,
-    pub experimental: bool
+    pub experimental: bool,
+    pub valid_iteration_frame_multiplier: f32,
+    pub valid_iteration_probe_multiplier: f32,
 }
 
 impl SeriesApproximation {
-    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize, experimental: bool) -> Self {
+    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize, experimental: bool, valid_iteration_frame_multiplier: f32, valid_iteration_probe_multiplier: f32) -> Self {
         let mut coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1]; 1];
 
         coefficients[0][0] = to_extended(&c);
@@ -40,7 +44,9 @@ impl SeriesApproximation {
             min_valid_iteration: 1,
             valid_iterations: Vec::new(),
             probe_sampling,
-            experimental
+            experimental,
+            valid_iteration_frame_multiplier,
+            valid_iteration_probe_multiplier
         }
     }
 
@@ -109,10 +115,14 @@ impl SeriesApproximation {
         if self.experimental {
             // iterate one probe and find its value
 
-            let mut first_valid_iterations = 1;
+            let mut first_valid_iterations = max(1, (self.min_valid_iteration as f32 * self.valid_iteration_frame_multiplier) as usize);
             let i = 0;
 
-            let mut probe = self.probe_start[i];
+            let mut probe = if first_valid_iterations > 1 {
+                self.evaluate(self.probe_start[i], first_valid_iterations)
+            } else {
+                self.probe_start[i]
+            };
 
             while first_valid_iterations < self.maximum_iteration {
                 let coefficients = &self.coefficients[first_valid_iterations - 1];
@@ -156,14 +166,14 @@ impl SeriesApproximation {
             let mut valid_iterations_array = Vec::new();
             valid_iterations_array.push(first_valid_iterations);
 
-            let new_start_iterations = (first_valid_iterations as f64 * 0.98) as usize;
+            let new_start_iterations = (first_valid_iterations as f32 * self.valid_iteration_probe_multiplier) as usize;
 
             // we now have a value for valid iterations, lets do the rest of the probes, but with 0.95 * that iteration
 
             let other_valid_iterations = (1..self.probe_start.len()).into_par_iter()
                 .map(|i| {
                     let mut valid_iterations = new_start_iterations;
-                    let mut probe = self.evaluate(self.probe_start[i], new_start_iterations);
+                    let mut probe = self.evaluate(self.probe_start[i], valid_iterations);
 
                     while valid_iterations < self.maximum_iteration {
                         let coefficients = &self.coefficients[valid_iterations - 1];

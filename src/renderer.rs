@@ -49,6 +49,8 @@ impl FractalRenderer {
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
+        let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.75) as f32;
+        let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.98) as f32;
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
@@ -91,7 +93,9 @@ impl FractalRenderer {
             FloatExtended::new(0.0, 0), 
             ComplexExtended::new2(0.0, 0.0, 0),
             probe_sampling,
-            experimental);
+            experimental,
+            valid_iteration_frame_multiplier,
+            valid_iteration_probe_multiplier);
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         // Change the zoom level to the correct one for the frame offset
