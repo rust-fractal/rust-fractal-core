@@ -1,7 +1,7 @@
 image_width = 1920
 image_height = 1080
 rotate = 0
-approximation_order = 48
+approximation_order = 64
 glitch_tolerance = 0.001
 frames = 1
 frame_offset = 0
@@ -10,4 +10,5 @@ display_glitches = false
 auto_adjust_iterations = true
 probe_sampling = 3
 remove_centre = true
-export = "exr"
+export = "png"
+experimental = true

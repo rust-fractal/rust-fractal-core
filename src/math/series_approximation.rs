@@ -4,6 +4,8 @@ use crate::math::reference::Reference;
 use rug::Float;
 use crate::util::float_extended::FloatExtended;
 use rayon::prelude::*;
+use std::fs::File;
+use std::io::Write;
 
 pub struct SeriesApproximation {
     pub maximum_iteration: usize,
@@ -17,10 +19,11 @@ pub struct SeriesApproximation {
     pub valid_coefficients: Vec<ComplexExtended>,
     pub valid_iteration: usize,
     pub probe_sampling: usize,
+    pub experimental: bool
 }
 
 impl SeriesApproximation {
-    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize) -> Self {
+    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize, experimental: bool) -> Self {
         let mut coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1]; 1];
 
         coefficients[0][0] = to_extended(&c);
@@ -39,6 +42,7 @@ impl SeriesApproximation {
             valid_coefficients: Vec::new(),
             valid_iteration: 1,
             probe_sampling,
+            experimental
         }
     }
 
@@ -121,7 +125,13 @@ impl SeriesApproximation {
         // Get all of the root locations, and don't use any of them that are not in the image
         // There might still be quite a few roots, so remove those which are close to each other
 
-        self.valid_iteration = (0..self.probe_start.len()).into_par_iter()
+        let mut f = File::create("test.csv").unwrap();
+
+        
+
+        // TODO THIS IS USUALLY PARALLEL ITERATOR
+
+        self.valid_iteration = (0..self.probe_start.len()).into_iter()
             .map(|i| {
                 let mut valid_iterations = 1;
                 let mut probe = self.probe_start[i];
@@ -149,6 +159,9 @@ impl SeriesApproximation {
                     };
 
                     let relative_error = (probe - series_probe).norm_square();
+
+                    f.write(format!("{},", relative_error.to_float()).as_bytes()).unwrap();
+
                     let mut derivative = derivative_probe.norm_square();
 
                     // Check to make sure that the derivative is greater than or equal to 1
@@ -165,6 +178,8 @@ impl SeriesApproximation {
                     valid_iterations += 1;
                     
                 }
+
+                f.write(b"\n").unwrap();
 
                 valid_iterations
             }).min().unwrap();
