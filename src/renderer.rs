@@ -51,6 +51,7 @@ impl FractalRenderer {
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.75) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.98) as f32;
+        let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
@@ -81,12 +82,18 @@ impl FractalRenderer {
         let delta_pixel =  (-2.0 * (4.0 / image_height as f64 - 2.0) / zoom) / image_height as f64;
         let radius = delta_pixel * image_width as f64;
         let precision = max(64, -radius.exponent + 64);
+
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
             ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
         let auto_approximation = get_approximation_terms(approximation_order, image_width, image_height);
 
-        let reference = Reference::new(center_location.clone(), center_location.clone(), 1, maximum_iteration);
+        let reference = Reference::new(center_location.clone(), 
+            center_location.clone(), 
+            1, 
+            maximum_iteration, 
+            high_precision_data_interval);
+
         let series_approximation = SeriesApproximation::new_central(&center_location, 
             auto_approximation, 
             maximum_iteration, 
@@ -95,7 +102,9 @@ impl FractalRenderer {
             probe_sampling,
             experimental,
             valid_iteration_frame_multiplier,
-            valid_iteration_probe_multiplier);
+            valid_iteration_probe_multiplier,
+            high_precision_data_interval);
+
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         // Change the zoom level to the correct one for the frame offset

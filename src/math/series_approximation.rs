@@ -22,10 +22,21 @@ pub struct SeriesApproximation {
     pub experimental: bool,
     pub valid_iteration_frame_multiplier: f32,
     pub valid_iteration_probe_multiplier: f32,
+    pub high_precision_data_interval: usize,
 }
 
 impl SeriesApproximation {
-    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize, experimental: bool, valid_iteration_frame_multiplier: f32, valid_iteration_probe_multiplier: f32) -> Self {
+    pub fn new_central(c: &ComplexArbitrary, 
+        order: usize, 
+        maximum_iteration: usize, 
+        delta_pixel_square: FloatExtended, 
+        delta_top_left: ComplexExtended, 
+        probe_sampling: usize, 
+        experimental: bool, 
+        valid_iteration_frame_multiplier: f32, 
+        valid_iteration_probe_multiplier: f32,
+        high_precision_data_interval: usize) -> Self {
+
         let mut coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1]; 1];
 
         coefficients[0][0] = to_extended(&c);
@@ -46,7 +57,8 @@ impl SeriesApproximation {
             probe_sampling,
             experimental,
             valid_iteration_frame_multiplier,
-            valid_iteration_probe_multiplier
+            valid_iteration_probe_multiplier,
+            high_precision_data_interval
         }
     }
 
@@ -156,7 +168,7 @@ impl SeriesApproximation {
                 }
 
                 // Check that the error over the derivative is less than the pixel spacing
-                if relative_error / derivative > self.delta_pixel_square {
+                if relative_error / derivative > 1e-6 * self.delta_pixel_square {
                     break;
                 }
 
@@ -207,7 +219,7 @@ impl SeriesApproximation {
                         }
 
                         // Check that the error over the derivative is less than the pixel spacing
-                        if relative_error / derivative > self.delta_pixel_square {
+                        if relative_error / derivative > 1e-6 * self.delta_pixel_square {
                             break;
                         }
 
@@ -320,7 +332,7 @@ impl SeriesApproximation {
     // Get the current reference, and the current number of iterations done
     pub fn get_reference(&self, reference_delta: ComplexExtended, center_reference: &Reference) -> Reference {
         let precision = center_reference.c.real().prec();
-        let iteration_reference = 100 * (self.min_valid_iteration / 100) + 1;
+        let iteration_reference = self.high_precision_data_interval * (self.min_valid_iteration / self.high_precision_data_interval) + 1;
 
         let mut reference_c = center_reference.c.clone();
         let temp = Float::with_val(precision, reference_delta.exponent).exp2();
@@ -331,7 +343,7 @@ impl SeriesApproximation {
         *reference_c.mut_imag() += &temp3 * &temp;
 
         // let mut reference_z = self.center_reference.approximation_data[self.valid_iteration].clone();
-        let mut reference_z = center_reference.high_precision_data[(self.min_valid_iteration - 1) / 100].clone();
+        let mut reference_z = center_reference.high_precision_data[(self.min_valid_iteration - 1) / self.high_precision_data_interval].clone();
 
         let temp4 = self.evaluate(reference_delta, iteration_reference);
         let temp = Float::with_val(precision, temp4.exponent).exp2();
@@ -341,7 +353,7 @@ impl SeriesApproximation {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        Reference::new(reference_z, reference_c, iteration_reference, center_reference.maximum_iteration)
+        Reference::new(reference_z, reference_c, iteration_reference, center_reference.maximum_iteration, self.high_precision_data_interval)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
