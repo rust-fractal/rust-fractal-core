@@ -4,9 +4,11 @@ use std::cmp::{min, max};
 pub mod data_export;
 pub mod float_extended;
 pub mod complex_extended;
+pub mod recolour_exr;
 
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
+pub use recolour_exr::RecolourEXR;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
@@ -100,6 +102,54 @@ pub fn get_approximation_terms(approximation_order: usize, image_width: usize, i
     } else {
         approximation_order
     }
+}
+
+pub fn generate_default_palette() -> Vec<(u8, u8, u8)> {
+    let mut colours = Vec::with_capacity(1024);
+
+    for i in 0..1024 {
+        let value = i as f32 / 1024.0;
+
+        let red;
+        let green;
+        let blue;
+
+        if value < 0.16 {
+            let factor = (value - 0.0) / (0.16 - 0.0);
+
+            red = 0.0 + factor * (32.0 - 0.0);
+            green = 7.0 + factor * (107.0 - 7.0);
+            blue = 100.0 + factor * (203.0 - 100.0);
+        } else if value < 0.42 {
+            let factor = (value - 0.16) / (0.42 - 0.16);
+
+            red = 32.0 + factor * (237.0 - 32.0);
+            green = 107.0 + factor * (255.0 - 107.0);
+            blue = 203.0 + factor * (255.0 - 203.0);
+        } else if value < 0.6425 {
+            let factor = (value - 0.42) / (0.6425 - 0.42);
+
+            red = 237.0 + factor * (255.0 - 237.0);
+            green = 255.0 + factor * (170.0 - 255.0);
+            blue = 255.0 + factor * (0.0 - 255.0);
+        } else if value < 0.8575 {
+            let factor = (value - 0.6425) / (0.8575 - 0.6425);
+
+            red = 255.0 + factor * (0.0 - 255.0);
+            green = 170.0 + factor * (2.0 - 170.0);
+            blue = 0.0;
+        } else {
+            let factor = (value - 0.8575) / (1.0 - 0.8575);
+
+            red = 0.0;
+            green = 2.0 + factor * (7.0 - 2.0);
+            blue = 0.0 + factor * (100.0 - 0.0);
+        }
+
+        colours.push((red as u8, green as u8, blue as u8))
+    }
+
+    colours
 }
 
 #[derive(Clone)]
