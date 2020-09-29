@@ -25,20 +25,19 @@ pub struct DataExport {
     pub smooth_f16: Vec<f16>,
     pub smooth_f32: Vec<f32>,
     pub display_glitches: bool,
+    iteration_division: f32,
     data_type: DataType,
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType) -> Self {
+    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32) -> Self {
         let mut rgb = Vec::new();
-        let mut palette = Vec::new();
         let mut smooth_f16 = Vec::new();
         let mut smooth_f32 = Vec::new();
 
         match data_type {
             DataType::COLOUR => {
                 rgb = vec![0u8; image_width * image_height * 3];
-                palette = DataExport::generate_default_palette();
             },
             DataType::RAW => {
                 smooth_f16 = vec![f16::ZERO; image_width * image_height];
@@ -48,7 +47,6 @@ impl DataExport {
             },
             DataType::BOTH => {
                 rgb = vec![0u8; image_width * image_height * 3];
-                palette = DataExport::generate_default_palette();
                 smooth_f16 = vec![f16::ZERO; image_width * image_height];
             }
         }
@@ -62,6 +60,7 @@ impl DataExport {
             smooth_f16,
             smooth_f32,
             display_glitches,
+            iteration_division,
             data_type
         }
     }
@@ -74,35 +73,33 @@ impl DataExport {
                 for pixel in pixel_data {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
 
-                    if pixel.glitched {
-                        if self.display_glitches {
-                            self.rgb[k] = 255;
-                            self.rgb[k + 1] = 0;
-                            self.rgb[k + 2] = 0;
-                        } else {
-                            // Pixel is glitched so the smooth won't do much
-
-                            let colour = self.palette[10 * pixel.iteration % 1024];
-                            self.rgb[k] = colour.0;
-                            self.rgb[k + 1] = colour.1;
-                            self.rgb[k + 2] = colour.2;
-                        }
+                    if pixel.glitched && self.display_glitches {
+                        self.rgb[k] = 255;
+                        self.rgb[k + 1] = 0;
+                        self.rgb[k + 2] = 0;
                     } else if pixel.iteration >= maximum_iteration {
                         self.rgb[k] = 0;
                         self.rgb[k + 1] = 0;
                         self.rgb[k + 2] = 0;
                     } else {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let colour = self.palette[(10.0 * (pixel.iteration as f32 + smooth)) as usize % 1024];
-                        self.rgb[k] = colour.0;
-                        self.rgb[k + 1] = colour.1;
-                        self.rgb[k + 2] = colour.2;
+                        let temp = (pixel.iteration as f32 + smooth) / self.iteration_division;
+
+                        let temp2 = temp.floor() as usize % self.palette.len();
+                        let temp3 = (temp as usize + 1) % self.palette.len();
+                        let temp4 = temp.fract();
+
+                        let colour1 = self.palette[temp2];
+                        let colour2 = self.palette[temp3];
+
+                        self.rgb[k] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
+                        self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
+                        self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
                     };
 
-                    self.iterations[k / 3] = pixel.iteration as u32;
+                    // self.iterations[k / 3] = pixel.iteration as u32;
                 }
             },
             DataType::RAW => {
@@ -141,19 +138,11 @@ impl DataExport {
                 for pixel in pixel_data {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
 
-                    if pixel.glitched {
-                        if self.display_glitches {
-                            self.rgb[k] = 255;
-                            self.rgb[k + 1] = 0;
-                            self.rgb[k + 2] = 0;
-                            self.iterations[k / 3] = 0x00000000
-                        } else {
-                            let colour = self.palette[10 * pixel.iteration % 1024];
-                            self.rgb[k] = colour.0;
-                            self.rgb[k + 1] = colour.1;
-                            self.rgb[k + 2] = colour.2;
-                            self.iterations[k / 3] = 0x00000000
-                        }
+                    if pixel.glitched && self.display_glitches {
+                        self.rgb[k] = 255;
+                        self.rgb[k + 1] = 0;
+                        self.rgb[k + 2] = 0;
+                        self.iterations[k / 3] = 0x00000000;
                     } else if pixel.iteration >= maximum_iteration {
                         self.rgb[k] = 0;
                         self.rgb[k + 1] = 0;
@@ -161,13 +150,20 @@ impl DataExport {
                         self.iterations[k / 3] = 0xFFFFFFFF;
                     } else {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
-
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let colour = self.palette[(10.0 * (pixel.iteration as f32 + smooth)) as usize % 1024];
-                        self.rgb[k] = colour.0;
-                        self.rgb[k + 1] = colour.1;
-                        self.rgb[k + 2] = colour.2;
+                        let temp = (pixel.iteration as f32 + smooth) / self.iteration_division;
+
+                        let temp2 = temp.floor() as usize % self.palette.len();
+                        let temp3 = (temp as usize + 1) % self.palette.len();
+                        let temp4 = temp.fract();
+
+                        let colour1 = self.palette[temp2];
+                        let colour2 = self.palette[temp3];
+
+                        self.rgb[k] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
+                        self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
+                        self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
                         self.iterations[k / 3] = pixel.iteration as u32;
                         self.smooth_f16[k / 3] = f16::from_f32(smooth)
                     };
@@ -232,11 +228,8 @@ impl DataExport {
 
         let test1 = [self.image_width as u32, self.image_height as u32];
 
-        // Colours in colourmap
-        let test5 = DataExport::generate_default_palette();
-
         // iteration division??
-        let test3 = [1u32, test5.len() as u32];
+        let test3 = [1u32, self.palette.len() as u32];
 
         // Maxmimum iteration
         let test6 = [maximum_iteration as u32];
@@ -254,7 +247,7 @@ impl DataExport {
         }).unwrap();
 
         file.write_all(unsafe {
-            slice::from_raw_parts(test5.as_ptr() as *const u8, 3 * test5.len())
+            slice::from_raw_parts(self.palette.as_ptr() as *const u8, 3 * self.palette.len())
         }).unwrap();
 
         file.write_all(unsafe {
@@ -265,54 +258,6 @@ impl DataExport {
             slice::from_raw_parts(self.smooth_f32.as_ptr() as *const u8, self.iterations.len() * 4)
         }).unwrap();
 
-    }
-
-    fn generate_default_palette() -> Vec<(u8, u8, u8)> {
-        let mut colours = Vec::with_capacity(1024);
-
-        for i in 0..1024 {
-            let value = i as f32 / 1024.0;
-
-            let red;
-            let green;
-            let blue;
-
-            if value < 0.16 {
-                let factor = (value - 0.0) / (0.16 - 0.0);
-
-                red = 0.0 + factor * (32.0 - 0.0);
-                green = 7.0 + factor * (107.0 - 7.0);
-                blue = 100.0 + factor * (203.0 - 100.0);
-            } else if value < 0.42 {
-                let factor = (value - 0.16) / (0.42 - 0.16);
-
-                red = 32.0 + factor * (237.0 - 32.0);
-                green = 107.0 + factor * (255.0 - 107.0);
-                blue = 203.0 + factor * (255.0 - 203.0);
-            } else if value < 0.6425 {
-                let factor = (value - 0.42) / (0.6425 - 0.42);
-
-                red = 237.0 + factor * (255.0 - 237.0);
-                green = 255.0 + factor * (170.0 - 255.0);
-                blue = 255.0 + factor * (0.0 - 255.0);
-            } else if value < 0.8575 {
-                let factor = (value - 0.6425) / (0.8575 - 0.6425);
-
-                red = 255.0 + factor * (0.0 - 255.0);
-                green = 170.0 + factor * (2.0 - 170.0);
-                blue = 0.0;
-            } else {
-                let factor = (value - 0.8575) / (1.0 - 0.8575);
-
-                red = 0.0;
-                green = 2.0 + factor * (7.0 - 2.0);
-                blue = 0.0 + factor * (100.0 - 0.0);
-            }
-
-            colours.push((red as u8, green as u8, blue as u8))
-        }
-
-        colours
     }
 
     pub fn clear_buffers(&mut self) {

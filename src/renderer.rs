@@ -1,4 +1,4 @@
-use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left};
+use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
@@ -47,12 +47,31 @@ impl FractalRenderer {
         let experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
+        let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
             "KFB" => DataType::KFB,
             "BOTH" => DataType::BOTH,
             _ => DataType::COLOUR
+        };
+
+        let palette = match data_type {
+            DataType::RAW => {
+                Vec::new()
+            },
+            DataType::KFB | DataType::COLOUR | DataType::BOTH => {
+                if let Ok(colour_values) = settings.get_array("palette") {
+                    colour_values.chunks_exact(3).map(|value| {
+                        // We assume the palette is in BGR rather than RGB
+                        (value[2].clone().into_int().unwrap() as u8, 
+                            value[1].clone().into_int().unwrap() as u8, 
+                            value[0].clone().into_int().unwrap() as u8)
+                    }).collect::<Vec<(u8, u8, u8)>>()
+                } else {
+                    generate_default_palette()
+                }
+            }
         };
 
         let mut zoom = string_to_extended(&initial_zoom);
@@ -88,7 +107,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_tolerance,
-            data_export: DataExport::new(image_width, image_height, display_glitches, data_type),
+            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
