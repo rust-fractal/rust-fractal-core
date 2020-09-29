@@ -49,7 +49,7 @@ impl FractalRenderer {
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
-            "COLOUR" | "PNG" => DataType::COLOUR,
+            "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
             "KFB" => DataType::KFB,
             "BOTH" => DataType::BOTH,
             _ => DataType::COLOUR
