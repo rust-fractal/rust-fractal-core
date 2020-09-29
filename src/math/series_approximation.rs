@@ -94,82 +94,197 @@ impl SeriesApproximation {
 
         for i in 0..self.probe_sampling {
             for j in 0..self.probe_sampling {
-                if self.probe_sampling % 2 == 1 && (i == self.probe_sampling / 2 && j == self.probe_sampling / 2) {
-                    continue;
-                } else {
+                // possible improvement is to remove the probes in the centre of the image which are blacked out
+                // if self.probe_sampling % 2 == 1 && (i == self.probe_sampling / 2 && j == self.probe_sampling / 2) {
+                    // continue;
+                // } else {
                     let real = (1.0 - 2.0 * (i as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
                     let imag = (1.0 - 2.0 * (j as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
 
                     self.add_probe(ComplexExtended::new2(real, imag, self.delta_top_left.exponent));
-                }
+                // }
             }
         }
 
-        // Possible how to add the roots as probes
+        if self.experimental {
+            // iterate one probe and find its value
 
-        // lets say we check the first 1000 iterations for roots with periods 0-1000
+            let mut first_valid_iterations = 1;
+            let i = 0;
 
-        // Each iteration, we NR the current SA polynomial??
+            let mut probe = self.probe_start[i];
 
-        // Maybe only needs to be done once for the entire zoom sequence??
+            while first_valid_iterations < self.maximum_iteration {
+                let coefficients = &self.coefficients[first_valid_iterations - 1];
+                let next_coefficients = &self.coefficients[first_valid_iterations];
 
-        // How do we know which probes to use??
+                // step the probe points using perturbation
+                probe = probe * (coefficients[0] * 2.0 + probe);
+                probe += self.probe_start[i];
 
-        // Maybe some kind of distance check, where the probes are chosen that are in the image, and are within some tolerance
-        // ~10 pixel spacing from others. 
-
-        // Possible loop once the roots have been calculated
-
-        // Get all of the root locations, and don't use any of them that are not in the image
-        // There might still be quite a few roots, so remove those which are close to each other
-
-        self.valid_iteration = (0..self.probe_start.len()).into_par_iter()
-            .map(|i| {
-                let mut valid_iterations = 1;
-                let mut probe = self.probe_start[i];
-
-                while valid_iterations < self.maximum_iteration {
-                    let coefficients = &self.coefficients[valid_iterations - 1];
-                    let next_coefficients = &self.coefficients[valid_iterations];
-
-                    // step the probe points using perturbation
-                    probe = probe * (coefficients[0] * 2.0 + probe);
-                    probe += self.probe_start[i];
-
-                    // This is not done on every iteration
-                    if valid_iterations % 250 == 0 {
-                        probe.reduce();
-                    }
-
-                    // get the new approximations
-                    let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
-                    let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
-
-                    for k in 2..=self.order {
-                        series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                        derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-                    };
-
-                    let relative_error = (probe - series_probe).norm_square();
-                    let mut derivative = derivative_probe.norm_square();
-
-                    // Check to make sure that the derivative is greater than or equal to 1
-                    if derivative.to_float() < 1.0 {
-                        derivative.mantissa = 1.0;
-                        derivative.exponent = 0;
-                    }
-
-                    // Check that the error over the derivative is less than the pixel spacing
-                    if relative_error / derivative > self.delta_pixel_square {
-                        break;
-                    }
-
-                    valid_iterations += 1;
-                    
+                // This is not done on every iteration
+                if first_valid_iterations % 250 == 0 {
+                    probe.reduce();
                 }
+
+                // get the new approximations
+                let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
+                let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
+
+                for k in 2..=self.order {
+                    series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                    derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                };
+
+                let relative_error = (probe - series_probe).norm_square();
+                let mut derivative = derivative_probe.norm_square();
+
+                // Check to make sure that the derivative is greater than or equal to 1
+                if derivative.to_float() < 1.0 {
+                    derivative.mantissa = 1.0;
+                    derivative.exponent = 0;
+                }
+
+                // Check that the error over the derivative is less than the pixel spacing
+                if relative_error / derivative > self.delta_pixel_square {
+                    break;
+                }
+
+                first_valid_iterations += 1;
+            }
+
+            let mut valid_iterations_array = Vec::new();
+            valid_iterations_array.push(first_valid_iterations);
+
+            let new_start_iterations = (first_valid_iterations as f64 * 0.98) as usize;
+
+            // we now have a value for valid iterations, lets do the rest of the probes, but with 0.95 * that iteration
+
+            let other_valid_iterations = (1..self.probe_start.len()).into_par_iter()
+                .map(|i| {
+                    let mut valid_iterations = new_start_iterations;
+                    let mut probe = self.evaluate(self.probe_start[i], Some(new_start_iterations));
+
+                    while valid_iterations < self.maximum_iteration {
+                        let coefficients = &self.coefficients[valid_iterations - 1];
+                        let next_coefficients = &self.coefficients[valid_iterations];
+
+                        // step the probe points using perturbation
+                        probe = probe * (coefficients[0] * 2.0 + probe);
+                        probe += self.probe_start[i];
+
+                        // This is not done on every iteration
+                        if valid_iterations % 250 == 0 {
+                            probe.reduce();
+                        }
+
+                        // get the new approximations
+                        let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
+                        let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
+
+                        for k in 2..=self.order {
+                            series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                            derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                        };
+
+                        let relative_error = (probe - series_probe).norm_square();
+                        let mut derivative = derivative_probe.norm_square();
+
+                        // Check to make sure that the derivative is greater than or equal to 1
+                        if derivative.to_float() < 1.0 {
+                            derivative.mantissa = 1.0;
+                            derivative.exponent = 0;
+                        }
+
+                        // Check that the error over the derivative is less than the pixel spacing
+                        if relative_error / derivative > self.delta_pixel_square {
+                            break;
+                        }
+
+                        valid_iterations += 1;
+                        
+                    }
+
+                valid_iterations
+            }).collect::<Vec<usize>>();
+
+            valid_iterations_array.extend_from_slice(other_valid_iterations.as_slice());
+
+            println!("{:?}", valid_iterations_array);
+
+            self.valid_iteration = *valid_iterations_array.iter().min().unwrap();
+        } else {
+            // Possible how to add the roots as probes
+
+            // lets say we check the first 1000 iterations for roots with periods 0-1000
+
+            // Each iteration, we NR the current SA polynomial??
+
+            // Maybe only needs to be done once for the entire zoom sequence??
+
+            // How do we know which probes to use??
+
+            // Maybe some kind of distance check, where the probes are chosen that are in the image, and are within some tolerance
+            // ~10 pixel spacing from others. 
+
+            // Possible loop once the roots have been calculated
+
+            // Get all of the root locations, and don't use any of them that are not in the image
+            // There might still be quite a few roots, so remove those which are close to each other
+
+            self.valid_iteration = (0..self.probe_start.len()).into_par_iter()
+                .map(|i| {
+                    let mut valid_iterations = 1;
+                    let mut probe = self.probe_start[i];
+
+                    while valid_iterations < self.maximum_iteration {
+                        let coefficients = &self.coefficients[valid_iterations - 1];
+                        let next_coefficients = &self.coefficients[valid_iterations];
+
+                        // step the probe points using perturbation
+                        probe = probe * (coefficients[0] * 2.0 + probe);
+                        probe += self.probe_start[i];
+
+                        // This is not done on every iteration
+                        if valid_iterations % 250 == 0 {
+                            probe.reduce();
+                        }
+
+                        // get the new approximations
+                        let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
+                        let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
+
+                        for k in 2..=self.order {
+                            series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                            derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                        };
+
+                        let relative_error = (probe - series_probe).norm_square();
+                        let mut derivative = derivative_probe.norm_square();
+
+                        // Check to make sure that the derivative is greater than or equal to 1
+                        if derivative.to_float() < 1.0 {
+                            derivative.mantissa = 1.0;
+                            derivative.exponent = 0;
+                        }
+
+                        // Check that the error over the derivative is less than the pixel spacing
+                        if relative_error / derivative > self.delta_pixel_square {
+                            break;
+                        }
+
+                        valid_iterations += 1;
+                        
+                    }
 
                 valid_iterations
             }).min().unwrap();
+        }
+
+
+
+
+
             
         self.valid_coefficients = self.coefficients[self.valid_iteration - 1].clone();
 
