@@ -30,59 +30,39 @@ pub struct DataExport {
 
 impl DataExport {
     pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType) -> Self {
+        let mut rgb = Vec::new();
+        let mut palette = Vec::new();
+        let mut smooth_f16 = Vec::new();
+        let mut smooth_f32 = Vec::new();
+
         match data_type {
             DataType::COLOUR => {
-                DataExport {
-                    image_width,
-                    image_height,
-                    rgb: vec![0u8; image_width * image_height * 3],
-                    palette: DataExport::generate_default_palette(),
-                    iterations: vec![0u32; image_width * image_height],
-                    smooth_f16: Vec::new(),
-                    smooth_f32: Vec::new(),
-                    display_glitches,
-                    data_type
-                }
+                rgb = vec![0u8; image_width * image_height * 3];
+                palette = DataExport::generate_default_palette();
             },
             DataType::RAW => {
-                DataExport {
-                    image_width,
-                    image_height,
-                    rgb: Vec::new(),
-                    palette: Vec::new(),
-                    iterations: vec![0u32; image_width * image_height],
-                    smooth_f16: vec![f16::ZERO; image_width * image_height],
-                    smooth_f32: Vec::new(),
-                    display_glitches,
-                    data_type
-                }
+                smooth_f16 = vec![f16::ZERO; image_width * image_height];
             },
             DataType::KFB => {
-                DataExport {
-                    image_width,
-                    image_height,
-                    rgb: Vec::new(),
-                    palette: Vec::new(),
-                    iterations: vec![0u32; image_width * image_height],
-                    smooth_f16: Vec::new(),
-                    smooth_f32: vec![0.0f32; image_width * image_height],
-                    display_glitches,
-                    data_type
-                }
+                smooth_f32 = vec![0.0f32; image_width * image_height];
             },
             DataType::BOTH => {
-                DataExport {
-                    image_width,
-                    image_height,
-                    rgb: vec![0u8; image_width * image_height * 3],
-                    palette: DataExport::generate_default_palette(),
-                    iterations: vec![0u32; image_width * image_height],
-                    smooth_f16: vec![f16::ZERO; image_width * image_height],
-                    smooth_f32: Vec::new(),
-                    display_glitches,
-                    data_type
-                }
+                rgb = vec![0u8; image_width * image_height * 3];
+                palette = DataExport::generate_default_palette();
+                smooth_f16 = vec![f16::ZERO; image_width * image_height];
             }
+        }
+
+        DataExport {
+            image_width,
+            image_height,
+            rgb,
+            palette,
+            iterations: vec![0u32; image_width * image_height],
+            smooth_f16,
+            smooth_f32,
+            display_glitches,
+            data_type
         }
     }
 

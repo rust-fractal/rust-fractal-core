@@ -22,12 +22,24 @@ fn main() {
                 .about("Sets the options file to use.")
                 .takes_value(true)
                 .required(false)
+        )
+        .arg(
+            Arg::new("palette")
+                .short('p')
+                .long("palette")
+                .value_name("FILE")
+                .about("Sets the palette file to use.")
+                .takes_value(true)
+                .required(false)
         ).get_matches();
-
 
     let mut settings = Config::default();
 
     if let Some(p) = matches.value_of("options") {
+        settings.merge(File::with_name(p).required(true)).unwrap();
+    };
+
+    if let Some(p) = matches.value_of("palette") {
         settings.merge(File::with_name(p).required(true)).unwrap();
     };
 
