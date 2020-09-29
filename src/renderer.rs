@@ -52,6 +52,7 @@ impl FractalRenderer {
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.75) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.98) as f32;
         let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
+        
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
