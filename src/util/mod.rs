@@ -4,9 +4,11 @@ use std::cmp::{min, max};
 pub mod data_export;
 pub mod float_extended;
 pub mod complex_extended;
+pub mod recolour_exr;
 
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
+pub use recolour_exr::RecolourEXR;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
