@@ -44,6 +44,7 @@ impl FractalRenderer {
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
         let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
+        let experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
@@ -69,7 +70,8 @@ impl FractalRenderer {
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
             ComplexExtended::new2(0.0, 0.0, 0),
-            probe_sampling);
+            probe_sampling,
+            experimental);
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         // Change the zoom level to the correct one for the frame offset

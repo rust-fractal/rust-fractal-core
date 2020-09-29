@@ -17,10 +17,11 @@ pub struct SeriesApproximation {
     pub valid_coefficients: Vec<ComplexExtended>,
     pub valid_iteration: usize,
     pub probe_sampling: usize,
+    pub experimental: bool
 }
 
 impl SeriesApproximation {
-    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize) -> Self {
+    pub fn new_central(c: &ComplexArbitrary, order: usize, maximum_iteration: usize, delta_pixel_square: FloatExtended, delta_top_left: ComplexExtended, probe_sampling: usize, experimental: bool) -> Self {
         let mut coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); order as usize + 1]; 1];
 
         coefficients[0][0] = to_extended(&c);
@@ -39,6 +40,7 @@ impl SeriesApproximation {
             valid_coefficients: Vec::new(),
             valid_iteration: 1,
             probe_sampling,
+            experimental
         }
     }
 
