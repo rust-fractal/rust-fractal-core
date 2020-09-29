@@ -10,4 +10,5 @@ display_glitches = false
 auto_adjust_iterations = true
 probe_sampling = 3
 remove_centre = true
-export = "exr"
+export = "png"
+experimental = true 
