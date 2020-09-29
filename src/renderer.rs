@@ -25,7 +25,8 @@ pub struct FractalRenderer {
     center_reference: Reference,
     series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
-    remove_centre: bool
+    remove_centre: bool,
+    experimental: bool,
 }
 
 impl FractalRenderer {
@@ -116,6 +117,7 @@ impl FractalRenderer {
             series_approximation,
             render_indices,
             remove_centre,
+            experimental
         }
     }
 
@@ -146,7 +148,7 @@ impl FractalRenderer {
         self.series_approximation.check_approximation();
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
-        print!("| {:<15}", self.series_approximation.valid_iteration);
+        print!("| {:<15}", self.series_approximation.min_valid_iteration);
         print!("| {:<6}", self.series_approximation.order);
         print!("| {:<15}", self.maximum_iteration);
         std::io::stdout().flush().unwrap();
@@ -188,13 +190,40 @@ impl FractalRenderer {
                     i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
                 );
 
+                let chosen_iteration = if self.experimental {
+                    let mut test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i as f64 / self.image_width as f64).floor() as usize;
+                    let mut test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j as f64 / self.image_height as f64).floor() as usize;
+
+                    if test1 >= (self.series_approximation.probe_sampling - 1) {
+                        test1 -= 1;
+                    }
+
+                    if test2 >= (self.series_approximation.probe_sampling - 1) {
+                        test2 -= 1;
+                    }
+
+                    let pos1 = test1 * self.series_approximation.probe_sampling + test2;
+                    let pos2 = test1 * self.series_approximation.probe_sampling + test2 + 1;
+                    let pos3 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling;
+                    let pos4 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling + 1;
+
+                    // println!("{}, {}, {}, {}", i, j, test1, test2);
+
+                    [self.series_approximation.valid_iterations[pos1], 
+                        self.series_approximation.valid_iterations[pos2], 
+                        self.series_approximation.valid_iterations[pos3], 
+                        self.series_approximation.valid_iterations[pos4]].iter().min().unwrap().clone()
+                } else {
+                    self.series_approximation.min_valid_iteration
+                };
+
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                let new_delta = self.series_approximation.evaluate(point_delta, None);
+                let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
 
                 PixelData {
                     image_x: i,
                     image_y: j,
-                    iteration: self.series_approximation.valid_iteration,
+                    iteration: chosen_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
                     delta_current: new_delta,
@@ -230,13 +259,13 @@ impl FractalRenderer {
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
             glitch_reference.run();
 
-            let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, Some(glitch_reference.start_iteration));
+            let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
             pixel_data.par_iter_mut()
                 .for_each(|pixel| {
                     pixel.iteration = glitch_reference.start_iteration;
                     pixel.glitched = false;
-                    pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, Some(glitch_reference.start_iteration)) - delta_current_reference;
+                    pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
                     pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
                 });
 
