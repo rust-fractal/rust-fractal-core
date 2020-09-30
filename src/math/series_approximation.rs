@@ -173,7 +173,7 @@ impl SeriesApproximation {
             let mut valid_iterations_array = Vec::new();
             valid_iterations_array.push(first_valid_iterations);
 
-            let new_start_iterations = (first_valid_iterations as f32 * self.valid_iteration_probe_multiplier) as usize;
+            let new_start_iterations = max(1, (first_valid_iterations as f32 * self.valid_iteration_probe_multiplier) as usize);
 
             // we now have a value for valid iterations, lets do the rest of the probes, but with 0.95 * that iteration
 
