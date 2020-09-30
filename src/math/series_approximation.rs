@@ -112,15 +112,10 @@ impl SeriesApproximation {
 
         for i in 0..self.probe_sampling {
             for j in 0..self.probe_sampling {
-                // possible improvement is to remove the probes in the centre of the image which are blacked out
-                // if self.probe_sampling % 2 == 1 && (i == self.probe_sampling / 2 && j == self.probe_sampling / 2) {
-                    // continue;
-                // } else {
-                    let real = (1.0 - 2.0 * (i as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
-                    let imag = (1.0 - 2.0 * (j as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
+                let real = (1.0 - 2.0 * (i as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
+                let imag = (1.0 - 2.0 * (j as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
 
-                    self.add_probe(ComplexExtended::new2(real, imag, self.delta_top_left.exponent));
-                // }
+                self.add_probe(ComplexExtended::new2(real, imag, self.delta_top_left.exponent));
             }
         }
 
@@ -353,7 +348,7 @@ impl SeriesApproximation {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        Reference::new(reference_z, reference_c, iteration_reference, center_reference.maximum_iteration, self.high_precision_data_interval)
+        Reference::new(reference_z, reference_c, iteration_reference, center_reference.maximum_iteration, self.high_precision_data_interval, center_reference.glitch_tolerance)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {

@@ -16,7 +16,7 @@ pub struct FractalRenderer {
     zoom: FloatExtended,
     auto_adjust_iterations: bool,
     maximum_iteration: usize,
-    glitch_tolerance: f64,
+    glitch_percentage: f64,
     data_export: DataExport,
     start_render_time: Instant,
     remaining_frames: usize,
@@ -39,7 +39,7 @@ impl FractalRenderer {
         let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
         let center_imag = settings.get_str("imag").unwrap_or(String::from("0.0"));
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
-        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(0.001);
+        let glitch_percentage = settings.get_float("glitch_percentage").unwrap_or(0.001);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
         let frame_offset = settings.get_int("frame_offset").unwrap_or(0) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
@@ -51,6 +51,7 @@ impl FractalRenderer {
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.75) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.98) as f32;
+        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1e-6) as f64;
         let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
@@ -93,7 +94,8 @@ impl FractalRenderer {
             center_location.clone(), 
             1, 
             maximum_iteration, 
-            high_precision_data_interval);
+            high_precision_data_interval,
+            glitch_tolerance);
 
         let series_approximation = SeriesApproximation::new_central(&center_location, 
             auto_approximation, 
@@ -121,7 +123,7 @@ impl FractalRenderer {
             zoom,
             auto_adjust_iterations,
             maximum_iteration,
-            glitch_tolerance,
+            glitch_percentage,
             data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division),
             start_render_time: Instant::now(),
             remaining_frames,
@@ -240,10 +242,12 @@ impl FractalRenderer {
                     iteration: chosen_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
-                    delta_current: new_delta,
+                    delta_current: new_delta.clone(),
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
-                    escaped: false
+                    escaped: false,
+                    series_approximation_delta: new_delta,
+                    series_approximation_iteration: chosen_iteration
                 }
             }).collect::<Vec<PixelData>>();
 
@@ -260,18 +264,23 @@ impl FractalRenderer {
         std::io::stdout().flush().unwrap();
 
         let correction_time = Instant::now();
+        let mut correction_references = 1;
 
         // Remove all non-glitched points from the remaining points
         pixel_data.retain(|packet| {
             packet.glitched
         });
 
-        while pixel_data.len() as f64 > 0.01 * self.glitch_tolerance * (self.image_width * self.image_height) as f64 {
+        while pixel_data.len() as f64 > 0.01 * self.glitch_percentage * (self.image_width * self.image_height) as f64 {
             // delta_c is the difference from the next reference from the previous one
+
             let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
 
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
+
+            correction_references += 1;
             glitch_reference.run();
+
 
             let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
@@ -281,7 +290,8 @@ impl FractalRenderer {
                     pixel.glitched = false;
                     pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
                     pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                });
+            });
+            
 
             Perturbation::iterate(&mut pixel_data, &glitch_reference);
             self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference);
@@ -292,6 +302,7 @@ impl FractalRenderer {
             });
         }
 
+        print!("| {:<6}", correction_references);
         print!("| {:<15}", correction_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
         
@@ -304,7 +315,7 @@ impl FractalRenderer {
 
     pub fn render(&mut self) {
         // Print out the status information
-        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Ref", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
 
         let mut count = 0;
 
