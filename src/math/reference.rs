@@ -11,7 +11,8 @@ pub struct Reference {
     // This is for every 100th iteration, when we do glitch correction the new references will be spawed from these values
     // Storing every iteration is memory intensive.
     pub high_precision_data_interval: usize,
-    pub high_precision_data: Vec<ComplexArbitrary>
+    pub high_precision_data: Vec<ComplexArbitrary>,
+    pub glitch_tolerance: f64,
 }
 
 #[derive(Clone)]
@@ -23,7 +24,7 @@ pub struct ReferenceIteration {
 }
 
 impl Reference {
-    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize, high_precision_data_interval: usize) -> Reference {
+    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize, high_precision_data_interval: usize, glitch_tolerance: f64) -> Reference {
         Reference {
             start_iteration: current_iteration,
             current_iteration,
@@ -32,7 +33,8 @@ impl Reference {
             c,
             reference_data: Vec::with_capacity(1000),
             high_precision_data_interval,
-            high_precision_data: Vec::with_capacity(1000)
+            high_precision_data: Vec::with_capacity(1000),
+            glitch_tolerance
         }
     }
 
@@ -42,7 +44,7 @@ impl Reference {
         self.current_iteration += 1;
 
         let z_fixed = to_fixed(&self.z);
-        let z_tolerance = 1e-6 * z_fixed.norm_sqr();
+        let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
         let mut z_extended = to_extended(&self.z);
         z_extended.reduce();
@@ -67,7 +69,7 @@ impl Reference {
 
     pub fn run(&mut self) {
         let z_fixed = to_fixed(&self.z);
-        let z_tolerance = 1e-6 * z_fixed.norm_sqr();
+        let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
         let mut z_extended = to_extended(&self.z);
         z_extended.reduce();
