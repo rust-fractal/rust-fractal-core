@@ -1,5 +1,5 @@
-image_width = 8192
-image_height = 8192
+image_width = 1920
+image_height = 1080
 rotate = 0
 approximation_order = 64
 glitch_percentage = 0.001
@@ -12,9 +12,12 @@ probe_sampling = 12
 remove_centre = false
 export = "png"
 
+# By default this is squared tolerance. 1e-6 works normally, 1.4e-6 is low tolerance.
+glitch_tolerance = 1.4e-6
+
 # These are experimental options
 experimental = true 
 high_precision_data_interval = 100
 valid_iteration_frame_multiplier = 0.75
 valid_iteration_probe_multiplier = 0.98
-glitch_tolerance = 1.25e-6
+
