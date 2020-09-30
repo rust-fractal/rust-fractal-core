@@ -51,7 +51,7 @@ impl FractalRenderer {
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.75) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.98) as f32;
-        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1e-6) as f64;
+        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
@@ -292,7 +292,6 @@ impl FractalRenderer {
                     pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
             });
             
-
             Perturbation::iterate(&mut pixel_data, &glitch_reference);
             self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference);
 
