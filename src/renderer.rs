@@ -207,23 +207,13 @@ impl FractalRenderer {
                 );
 
                 let chosen_iteration = if self.experimental {
-                    let mut test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i as f64 / self.image_width as f64).floor() as usize;
-                    let mut test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j as f64 / self.image_height as f64).floor() as usize;
-
-                    if test1 >= (self.series_approximation.probe_sampling - 1) {
-                        test1 -= 1;
-                    }
-
-                    if test2 >= (self.series_approximation.probe_sampling - 1) {
-                        test2 -= 1;
-                    }
+                    let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i as f64 / self.image_width as f64).floor() as usize;
+                    let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j as f64 / self.image_height as f64).floor() as usize;
 
                     let pos1 = test1 * self.series_approximation.probe_sampling + test2;
                     let pos2 = test1 * self.series_approximation.probe_sampling + test2 + 1;
                     let pos3 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling;
                     let pos4 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling + 1;
-
-                    // println!("{}, {}, {}, {}", i, j, test1, test2);
 
                     [self.series_approximation.valid_iterations[pos1], 
                         self.series_approximation.valid_iterations[pos2], 
@@ -246,8 +236,6 @@ impl FractalRenderer {
                     derivative_current: ComplexFixed::new(1.0, 0.0),
                     glitched: false,
                     escaped: false,
-                    series_approximation_delta: new_delta,
-                    series_approximation_iteration: chosen_iteration
                 }
             }).collect::<Vec<PixelData>>();
 
@@ -327,6 +315,9 @@ impl FractalRenderer {
             self.zoom.reduce();
 
             if self.zoom.to_float() < 1e10 {
+                self.series_approximation.valid_iteration_frame_multiplier = 0.0;
+                self.series_approximation.valid_iteration_probe_multiplier = 0.0;
+
                 // SA has some problems with precision with lots of terms at lot zoom levels
                 if self.series_approximation.order > 8 {
                     // Overwrite the series approximation order
