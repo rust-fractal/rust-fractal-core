@@ -269,16 +269,43 @@ impl FractalRenderer {
             correction_references += 1;
             glitch_reference.run();
 
+            // Experimental but does not work very well. There are a few glitches that still happen with this
+            if false {
+                pixel_data.par_iter_mut()
+                    .for_each(|pixel| {
+                        let chosen_iteration = {
+                            let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * pixel.image_x as f64 / self.image_width as f64).floor() as usize;
+                            let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * pixel.image_y as f64 / self.image_height as f64).floor() as usize;
+        
+                            let pos1 = test1 * self.series_approximation.probe_sampling + test2;
+                            let pos2 = test1 * self.series_approximation.probe_sampling + test2 + 1;
+                            let pos3 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling;
+                            let pos4 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling + 1;
+        
+                            [self.series_approximation.valid_iterations[pos1], 
+                                self.series_approximation.valid_iterations[pos2], 
+                                self.series_approximation.valid_iterations[pos3], 
+                                self.series_approximation.valid_iterations[pos4]].iter().min().unwrap().clone()
+                        };
 
-            let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+                        let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, chosen_iteration);
 
-            pixel_data.par_iter_mut()
-                .for_each(|pixel| {
-                    pixel.iteration = glitch_reference.start_iteration;
-                    pixel.glitched = false;
-                    pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                    pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-            });
+                        pixel.iteration = chosen_iteration;
+                        pixel.glitched = false;
+                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, chosen_iteration) - delta_current_reference;
+                        pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                });
+            } else {
+                let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+
+                pixel_data.par_iter_mut()
+                    .for_each(|pixel| {
+                        pixel.iteration = glitch_reference.start_iteration;
+                        pixel.glitched = false;
+                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+                        pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                });
+            };
             
             Perturbation::iterate(&mut pixel_data, &glitch_reference);
             self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference);
