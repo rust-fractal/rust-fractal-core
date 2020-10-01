@@ -170,8 +170,9 @@ impl SeriesApproximation {
                         derivative.exponent = 0;
                     }
 
+                    // The first element is reduced, the second might need to be reduced a little more
                     // Check that the error over the derivative is less than the pixel spacing
-                    if relative_error / derivative > 1e-6 * self.delta_pixel_square {
+                    if relative_error / derivative > self.delta_pixel_square {
                         break;
                     }
 
@@ -231,7 +232,7 @@ impl SeriesApproximation {
                                 }
 
                                 // Check that the error over the derivative is less than the pixel spacing
-                                if relative_error / derivative > 1e-6 * self.delta_pixel_square {
+                                if relative_error / derivative > self.delta_pixel_square {
                                     // set the current value to the lower one so it is checked in the next iteration
                                     if *probe_iteration_level <= (current_probe_check_value + 10) {
                                         *probe_iteration_level = next_probe_check_value;
@@ -261,133 +262,6 @@ impl SeriesApproximation {
             }
 
             self.valid_iterations = valid_iterations;
-
-
-
-            // let mut previous_value = self.min_valid_iteration;
-
-            // while true {
-            //     let mut first_valid_iterations = max(1, (previous_value as f32 * self.valid_iteration_frame_multiplier) as usize);
-            //     let i = 0;
-
-            //     let mut probe = if first_valid_iterations > 1 {
-            //         self.evaluate(self.probe_start[i], first_valid_iterations)
-            //     } else {
-            //         self.probe_start[i]
-            //     };
-
-            //     while first_valid_iterations < self.maximum_iteration {
-            //         let coefficients = &self.coefficients[first_valid_iterations - 1];
-            //         let next_coefficients = &self.coefficients[first_valid_iterations];
-
-            //         // step the probe points using perturbation
-            //         probe = probe * (coefficients[0] * 2.0 + probe);
-            //         probe += self.probe_start[i];
-
-            //         // This is not done on every iteration
-            //         if first_valid_iterations % 250 == 0 {
-            //             probe.reduce();
-            //         }
-
-            //         // get the new approximations
-            //         let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
-            //         let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
-
-            //         for k in 2..=self.order {
-            //             series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-            //             derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-            //         };
-
-            //         let relative_error = (probe - series_probe).norm_square();
-            //         let mut derivative = derivative_probe.norm_square();
-
-            //         // Check to make sure that the derivative is greater than or equal to 1
-            //         if derivative.to_float() < 1.0 {
-            //             derivative.mantissa = 1.0;
-            //             derivative.exponent = 0;
-            //         }
-
-            //         // Check that the error over the derivative is less than the pixel spacing
-            //         if relative_error / derivative > 1e-6 * self.delta_pixel_square {
-            //             break;
-            //         }
-
-            //         first_valid_iterations += 1;
-            //     }
-
-            //     self.valid_iterations = Vec::new();
-            //     self.valid_iterations.push(first_valid_iterations);
-
-            //     let new_start_iterations = max(1, (previous_value as f32 * self.valid_iteration_probe_multiplier) as usize);
-
-            //     // we now have a value for valid iterations, lets do the rest of the probes, but with 0.95 * that iteration
-
-            //     let other_valid_iterations = (1..self.probe_start.len()).into_par_iter()
-            //         .map(|i| {
-            //             let mut valid_iterations = new_start_iterations;
-            //             let mut probe = self.evaluate(self.probe_start[i], valid_iterations);
-
-            //             while valid_iterations < self.maximum_iteration {
-            //                 let coefficients = &self.coefficients[valid_iterations - 1];
-            //                 let next_coefficients = &self.coefficients[valid_iterations];
-
-            //                 // step the probe points using perturbation
-            //                 probe = probe * (coefficients[0] * 2.0 + probe);
-            //                 probe += self.probe_start[i];
-
-            //                 // This is not done on every iteration
-            //                 if valid_iterations % 250 == 0 {
-            //                     probe.reduce();
-            //                 }
-
-            //                 // get the new approximations
-            //                 let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
-            //                 let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
-
-            //                 for k in 2..=self.order {
-            //                     series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-            //                     derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-            //                 };
-
-            //                 let relative_error = (probe - series_probe).norm_square();
-            //                 let mut derivative = derivative_probe.norm_square();
-
-            //                 // Check to make sure that the derivative is greater than or equal to 1
-            //                 if derivative.to_float() < 1.0 {
-            //                     derivative.mantissa = 1.0;
-            //                     derivative.exponent = 0;
-            //                 }
-
-            //                 // Check that the error over the derivative is less than the pixel spacing
-            //                 if relative_error / derivative > 1e-6 * self.delta_pixel_square {
-            //                     break;
-            //                 }
-
-            //                 valid_iterations += 1;
-                            
-            //             }
-
-            //         valid_iterations
-            //     }).collect::<Vec<usize>>();
-
-            //     self.valid_iterations.extend_from_slice(other_valid_iterations.as_slice());
-
-                // self.min_valid_iteration = self.valid_iterations.iter().min().unwrap().clone();
-                // previous_value = self.min_valid_iteration;
-
-                // if new_start_iterations != 0 && self.min_valid_iteration == new_start_iterations {
-                //     // we only need to recurse the ones which didn't work out
-                //     println!("recurse {} {} {}", first_valid_iterations, new_start_iterations, self.min_valid_iteration);
-                //     continue;
-                // } else {
-                //     println!("break {} {} {}", first_valid_iterations, new_start_iterations, self.min_valid_iteration);
-                //     break;
-                // }
-            // }
-
-
-            // println!("{:?}", valid_iterations_array);
-
         } else {
             // Possible how to add the roots as probes
 
@@ -485,7 +359,7 @@ impl SeriesApproximation {
     // Get the current reference, and the current number of iterations done
     pub fn get_reference(&self, reference_delta: ComplexExtended, center_reference: &Reference) -> Reference {
         let precision = center_reference.c.real().prec();
-        let iteration_reference = self.high_precision_data_interval * (self.min_valid_iteration / self.high_precision_data_interval) + 1;
+        let iteration_reference = self.high_precision_data_interval * ((self.min_valid_iteration - 1) / self.high_precision_data_interval) + 1;
 
         let mut reference_c = center_reference.c.clone();
         let temp = Float::with_val(precision, reference_delta.exponent).exp2();
