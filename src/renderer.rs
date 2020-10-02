@@ -330,8 +330,9 @@ impl FractalRenderer {
             self.zoom.reduce();
 
             if self.zoom.to_float() < 1e10 {
-                self.series_approximation.valid_iteration_frame_multiplier = 0.0;
-                self.series_approximation.valid_iteration_probe_multiplier = 0.0;
+                // Set these to start from the beginning
+                self.series_approximation.valid_iteration_frame_multiplier = 1.0;
+                self.series_approximation.valid_iteration_probe_multiplier = 1.0;
 
                 // SA has some problems with precision with lots of terms at lot zoom levels
                 if self.series_approximation.order > 8 {
@@ -352,6 +353,14 @@ impl FractalRenderer {
 
                     self.center_reference.maximum_iteration = new_iteration_value;
                     self.maximum_iteration = new_iteration_value;
+                }
+            } else {
+                if self.series_approximation.min_valid_iteration < 1000 && self.series_approximation.order > 16 {
+                    self.series_approximation.order = 16;
+                    self.series_approximation.generate_approximation(&self.center_reference);
+                } else if self.series_approximation.min_valid_iteration < 10000 && self.series_approximation.order > 32 {
+                    self.series_approximation.order = 32;
+                    self.series_approximation.generate_approximation(&self.center_reference);
                 }
             }
             
