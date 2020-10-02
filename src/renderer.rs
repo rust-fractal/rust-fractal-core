@@ -49,8 +49,8 @@ impl FractalRenderer {
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
-        let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.75) as f32;
-        let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.98) as f32;
+        let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
+        let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
         
@@ -210,15 +210,9 @@ impl FractalRenderer {
                     let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i as f64 / self.image_width as f64).floor() as usize;
                     let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j as f64 / self.image_height as f64).floor() as usize;
 
-                    let pos1 = test1 * self.series_approximation.probe_sampling + test2;
-                    let pos2 = test1 * self.series_approximation.probe_sampling + test2 + 1;
-                    let pos3 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling;
-                    let pos4 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling + 1;
+                    let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
 
-                    [self.series_approximation.valid_iterations[pos1], 
-                        self.series_approximation.valid_iterations[pos2], 
-                        self.series_approximation.valid_iterations[pos3], 
-                        self.series_approximation.valid_iterations[pos4]].iter().min().unwrap().clone()
+                    self.series_approximation.valid_interpolation[index]
                 } else {
                     self.series_approximation.min_valid_iteration
                 };
@@ -269,23 +263,17 @@ impl FractalRenderer {
             correction_references += 1;
             glitch_reference.run();
 
-            // Experimental but does not work very well. There are a few glitches that still happen with this
+            // Experimental but does not work very well. There are quite a few glitches that still happen with this
             if false {
                 pixel_data.par_iter_mut()
                     .for_each(|pixel| {
                         let chosen_iteration = {
                             let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * pixel.image_x as f64 / self.image_width as f64).floor() as usize;
                             let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * pixel.image_y as f64 / self.image_height as f64).floor() as usize;
-        
-                            let pos1 = test1 * self.series_approximation.probe_sampling + test2;
-                            let pos2 = test1 * self.series_approximation.probe_sampling + test2 + 1;
-                            let pos3 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling;
-                            let pos4 = test1 * self.series_approximation.probe_sampling + test2 + self.series_approximation.probe_sampling + 1;
-        
-                            [self.series_approximation.valid_iterations[pos1], 
-                                self.series_approximation.valid_iterations[pos2], 
-                                self.series_approximation.valid_iterations[pos3], 
-                                self.series_approximation.valid_iterations[pos4]].iter().min().unwrap().clone()
+
+                            let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
+
+                            self.series_approximation.valid_interpolation[index]
                         };
 
                         let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, chosen_iteration);
