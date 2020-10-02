@@ -1,4 +1,4 @@
-use crate::util::{to_extended, ComplexArbitrary};
+use crate::util::{to_extended, ComplexArbitrary, ComplexFixed};
 use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
 use rug::Float;
@@ -15,7 +15,6 @@ pub struct SeriesApproximation {
     probe_start: Vec<ComplexExtended>,
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
-    pub delta_top_left: ComplexExtended,
     pub min_valid_iteration: usize,
     pub valid_iterations: Vec<usize>,
     pub valid_interpolation: Vec<usize>,
@@ -31,7 +30,6 @@ impl SeriesApproximation {
         order: usize, 
         maximum_iteration: usize, 
         delta_pixel_square: FloatExtended, 
-        delta_top_left: ComplexExtended, 
         probe_sampling: usize, 
         experimental: bool, 
         valid_iteration_frame_multiplier: f32, 
@@ -52,7 +50,6 @@ impl SeriesApproximation {
             probe_start: Vec::new(),
             approximation_probes: Vec::new(),
             approximation_probes_derivative: Vec::new(),
-            delta_top_left,
             min_valid_iteration: 1,
             valid_iterations: Vec::new(),
             valid_interpolation: Vec::new(),
@@ -60,7 +57,7 @@ impl SeriesApproximation {
             experimental,
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
-            high_precision_data_interval
+            high_precision_data_interval,
         }
     }
 
@@ -106,7 +103,14 @@ impl SeriesApproximation {
         }
     }
 
-    pub fn check_approximation(&mut self) {
+    pub fn check_approximation(&mut self, 
+        delta_top_left_mantissa: ComplexFixed<f64>, 
+        delta_top_left_exponent: i32, 
+        cos_rotate: f64, 
+        sin_rotate: f64, 
+        delta_pixel: f64,
+        image_width: usize,
+        image_height: usize) {
         // Delete the previous probes and calculate new ones
         self.probe_start = Vec::new();
         self.approximation_probes = Vec::new();
@@ -115,10 +119,17 @@ impl SeriesApproximation {
         // Probes are stored in row first order
         for j in 0..self.probe_sampling {
             for i in 0..self.probe_sampling {
-                let real = (1.0 - 2.0 * (i as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
-                let imag = (1.0 - 2.0 * (j as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
 
-                self.add_probe(ComplexExtended::new2(real, imag, self.delta_top_left.exponent));
+                let pos_x = image_width as f64 * (i as f64 / (self.probe_sampling as f64 - 1.0));
+                let pos_y = image_height as f64 * (j as f64 / (self.probe_sampling as f64 - 1.0));
+
+                // This could be changed to account for jittering if needed
+                let real = pos_x * delta_pixel * cos_rotate - pos_y * delta_pixel * sin_rotate + delta_top_left_mantissa.re;
+                let imag = pos_x * delta_pixel * sin_rotate + pos_y * delta_pixel * cos_rotate + delta_top_left_mantissa.im;
+
+                self.add_probe(ComplexExtended::new2(
+                    cos_rotate * real - sin_rotate * imag, 
+                    sin_rotate * real + cos_rotate * imag, delta_top_left_exponent));
             }
         }
 

@@ -101,7 +101,6 @@ impl FractalRenderer {
             auto_approximation, 
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
-            ComplexExtended::new2(0.0, 0.0, 0),
             probe_sampling,
             experimental,
             valid_iteration_frame_multiplier,
@@ -154,14 +153,19 @@ impl FractalRenderer {
         let sin_rotate = self.rotate.sin();
         let delta_pixel = 4.0 / ((self.image_height - 1) as f64 * self.zoom.mantissa);
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
-
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
         self.series_approximation.delta_pixel_square = delta_pixel_extended * delta_pixel_extended;
 
         // Used for placing the probe points
-        self.series_approximation.delta_top_left = ComplexExtended::new(delta_top_left, -self.zoom.exponent);
-        self.series_approximation.check_approximation();
+        self.series_approximation.check_approximation(
+            delta_top_left, 
+            -self.zoom.exponent, 
+            cos_rotate, 
+            sin_rotate, 
+            delta_pixel,
+            self.image_width,
+            self.image_height);
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.min_valid_iteration);
