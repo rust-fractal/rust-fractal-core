@@ -18,6 +18,7 @@ pub struct SeriesApproximation {
     pub delta_top_left: ComplexExtended,
     pub min_valid_iteration: usize,
     pub valid_iterations: Vec<usize>,
+    pub valid_interpolation: Vec<usize>,
     pub probe_sampling: usize,
     pub experimental: bool,
     pub valid_iteration_frame_multiplier: f32,
@@ -54,6 +55,7 @@ impl SeriesApproximation {
             delta_top_left,
             min_valid_iteration: 1,
             valid_iterations: Vec::new(),
+            valid_interpolation: Vec::new(),
             probe_sampling,
             experimental,
             valid_iteration_frame_multiplier,
@@ -110,8 +112,9 @@ impl SeriesApproximation {
         self.approximation_probes = Vec::new();
         self.approximation_probes_derivative = Vec::new();
 
-        for i in 0..self.probe_sampling {
-            for j in 0..self.probe_sampling {
+        // Probes are stored in row first order
+        for j in 0..self.probe_sampling {
+            for i in 0..self.probe_sampling {
                 let real = (1.0 - 2.0 * (i as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.re;
                 let imag = (1.0 - 2.0 * (j as f64 / (self.probe_sampling as f64 - 1.0))) * self.delta_top_left.mantissa.im;
 
@@ -136,7 +139,14 @@ impl SeriesApproximation {
                 // We check using the top left probe
                 let i = 0;
 
-                let mut first_valid_iterations = max(1, (self.min_valid_iteration as f32 * self.valid_iteration_frame_multiplier) as usize);
+                let test_val = max((self.min_valid_iteration as f32 * self.valid_iteration_frame_multiplier) as usize, 1000);
+
+                let mut first_valid_iterations = if self.min_valid_iteration > test_val {
+                    self.min_valid_iteration - test_val
+                } else {
+                    1
+                };
+
                 let mut probe = self.evaluate(self.probe_start[i], first_valid_iterations);
                 
                 while first_valid_iterations < self.maximum_iteration {
@@ -182,8 +192,19 @@ impl SeriesApproximation {
                 self.min_valid_iteration = first_valid_iterations;
             }
 
-            let mut current_probe_check_value = max(1, (self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize);
-            let mut next_probe_check_value = max(1, (current_probe_check_value as f32 * self.valid_iteration_probe_multiplier) as usize);
+            let test_val = max((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize, 1000);
+
+            let mut current_probe_check_value = if self.min_valid_iteration > test_val {
+                self.min_valid_iteration - test_val
+            } else {
+                1
+            };
+
+            let mut next_probe_check_value = if current_probe_check_value > test_val {
+                current_probe_check_value - test_val
+            } else {
+                1
+            };
 
             // This is the array that will be iterated
             let mut valid_iterations = vec![current_probe_check_value; self.probe_sampling * self.probe_sampling];
@@ -256,12 +277,37 @@ impl SeriesApproximation {
                     break;
                 } else {
                     current_probe_check_value = next_probe_check_value;
-                    next_probe_check_value = (current_probe_check_value as f32 * self.valid_iteration_probe_multiplier) as usize;
-                    // println!("{:?}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value);
+
+                    let test_val = max((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize, 1000);
+        
+                    next_probe_check_value = if current_probe_check_value > test_val {
+                        current_probe_check_value - test_val
+                    } else {
+                        1
+                    };
+                    // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
                 }
             }
 
             self.valid_iterations = valid_iterations;
+
+            // Also, here we do the interpolation and set up the array
+            self.valid_interpolation = Vec::new();
+
+            for j in 0..(self.probe_sampling - 1) {
+                for i in 0..(self.probe_sampling - 1) {
+                    // this is the index into the main array
+                    let index = j * self.probe_sampling + i;
+
+                    let min_interpolation = [self.valid_iterations[index], 
+                        self.valid_iterations[index + 1], 
+                        self.valid_iterations[index + self.probe_sampling], 
+                        self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap().clone();
+
+                    self.valid_interpolation.push(min_interpolation);
+                }
+            }
+
         } else {
             // Possible how to add the roots as probes
 
