@@ -319,6 +319,9 @@ impl SeriesApproximation {
                 }
             }
 
+            // override???
+            self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];
+
         } else {
             // Possible how to add the roots as probes
 
