@@ -648,7 +648,7 @@ checksum = "3e52c148ef37f8c375d49d5a73aa70713125b7f19095948a923f80afdeb22ec2"
 
 [[package]]
 name = "rust_fractal"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "clap",
  "config",

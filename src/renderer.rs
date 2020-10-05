@@ -52,7 +52,7 @@ impl FractalRenderer {
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
-        let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
+        let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
@@ -94,19 +94,17 @@ impl FractalRenderer {
             center_location.clone(), 
             1, 
             maximum_iteration, 
-            high_precision_data_interval,
+            data_storage_interval,
             glitch_tolerance);
 
-        let series_approximation = SeriesApproximation::new_central(&center_location, 
-            auto_approximation, 
+        let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
-            ComplexExtended::new2(0.0, 0.0, 0),
             probe_sampling,
             experimental,
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
-            high_precision_data_interval);
+            data_storage_interval);
 
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
@@ -154,14 +152,20 @@ impl FractalRenderer {
         let sin_rotate = self.rotate.sin();
         let delta_pixel = 4.0 / ((self.image_height - 1) as f64 * self.zoom.mantissa);
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
-
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
         self.series_approximation.delta_pixel_square = delta_pixel_extended * delta_pixel_extended;
 
         // Used for placing the probe points
-        self.series_approximation.delta_top_left = ComplexExtended::new(delta_top_left, -self.zoom.exponent);
-        self.series_approximation.check_approximation();
+        self.series_approximation.check_approximation(
+            delta_top_left, 
+            -self.zoom.exponent, 
+            cos_rotate, 
+            sin_rotate, 
+            delta_pixel,
+            self.image_width,
+            self.image_height,
+            &self.center_reference);
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.min_valid_iteration);
