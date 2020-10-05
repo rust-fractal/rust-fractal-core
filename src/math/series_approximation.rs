@@ -140,276 +140,208 @@ impl SeriesApproximation {
             }
         }
 
-        if self.experimental {
-            if true {
-                // We check using the top left probe
-                let i = 0;
+        // We check using the top left probe
+        let i = 0;
 
-                let test_val = max((self.min_valid_iteration as f32 * self.valid_iteration_frame_multiplier) as usize, 1000);
+        let test_val = max((self.min_valid_iteration as f32 * self.valid_iteration_frame_multiplier) as usize, 1000);
 
-                let mut first_valid_iterations = if self.min_valid_iteration > test_val {
-                    self.min_valid_iteration - test_val
-                } else {
-                    1
-                };
+        let mut first_valid_iterations = if self.min_valid_iteration > test_val {
+            self.min_valid_iteration - test_val
+        } else {
+            1
+        };
 
-                // TODO make this adapt for the division (defaults to 1 so same)
-                let mut probe = self.evaluate(self.probe_start[i], first_valid_iterations);
-                
-                while first_valid_iterations < self.maximum_iteration {
-                    // step the probe points using perturbation
-                    probe = probe * (center_reference.reference_data[first_valid_iterations - 1].z_extended * 2.0 + probe);
-                    probe += self.probe_start[i];
+        // TODO make this adapt for the division (defaults to 1 so same)
+        let mut probe = self.evaluate(self.probe_start[i], first_valid_iterations);
+        
+        while first_valid_iterations < self.maximum_iteration {
+            // step the probe points using perturbation
+            probe = probe * (center_reference.reference_data[first_valid_iterations - 1].z_extended * 2.0 + probe);
+            probe += self.probe_start[i];
 
-                    // This is not done on every iteration
-                    if first_valid_iterations % 250 == 0 {
-                        probe.reduce();
-                    }
-
-                    // triggers on when the next iteration would be 1, 101, 201 etc.
-                    if first_valid_iterations % self.high_precision_data_interval == 0 {
-                        // valid_iteration + 1 - 1 (for the approximation)
-                        let next_coefficients = &self.coefficients[first_valid_iterations / self.high_precision_data_interval];
-
-                        // get the new approximations
-                        let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
-                        let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
-
-                        for k in 2..=self.order {
-                            series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                            derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-                        };
-
-                        let relative_error = (probe - series_probe).norm_square();
-                        let mut derivative = derivative_probe.norm_square();
-
-                        // Check to make sure that the derivative is greater than or equal to 1
-                        if derivative.to_float() < 1.0 {
-                            derivative.mantissa = 1.0;
-                            derivative.exponent = 0;
-                        }
-
-                        // The first element is reduced, the second might need to be reduced a little more
-                        // Check that the error over the derivative is less than the pixel spacing
-                        if relative_error / derivative > self.delta_pixel_square {
-                            first_valid_iterations = if first_valid_iterations > self.high_precision_data_interval {
-                                first_valid_iterations - self.high_precision_data_interval + 1
-                            } else {
-                                1
-                            };
-
-                            break;
-                        }
-                    }
-
-                    first_valid_iterations += 1;
-                }
-
-                self.min_valid_iteration = first_valid_iterations;
+            // This is not done on every iteration
+            if first_valid_iterations % 250 == 0 {
+                probe.reduce();
             }
 
-            // println!("{}", self.min_valid_iteration);
+            // triggers on when the next iteration would be 1, 101, 201 etc.
+            if first_valid_iterations % self.high_precision_data_interval == 0 {
+                // valid_iteration + 1 - 1 (for the approximation)
+                let next_coefficients = &self.coefficients[first_valid_iterations / self.high_precision_data_interval];
 
-            let test_val = max(
-                ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
-                (1000 / self.high_precision_data_interval) * self.high_precision_data_interval);
+                // get the new approximations
+                let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
+                let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
 
-            let mut current_probe_check_value = if self.min_valid_iteration > test_val {
-                self.min_valid_iteration - test_val
-            } else {
-                1
-            };
+                for k in 2..=self.order {
+                    series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                    derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                };
 
-            let mut next_probe_check_value = if current_probe_check_value > test_val {
-                current_probe_check_value - test_val
-            } else {
-                1
-            };
+                let relative_error = (probe - series_probe).norm_square();
+                let mut derivative = derivative_probe.norm_square();
 
-            // println!("{} {}", current_probe_check_value, next_probe_check_value);
+                // Check to make sure that the derivative is greater than or equal to 1
+                if derivative.to_float() < 1.0 {
+                    derivative.mantissa = 1.0;
+                    derivative.exponent = 0;
+                }
 
-            // This is the array that will be iterated
-            let mut valid_iterations = vec![current_probe_check_value; self.probe_sampling * self.probe_sampling];
-
-            // preallocate array for the values
-
-            loop {
-                valid_iterations.par_iter_mut().enumerate()
-                    .for_each(|(i, probe_iteration_level)| {
-                        // check if the probe has already found its max skip
-                        if *probe_iteration_level == current_probe_check_value {
-                            let mut probe = self.evaluate(self.probe_start[i], *probe_iteration_level);
-
-                            while *probe_iteration_level < self.maximum_iteration {
-                                // step the probe points using perturbation
-                                probe = probe * (center_reference.reference_data[*probe_iteration_level - 1].z_extended * 2.0 + probe);
-                                probe += self.probe_start[i];
-
-                                // This is not done on every iteration
-                                if *probe_iteration_level % 250 == 0 {
-                                    probe.reduce();
-                                }
-
-                                // triggers on the first iteration when the next iteration is 1001, 1101 etc.
-                                if *probe_iteration_level % self.high_precision_data_interval == 0 {
-                                    let next_coefficients = &self.coefficients[*probe_iteration_level / self.high_precision_data_interval];
-
-                                    // get the new approximations
-                                    let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
-                                    let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
-
-                                    for k in 2..=self.order {
-                                        series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                                        derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-                                    };
-
-                                    let relative_error = (probe - series_probe).norm_square();
-                                    let mut derivative = derivative_probe.norm_square();
-
-                                    // Check to make sure that the derivative is greater than or equal to 1
-                                    if derivative.to_float() < 1.0 {
-                                        derivative.mantissa = 1.0;
-                                        derivative.exponent = 0;
-                                    }
-
-                                    // The first element is reduced, the second might need to be reduced a little more
-                                    // Check that the error over the derivative is less than the pixel spacing
-                                    if relative_error / derivative > self.delta_pixel_square {
-                                        // println!("{} ", *probe_iteration_level);
-
-                                        if *probe_iteration_level <= (current_probe_check_value + self.high_precision_data_interval + 1) {
-                                            *probe_iteration_level = next_probe_check_value;
-                                            break;
-                                        };
-
-                                        *probe_iteration_level = if *probe_iteration_level > self.high_precision_data_interval {
-                                            *probe_iteration_level - self.high_precision_data_interval + 1
-                                        } else {
-                                            1
-                                        };
-
-                                        break;
-                                    }
-                                }
-
-                                *probe_iteration_level += 1;
-                            }
-                        };
-                    });
-
-                // we have now iterated all the values, we need to update those which skipped too quickly
-                self.min_valid_iteration = valid_iterations.iter().min().unwrap().clone();
-
-                // this would indicate that no more of the probes are bad
-                if self.min_valid_iteration != next_probe_check_value  || self.min_valid_iteration == 1 {
-                    // println!("{:?}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value);
-                    break;
-                } else {
-                    current_probe_check_value = next_probe_check_value;
-
-                    let test_val = max(
-                        ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
-                        (1000 / self.high_precision_data_interval) * self.high_precision_data_interval);
-        
-                    next_probe_check_value = if current_probe_check_value > test_val {
-                        current_probe_check_value - test_val
+                // The first element is reduced, the second might need to be reduced a little more
+                // Check that the error over the derivative is less than the pixel spacing
+                if relative_error / derivative > self.delta_pixel_square {
+                    first_valid_iterations = if first_valid_iterations > self.high_precision_data_interval {
+                        first_valid_iterations - self.high_precision_data_interval + 1
                     } else {
                         1
                     };
-                    // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
+
+                    break;
                 }
             }
 
-            self.valid_iterations = valid_iterations;
+            first_valid_iterations += 1;
+        }
 
-            // Also, here we do the interpolation and set up the array
-            self.valid_interpolation = Vec::new();
+        self.min_valid_iteration = first_valid_iterations;
 
-            for j in 0..(self.probe_sampling - 1) {
-                for i in 0..(self.probe_sampling - 1) {
-                    // this is the index into the main array
-                    let index = j * self.probe_sampling + i;
+        // println!("{}", self.min_valid_iteration);
 
-                    let min_interpolation = [self.valid_iterations[index], 
-                        self.valid_iterations[index + 1], 
-                        self.valid_iterations[index + self.probe_sampling], 
-                        self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap().clone();
+        let test_val = max(
+            ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
+            (1000 / self.high_precision_data_interval) * self.high_precision_data_interval);
 
-                    self.valid_interpolation.push(min_interpolation);
-                }
-            }
-
-            // override???
-            self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];
-
+        let mut current_probe_check_value = if self.min_valid_iteration > test_val {
+            self.min_valid_iteration - test_val
         } else {
-            // Possible how to add the roots as probes
+            1
+        };
 
-            // lets say we check the first 1000 iterations for roots with periods 0-1000
+        let mut next_probe_check_value = if current_probe_check_value > test_val {
+            current_probe_check_value - test_val
+        } else {
+            1
+        };
 
-            // Each iteration, we NR the current SA polynomial??
+        // println!("{} {}", current_probe_check_value, next_probe_check_value);
 
-            // Maybe only needs to be done once for the entire zoom sequence??
+        // This is the array that will be iterated
+        let mut valid_iterations = vec![current_probe_check_value; self.probe_sampling * self.probe_sampling];
 
-            // How do we know which probes to use??
+        // preallocate array for the values
 
-            // Maybe some kind of distance check, where the probes are chosen that are in the image, and are within some tolerance
-            // ~10 pixel spacing from others. 
+        loop {
+            valid_iterations.par_iter_mut().enumerate()
+                .for_each(|(i, probe_iteration_level)| {
+                    // check if the probe has already found its max skip
+                    if *probe_iteration_level == current_probe_check_value {
+                        let mut probe = self.evaluate(self.probe_start[i], *probe_iteration_level);
 
-            // Possible loop once the roots have been calculated
+                        while *probe_iteration_level < self.maximum_iteration {
+                            // step the probe points using perturbation
+                            probe = probe * (center_reference.reference_data[*probe_iteration_level - 1].z_extended * 2.0 + probe);
+                            probe += self.probe_start[i];
 
-            // Get all of the root locations, and don't use any of them that are not in the image
-            // There might still be quite a few roots, so remove those which are close to each other
+                            // This is not done on every iteration
+                            if *probe_iteration_level % 250 == 0 {
+                                probe.reduce();
+                            }
 
-            self.valid_iterations = (0..self.probe_start.len()).into_par_iter()
-                .map(|i| {
-                    let mut valid_iterations = 1;
-                    let mut probe = self.probe_start[i];
+                            // triggers on the first iteration when the next iteration is 1001, 1101 etc.
+                            if *probe_iteration_level % self.high_precision_data_interval == 0 {
+                                let next_coefficients = &self.coefficients[*probe_iteration_level / self.high_precision_data_interval];
 
-                    while valid_iterations < self.maximum_iteration {
-                        let coefficients = &self.coefficients[valid_iterations - 1];
-                        let next_coefficients = &self.coefficients[valid_iterations];
+                                // get the new approximations
+                                let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
+                                let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
 
-                        // step the probe points using perturbation
-                        probe = probe * (coefficients[0] * 2.0 + probe);
-                        probe += self.probe_start[i];
+                                for k in 2..=self.order {
+                                    series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
+                                    derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
+                                };
 
-                        // This is not done on every iteration
-                        if valid_iterations % 250 == 0 {
-                            probe.reduce();
+                                let relative_error = (probe - series_probe).norm_square();
+                                let mut derivative = derivative_probe.norm_square();
+
+                                // Check to make sure that the derivative is greater than or equal to 1
+                                if derivative.to_float() < 1.0 {
+                                    derivative.mantissa = 1.0;
+                                    derivative.exponent = 0;
+                                }
+
+                                // The first element is reduced, the second might need to be reduced a little more
+                                // Check that the error over the derivative is less than the pixel spacing
+                                if relative_error / derivative > self.delta_pixel_square {
+                                    // println!("{} ", *probe_iteration_level);
+
+                                    if *probe_iteration_level <= (current_probe_check_value + self.high_precision_data_interval + 1) {
+                                        *probe_iteration_level = next_probe_check_value;
+                                    };
+
+                                    *probe_iteration_level = if *probe_iteration_level > self.high_precision_data_interval {
+                                        *probe_iteration_level - self.high_precision_data_interval + 1
+                                    } else {
+                                        1
+                                    };
+
+                                    break;
+                                }
+                            }
+
+                            *probe_iteration_level += 1;
                         }
 
-                        // get the new approximations
-                        let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
-                        let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
-
-                        for k in 2..=self.order {
-                            series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                            derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-                        };
-
-                        let relative_error = (probe - series_probe).norm_square();
-                        let mut derivative = derivative_probe.norm_square();
-
-                        // Check to make sure that the derivative is greater than or equal to 1
-                        if derivative.to_float() < 1.0 {
-                            derivative.mantissa = 1.0;
-                            derivative.exponent = 0;
+                        if *probe_iteration_level == self.maximum_iteration {
+                            // 100 -> 0 + 1 = 1, 101 -> 100 + 1 = 101
+                            *probe_iteration_level = ((*probe_iteration_level - 1) / self.high_precision_data_interval) * self.high_precision_data_interval + 1;
                         }
+                    };
+                });
 
-                        // Check that the error over the derivative is less than the pixel spacing
-                        if relative_error / derivative > self.delta_pixel_square {
-                            break;
-                        }
+            // we have now iterated all the values, we need to update those which skipped too quickly
+            self.min_valid_iteration = valid_iterations.iter().min().unwrap().clone();
 
-                        valid_iterations += 1;
-                        
-                    }
+            // this would indicate that no more of the probes are bad
+            if self.min_valid_iteration != next_probe_check_value  || self.min_valid_iteration == 1 {
+                // println!("{:?}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value);
+                break;
+            } else {
+                current_probe_check_value = next_probe_check_value;
 
-                valid_iterations
-            }).collect::<Vec<usize>>();
+                let test_val = max(
+                    ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
+                    (1000 / self.high_precision_data_interval) * self.high_precision_data_interval);
+    
+                next_probe_check_value = if current_probe_check_value > test_val {
+                    current_probe_check_value - test_val
+                } else {
+                    1
+                };
+                // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
+            }
+        }
 
-            self.min_valid_iteration = self.valid_iterations.iter().min().unwrap().clone();
+        self.valid_iterations = valid_iterations;
+
+        // Also, here we do the interpolation and set up the array
+        self.valid_interpolation = Vec::new();
+
+        for j in 0..(self.probe_sampling - 1) {
+            for i in 0..(self.probe_sampling - 1) {
+                // this is the index into the main array
+                let index = j * self.probe_sampling + i;
+
+                let min_interpolation = [self.valid_iterations[index], 
+                    self.valid_iterations[index + 1], 
+                    self.valid_iterations[index + self.probe_sampling], 
+                    self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap().clone();
+
+                self.valid_interpolation.push(min_interpolation);
+            }
+        }
+
+        if !self.experimental {
+            self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];
         }
     }
 
