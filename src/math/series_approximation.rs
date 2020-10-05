@@ -304,7 +304,7 @@ impl SeriesApproximation {
 
             // this would indicate that no more of the probes are bad
             if self.min_valid_iteration != next_probe_check_value  || self.min_valid_iteration == 1 {
-                println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
+                // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
                 break;
             } else {
                 current_probe_check_value = next_probe_check_value;
@@ -318,7 +318,7 @@ impl SeriesApproximation {
                 } else {
                     1
                 };
-                println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
+                // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
             }
         }
 
