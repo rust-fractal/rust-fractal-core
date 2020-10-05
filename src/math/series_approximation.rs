@@ -22,7 +22,7 @@ pub struct SeriesApproximation {
     pub experimental: bool,
     pub valid_iteration_frame_multiplier: f32,
     pub valid_iteration_probe_multiplier: f32,
-    pub high_precision_data_interval: usize,
+    pub data_storage_interval: usize,
 }
 
 impl SeriesApproximation {
@@ -33,7 +33,7 @@ impl SeriesApproximation {
         experimental: bool, 
         valid_iteration_frame_multiplier: f32, 
         valid_iteration_probe_multiplier: f32,
-        high_precision_data_interval: usize) -> Self {
+        data_storage_interval: usize) -> Self {
 
         // The current iteration is set to 1 as we set z = c
         SeriesApproximation {
@@ -51,7 +51,7 @@ impl SeriesApproximation {
             experimental,
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
-            high_precision_data_interval,
+            data_storage_interval,
         }
     }
 
@@ -101,7 +101,7 @@ impl SeriesApproximation {
 
             // only every 100th iteration (101, 201 etc)
             // This is 0, 100, 200 -> 1, 101, 201
-            if i % self.high_precision_data_interval == 0 {
+            if i % self.data_storage_interval == 0 {
                 self.coefficients.push(next_coefficients);
             }
 
@@ -165,9 +165,9 @@ impl SeriesApproximation {
             }
 
             // triggers on when the next iteration would be 1, 101, 201 etc.
-            if first_valid_iterations % self.high_precision_data_interval == 0 {
+            if first_valid_iterations % self.data_storage_interval == 0 {
                 // valid_iteration + 1 - 1 (for the approximation)
-                let next_coefficients = &self.coefficients[first_valid_iterations / self.high_precision_data_interval];
+                let next_coefficients = &self.coefficients[first_valid_iterations / self.data_storage_interval];
 
                 // get the new approximations
                 let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
@@ -190,8 +190,8 @@ impl SeriesApproximation {
                 // The first element is reduced, the second might need to be reduced a little more
                 // Check that the error over the derivative is less than the pixel spacing
                 if relative_error / derivative > self.delta_pixel_square {
-                    first_valid_iterations = if first_valid_iterations > self.high_precision_data_interval {
-                        first_valid_iterations - self.high_precision_data_interval + 1
+                    first_valid_iterations = if first_valid_iterations > self.data_storage_interval {
+                        first_valid_iterations - self.data_storage_interval + 1
                     } else {
                         1
                     };
@@ -208,8 +208,8 @@ impl SeriesApproximation {
         // println!("{}", self.min_valid_iteration);
 
         let test_val = max(
-            ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
-            (1000 / self.high_precision_data_interval) * self.high_precision_data_interval);
+            ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.data_storage_interval) * self.data_storage_interval, 
+            (1000 / self.data_storage_interval) * self.data_storage_interval);
 
         let mut current_probe_check_value = if self.min_valid_iteration > test_val {
             self.min_valid_iteration - test_val
@@ -248,8 +248,8 @@ impl SeriesApproximation {
                             }
 
                             // triggers on the first iteration when the next iteration is 1001, 1101 etc.
-                            if *probe_iteration_level % self.high_precision_data_interval == 0 {
-                                let next_coefficients = &self.coefficients[*probe_iteration_level / self.high_precision_data_interval];
+                            if *probe_iteration_level % self.data_storage_interval == 0 {
+                                let next_coefficients = &self.coefficients[*probe_iteration_level / self.data_storage_interval];
 
                                 // get the new approximations
                                 let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
@@ -274,12 +274,12 @@ impl SeriesApproximation {
                                 if relative_error / derivative > self.delta_pixel_square {
                                     // println!("{} ", *probe_iteration_level);
 
-                                    if *probe_iteration_level <= (current_probe_check_value + self.high_precision_data_interval + 1) {
+                                    if *probe_iteration_level <= (current_probe_check_value + self.data_storage_interval + 1) {
                                         *probe_iteration_level = next_probe_check_value;
                                     };
 
-                                    *probe_iteration_level = if *probe_iteration_level > self.high_precision_data_interval {
-                                        *probe_iteration_level - self.high_precision_data_interval + 1
+                                    *probe_iteration_level = if *probe_iteration_level > self.data_storage_interval {
+                                        *probe_iteration_level - self.data_storage_interval + 1
                                     } else {
                                         1
                                     };
@@ -293,7 +293,7 @@ impl SeriesApproximation {
 
                         if *probe_iteration_level == self.maximum_iteration {
                             // 100 -> 0 + 1 = 1, 101 -> 100 + 1 = 101
-                            *probe_iteration_level = ((*probe_iteration_level - 1) / self.high_precision_data_interval) * self.high_precision_data_interval + 1;
+                            *probe_iteration_level = ((*probe_iteration_level - 1) / self.data_storage_interval) * self.data_storage_interval + 1;
                         }
                     };
                 });
@@ -309,8 +309,8 @@ impl SeriesApproximation {
                 current_probe_check_value = next_probe_check_value;
 
                 let test_val = max(
-                    ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
-                    (1000 / self.high_precision_data_interval) * self.high_precision_data_interval);
+                    ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.data_storage_interval) * self.data_storage_interval, 
+                    (1000 / self.data_storage_interval) * self.data_storage_interval);
     
                 next_probe_check_value = if current_probe_check_value > test_val {
                     current_probe_check_value - test_val
@@ -371,7 +371,7 @@ impl SeriesApproximation {
     // Get the current reference, and the current number of iterations done
     pub fn get_reference(&self, reference_delta: ComplexExtended, center_reference: &Reference) -> Reference {
         let precision = center_reference.c.real().prec();
-        // let iteration_reference = self.high_precision_data_interval * ((self.min_valid_iteration - 1) / self.high_precision_data_interval) + 1;
+        // let iteration_reference = self.data_storage_interval * ((self.min_valid_iteration - 1) / self.data_storage_interval) + 1;
 
         let mut reference_c = center_reference.c.clone();
         let temp = Float::with_val(precision, reference_delta.exponent).exp2();
@@ -382,7 +382,7 @@ impl SeriesApproximation {
         *reference_c.mut_imag() += &temp3 * &temp;
 
         // let mut reference_z = self.center_reference.approximation_data[self.valid_iteration].clone();
-        let mut reference_z = center_reference.high_precision_data[(self.min_valid_iteration - 1) / self.high_precision_data_interval].clone();
+        let mut reference_z = center_reference.high_precision_data[(self.min_valid_iteration - 1) / self.data_storage_interval].clone();
 
         let temp4 = self.evaluate(reference_delta, self.min_valid_iteration);
         let temp = Float::with_val(precision, temp4.exponent).exp2();
@@ -392,7 +392,7 @@ impl SeriesApproximation {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        Reference::new(reference_z, reference_c, self.min_valid_iteration, center_reference.maximum_iteration, self.high_precision_data_interval, center_reference.glitch_tolerance)
+        Reference::new(reference_z, reference_c, self.min_valid_iteration, center_reference.maximum_iteration, self.data_storage_interval, center_reference.glitch_tolerance)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
@@ -400,7 +400,7 @@ impl SeriesApproximation {
         // this assumes that the requested iteration is a multiple of the data interval
 
         // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
-        let new_coefficients = &self.coefficients[(iteration - 1) / self.high_precision_data_interval];
+        let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];
         // Horner's rule
         let mut approximation = new_coefficients[self.order];
 
