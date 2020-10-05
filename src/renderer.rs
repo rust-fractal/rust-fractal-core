@@ -97,8 +97,7 @@ impl FractalRenderer {
             high_precision_data_interval,
             glitch_tolerance);
 
-        let series_approximation = SeriesApproximation::new_central(&center_location, 
-            auto_approximation, 
+        let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
             probe_sampling,
@@ -165,7 +164,8 @@ impl FractalRenderer {
             sin_rotate, 
             delta_pixel,
             self.image_width,
-            self.image_height);
+            self.image_height,
+            &self.center_reference);
 
         print!("| {:<15}", approximation_time.elapsed().as_millis());
         print!("| {:<15}", self.series_approximation.min_valid_iteration);
