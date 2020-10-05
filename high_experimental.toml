@@ -16,11 +16,10 @@ glitch_tolerance = 1.4e-6
 
 probe_sampling = 30
 
-# If this is set higher than the maximum iteration value this will cause any additional glitches to be perturbed without series approximation
-high_precision_data_interval = 100
+# Do not set this value higher than ~900
+data_storage_interval = 10
 valid_iteration_frame_multiplier = 0.05
 valid_iteration_probe_multiplier = 0.005
 
 # These are experimental options following
 experimental = false 
-

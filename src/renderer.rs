@@ -52,7 +52,7 @@ impl FractalRenderer {
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
-        let high_precision_data_interval = settings.get_int("high_precision_data_interval").unwrap_or(100) as usize;
+        let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
@@ -94,7 +94,7 @@ impl FractalRenderer {
             center_location.clone(), 
             1, 
             maximum_iteration, 
-            high_precision_data_interval,
+            data_storage_interval,
             glitch_tolerance);
 
         let series_approximation = SeriesApproximation::new_central(auto_approximation, 
@@ -104,7 +104,7 @@ impl FractalRenderer {
             experimental,
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
-            high_precision_data_interval);
+            data_storage_interval);
 
         let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
