@@ -8,6 +8,16 @@ frame_offset = 0
 zoom_scale = 2.0
 display_glitches = false
 auto_adjust_iterations = true
-probe_sampling = 2
 remove_centre = true
 export = "png"
+
+glitch_tolerance = 1.4e-6
+
+probe_sampling = 3
+
+data_storage_interval = 10
+
+valid_iteration_frame_multiplier = 0.25
+valid_iteration_probe_multiplier = 0.02
+
+experimental = false 
