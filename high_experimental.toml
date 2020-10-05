@@ -20,6 +20,6 @@ probe_sampling = 15
 experimental = true 
 
 # If this is set higher than the maximum iteration value this will cause any additional glitches to be perturbed without series approximation
-high_precision_data_interval = 100
+high_precision_data_interval = 1000
 valid_iteration_frame_multiplier = 0.05
 valid_iteration_probe_multiplier = 0.005
