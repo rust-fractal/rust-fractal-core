@@ -208,10 +208,7 @@ impl SeriesApproximation {
                 self.min_valid_iteration = first_valid_iterations;
             }
 
-
-            println!("{}", self.min_valid_iteration);
-            
-
+            // println!("{}", self.min_valid_iteration);
 
             let test_val = max(
                 ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.high_precision_data_interval) * self.high_precision_data_interval, 
@@ -229,19 +226,16 @@ impl SeriesApproximation {
                 1
             };
 
-            println!("{} {}", current_probe_check_value, next_probe_check_value);
+            // println!("{} {}", current_probe_check_value, next_probe_check_value);
 
             // This is the array that will be iterated
             let mut valid_iterations = vec![current_probe_check_value; self.probe_sampling * self.probe_sampling];
 
             // preallocate array for the values
-            // TODO there needs to be checks here to make sure that we are not too close to 0
 
             loop {
-                valid_iterations.iter_mut().enumerate()
+                valid_iterations.par_iter_mut().enumerate()
                     .for_each(|(i, probe_iteration_level)| {
-                        // let mut probe_iteration_level = valid_iteration;
-
                         // check if the probe has already found its max skip
                         if *probe_iteration_level == current_probe_check_value {
                             let mut probe = self.evaluate(self.probe_start[i], *probe_iteration_level);
@@ -304,12 +298,11 @@ impl SeriesApproximation {
                     });
 
                 // we have now iterated all the values, we need to update those which skipped too quickly
-
                 self.min_valid_iteration = valid_iterations.iter().min().unwrap().clone();
 
                 // this would indicate that no more of the probes are bad
                 if self.min_valid_iteration != next_probe_check_value  || self.min_valid_iteration == 1 {
-                    println!("{:?}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value);
+                    // println!("{:?}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value);
                     break;
                 } else {
                     current_probe_check_value = next_probe_check_value;
@@ -323,7 +316,7 @@ impl SeriesApproximation {
                     } else {
                         1
                     };
-                    println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
+                    // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
                 }
             }
 
