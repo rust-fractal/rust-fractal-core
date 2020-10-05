@@ -14,10 +14,10 @@ export = "png"
 # By default this is squared tolerance. 1e-6 works normally, 1.4e-6 is low tolerance.
 glitch_tolerance = 1.4e-6
 
-probe_sampling = 30
+probe_sampling = 15
 
 # Do not set this value higher than ~900
-data_storage_interval = 10
+data_storage_interval = 100
 valid_iteration_frame_multiplier = 0.05
 valid_iteration_probe_multiplier = 0.005
 
