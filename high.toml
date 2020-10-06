@@ -3,8 +3,8 @@ image_height = 1080
 rotate = 0
 approximation_order = 64
 glitch_percentage = 0.001
-frames = 1
-frame_offset = 0
+frames = 10
+frame_offset = 10
 zoom_scale = 2.0
 display_glitches = false
 auto_adjust_iterations = true
@@ -17,7 +17,7 @@ probe_sampling = 15
 
 data_storage_interval = 100
 
-valid_iteration_frame_multiplier = 0.05
+valid_iteration_frame_multiplier = 0.10
 valid_iteration_probe_multiplier = 0.005
 
 experimental = false  
