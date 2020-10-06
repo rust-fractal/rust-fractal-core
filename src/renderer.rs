@@ -333,6 +333,19 @@ impl FractalRenderer {
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
 
+            // Logic in here to automatically adjust the maximum number of iterations
+            // This is done arbitrarily and could be done in a config file if required
+            if self.auto_adjust_iterations && self.maximum_iteration > 10000 {
+                let new_iteration_value = max(10000, self.series_approximation.min_valid_iteration * 10);
+
+                if self.center_reference.current_iteration >= 10000 {
+                    self.center_reference.current_iteration = new_iteration_value;
+                };
+
+                self.center_reference.maximum_iteration = new_iteration_value;
+                self.maximum_iteration = new_iteration_value;
+            }
+
             if self.zoom.to_float() < 1e10 {
                 // Set these to start from the beginning
                 self.series_approximation.valid_iteration_frame_multiplier = 1.0;
@@ -346,18 +359,6 @@ impl FractalRenderer {
                     self.series_approximation.generate_approximation(&self.center_reference);
                 }
 
-                // Logic in here to automatically adjust the maximum number of iterations
-                // This is done arbitrarily and could be done in a config file if required
-                if self.auto_adjust_iterations && self.maximum_iteration > 10000 {
-                    let new_iteration_value = 10000;
-
-                    if self.center_reference.current_iteration >= 10000 {
-                        self.center_reference.current_iteration = new_iteration_value;
-                    };
-
-                    self.center_reference.maximum_iteration = new_iteration_value;
-                    self.maximum_iteration = new_iteration_value;
-                }
             } else {
                 if self.series_approximation.min_valid_iteration < 1000 && self.series_approximation.order > 16 {
                     self.series_approximation.order = 16;

@@ -9,15 +9,15 @@ zoom_scale = 2.0
 display_glitches = false
 auto_adjust_iterations = true
 remove_centre = true
-export = "png"
+export = "both"
 
 glitch_tolerance = 1.4e-6
 
 probe_sampling = 15
 
-data_storage_interval = 10
+data_storage_interval = 100
 
 valid_iteration_frame_multiplier = 0.05
 valid_iteration_probe_multiplier = 0.005
 
-experimental = false 
+experimental = false  
