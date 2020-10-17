@@ -135,8 +135,8 @@ impl SeriesApproximation {
                 let imag = pos_x * delta_pixel * sin_rotate + pos_y * delta_pixel * cos_rotate + delta_top_left_mantissa.im;
 
                 self.add_probe(ComplexExtended::new2(
-                    cos_rotate * real - sin_rotate * imag, 
-                    sin_rotate * real + cos_rotate * imag, delta_top_left_exponent));
+                    real, 
+                    imag, delta_top_left_exponent));
             }
         }
 
@@ -340,6 +340,8 @@ impl SeriesApproximation {
                 self.valid_interpolation.push(min_interpolation);
             }
         }
+
+        // println!("{:?}", self.valid_interpolation);
 
         if !self.experimental {
             self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];
