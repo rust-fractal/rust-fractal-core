@@ -154,7 +154,11 @@ impl FractalRenderer {
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
-        self.series_approximation.delta_pixel_square = delta_pixel_extended * delta_pixel_extended;
+        self.series_approximation.delta_pixel_square = if self.experimental {
+            delta_pixel_extended * delta_pixel_extended
+        } else {
+            delta_pixel_extended * delta_pixel_extended
+        };
 
         // Used for placing the probe points
         self.series_approximation.check_approximation(
