@@ -1,4 +1,4 @@
-./target/release/main -o high.toml locations/glitch_test_1.toml
+#./target/release/main -o high.toml locations/glitch_test_1.toml
 ./target/release/main -o high.toml locations/glitch_test_2.toml
 ./target/release/main -o high.toml locations/glitch_test_3.toml
 ./target/release/main -o high.toml locations/glitch_test_4.toml

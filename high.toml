@@ -15,9 +15,9 @@ glitch_tolerance = 1.4e-6
 
 probe_sampling = 15
 
-data_storage_interval = 10
+data_storage_interval = 100
 
-valid_iteration_frame_multiplier = 0.05
-valid_iteration_probe_multiplier = 0.005
+valid_iteration_frame_multiplier = 0.10
+valid_iteration_probe_multiplier = 0.01
 
-experimental = false 
+experimental = true  

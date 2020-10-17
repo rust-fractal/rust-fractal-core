@@ -1,0 +1,4 @@
+palette = [
+    0, 0, 0, 255, 255, 255
+]
+iteration_division = 20.0
