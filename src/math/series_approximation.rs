@@ -417,29 +417,24 @@ impl SeriesApproximation {
         approximation
     }
 
-    // pub fn evaluate_derivative(&self, point_delta: ComplexExtended) -> FloatExtended {
-    //     let mut original_point_derivative_n = ComplexExtended::new(1.0, 0, 0.0, 0);
-    //     let mut approximation_derivative = ComplexExtended::new(0.0, 0, 0.0, 0);
-    
-    //     for k in 1..=self.order {
-    //         approximation_derivative += k as f64 * self.coefficients[k] * original_point_derivative_n;
-    //         original_point_derivative_n *= ComplexExtended::new(point_delta.re, 0, point_delta.im, 0);
-    //     };
-    
-    //     approximation_derivative.to_float()
+    pub fn evaluate_derivative(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
+        // This could be improved to use the iteration option better
+        // this assumes that the requested iteration is a multiple of the data interval
 
+        // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
+        let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];
+        // Horner's rule
+        let mut approximation = new_coefficients[self.order];
+        approximation *= self.order as f64;
 
-    //     let mut approximation_derivative = self.coefficients[self.order] * self.order as f64;
+        for k in (1..=(self.order - 1)).rev() {
+            approximation *= point_delta;
+            approximation += new_coefficients[k] * k as f64;
+        }
 
-    //     for k in (1..=(self.order - 1)).rev() {
-    //         approximation *= point_delta;
-    //         approximation += self.coefficients[k] * k as f64;
-    //     }
+        // println!("{:?}", approximation);
 
-    //     approximation *= point_delta;
-    //     approximation.reduce();
-    //     approximation
-
-
-    // }
+        // approximation *= point_delta;
+        approximation
+    }
 }

@@ -26,6 +26,7 @@ pub struct FractalRenderer {
     series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
     remove_centre: bool,
+    analytic_derivative: bool,
     experimental: bool,
 }
 
@@ -53,6 +54,8 @@ impl FractalRenderer {
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
+        let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
+
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
@@ -122,7 +125,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division),
+            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, analytic_derivative),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -131,6 +134,7 @@ impl FractalRenderer {
             series_approximation,
             render_indices,
             remove_centre,
+            analytic_derivative,
             experimental
         }
     }
@@ -228,6 +232,12 @@ impl FractalRenderer {
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
 
+                let derivative = if self.analytic_derivative {
+                    self.series_approximation.evaluate_derivative(point_delta, chosen_iteration)
+                } else {
+                    ComplexExtended::new2(1.0, 0.0, 0)
+                };
+
                 PixelData {
                     image_x: i,
                     image_y: j,
@@ -235,7 +245,7 @@ impl FractalRenderer {
                     delta_centre: point_delta,
                     delta_reference: point_delta,
                     delta_current: new_delta.clone(),
-                    derivative_current: ComplexFixed::new(1.0, 0.0),
+                    derivative_current: derivative,
                     glitched: false,
                     escaped: false,
                 }
@@ -247,9 +257,13 @@ impl FractalRenderer {
         let iteration_time = Instant::now();
 
         // This one has no offset because it is not a glitch resolving reference
-        Perturbation::iterate(&mut pixel_data, &self.center_reference);
+        if self.analytic_derivative {
+            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference);
+        } else {
+            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference);
+        }
 
-        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
+        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference, delta_pixel_extended);
         print!("| {:<15}", iteration_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
 
@@ -294,17 +308,33 @@ impl FractalRenderer {
             } else {
                 let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
-                pixel_data.par_iter_mut()
-                    .for_each(|pixel| {
-                        pixel.iteration = glitch_reference.start_iteration;
-                        pixel.glitched = false;
-                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                        pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                });
+                if self.analytic_derivative {
+                    pixel_data.par_iter_mut()
+                        .for_each(|pixel| {
+                            pixel.iteration = glitch_reference.start_iteration;
+                            pixel.glitched = false;
+                            pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+                            pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                            pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
+                    });
+                } else {
+                    pixel_data.par_iter_mut()
+                        .for_each(|pixel| {
+                            pixel.iteration = glitch_reference.start_iteration;
+                            pixel.glitched = false;
+                            pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+                            pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                    });
+                }
             };
             
-            Perturbation::iterate(&mut pixel_data, &glitch_reference);
-            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference);
+            if self.analytic_derivative {
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference);
+            } else {
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference);
+            };
+
+            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {

@@ -1,5 +1,6 @@
 use crate::util::PixelData;
 use crate::math::Reference;
+use crate::util::FloatExtended;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -24,16 +25,21 @@ pub struct DataExport {
     pub iterations: Vec<u32>,
     pub smooth_f16: Vec<f16>,
     pub smooth_f32: Vec<f32>,
+    pub distance_x: Vec<f16>,
+    pub distance_y: Vec<f16>,
     pub display_glitches: bool,
     iteration_division: f32,
     data_type: DataType,
+    analytic_derivative: bool
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32) -> Self {
+    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, analytic_derivative: bool) -> Self {
         let mut rgb = Vec::new();
         let mut smooth_f16 = Vec::new();
         let mut smooth_f32 = Vec::new();
+        let mut distance_x = Vec::new();
+        let mut distance_y = Vec::new();
 
         match data_type {
             DataType::COLOUR => {
@@ -41,6 +47,8 @@ impl DataExport {
             },
             DataType::RAW => {
                 smooth_f16 = vec![f16::ZERO; image_width * image_height];
+                distance_x = vec![f16::ZERO; image_width * image_height];
+                distance_y = vec![f16::ZERO; image_width * image_height];
             },
             DataType::KFB => {
                 smooth_f32 = vec![0.0f32; image_width * image_height];
@@ -59,13 +67,16 @@ impl DataExport {
             iterations: vec![0u32; image_width * image_height],
             smooth_f16,
             smooth_f32,
+            distance_x,
+            distance_y,
             display_glitches,
             iteration_division,
-            data_type
+            data_type,
+            analytic_derivative
         }
     }
 
-    pub fn export_pixels(&mut self, pixel_data: &[PixelData], maximum_iteration: usize, reference: &Reference) {
+    pub fn export_pixels(&mut self, pixel_data: &[PixelData], maximum_iteration: usize, reference: &Reference, delta_pixel: FloatExtended) {
         let escape_radius_ln = 1e16f32.ln();
 
         match self.data_type {
@@ -97,6 +108,19 @@ impl DataExport {
                         self.rgb[k] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
                         self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
                         self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
+
+                        if self.analytic_derivative && pixel.iteration < maximum_iteration {
+                            // let temp = pixel.delta_current.norm();
+                            let temp = (reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current).norm();
+
+                            let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
+
+                            let out = (255.0 * (de / delta_pixel).to_float().tanh()) as u8;
+
+                            self.rgb[k] = out; 
+                            self.rgb[k + 1] = out; 
+                            self.rgb[k + 2] = out;
+                        }
                     };
 
                     // self.iterations[k / 3] = pixel.iteration as u32;
@@ -116,6 +140,25 @@ impl DataExport {
 
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth_f16[k] = f16::from_f32(1.0 - (z_norm.ln() / escape_radius_ln).log2());
+
+                    if self.analytic_derivative && pixel.iteration < maximum_iteration {
+                        let temp = (reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current).norm();
+
+                        let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
+
+                        let temp2 = pixel.derivative_current.mantissa.norm();
+
+                        let temp_x = pixel.derivative_current.mantissa.re / temp2;
+                        let temp_y = pixel.derivative_current.mantissa.im / temp2;
+
+                        // println!("{}", f16::from_f64((de / delta_pixel).to_float().tanh()));
+                        let value = (de / delta_pixel).to_float().tanh();
+
+                        self.distance_x[k] = f16::from_f64(temp_x * value);
+                        self.distance_y[k] = f16::from_f64(temp_y * value);
+
+                        // println!("{} {} {} {}", temp_x * value, temp_y * value, value, ((temp_x * value).powi(2) + (temp_y * value).powi(2)).sqrt());
+                    }
                 }
             },
             DataType::KFB => {
@@ -203,9 +246,18 @@ impl DataExport {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F16(self.smooth_f16.clone()));
 
-        let mut layer = simple_image::Layer::new(simple_image::Text::from("fractal_data").unwrap(), (self.image_width, self.image_height), smallvec::smallvec![iterations, smooth])
+        let channels = if self.analytic_derivative {
+            let distance_x = simple_image::Channel::non_color_data(simple_image::Text::from("DEX").unwrap(), simple_image::Samples::F16(self.distance_x.clone()));
+            let distance_y = simple_image::Channel::non_color_data(simple_image::Text::from("DEY").unwrap(), simple_image::Samples::F16(self.distance_y.clone()));
+
+            smallvec::smallvec![iterations, smooth, distance_x, distance_y]
+        } else {
+            smallvec::smallvec![iterations, smooth]
+        };
+
+        let mut layer = simple_image::Layer::new(simple_image::Text::from("fractal_data").unwrap(), (self.image_width, self.image_height), channels)
             .with_compression(simple_image::Compression::PXR24)
-            .with_block_format(None, simple_image::attribute::LineOrder::Increasing);
+            .with_block_format(None, simple_image::attribute::LineOrder::Increasing);   
 
         let mut attributes = HashMap::new();
         attributes.insert(simple_image::Text::from("IterationsBias").unwrap(), exr::meta::attribute::AttributeValue::I32(0));
