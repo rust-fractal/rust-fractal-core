@@ -126,11 +126,11 @@ impl Perturbation {
 
                         if reference_data.extended_precision_required {
                             // If the reference is small, use the slow extended method
-                            pixel.delta_current *= reference_data.z_extended * 2.0;
-                            pixel.delta_current += pixel.delta_reference;
-
-                            pixel.derivative_current *= reference_data.z_extended * 2.0;
+                            pixel.derivative_current *= (reference_data.z_extended + pixel.delta_current) * 2.0;
                             pixel.derivative_current += ComplexExtended::new2(1.0, 0.0, 0);
+
+                            pixel.delta_current *= reference_data.z_extended * 2.0 + pixel.delta_current;
+                            pixel.delta_current += pixel.delta_reference;
 
                             // reset the scaled counter
                             pixel.delta_current.reduce();
