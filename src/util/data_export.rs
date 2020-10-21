@@ -120,7 +120,20 @@ impl DataExport {
                             self.rgb[k] = out; 
                             self.rgb[k + 1] = out; 
                             self.rgb[k + 2] = out;
+
+                            // if pixel.image_x == 960 && pixel.image_y > 540 && pixel.image_y < 740 {
+                            //     println!("{:?} {:?} {:?} {:?} {:?} {:?}", 
+                            //         reference.reference_data[pixel.iteration - reference.start_iteration].z_extended,
+                            //         pixel.delta_current,
+                            //         pixel.derivative_current,
+                            //         temp,
+                            //         de,
+                            //         out,
+                            //     );
+                            // }
                         }
+
+                        
                     };
 
                     // self.iterations[k / 3] = pixel.iteration as u32;
@@ -142,20 +155,43 @@ impl DataExport {
                     self.smooth_f16[k] = f16::from_f32(1.0 - (z_norm.ln() / escape_radius_ln).log2());
 
                     if self.analytic_derivative && pixel.iteration < maximum_iteration {
-                        let temp = (reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current).norm();
+                        let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
+                        let temp2 = temp1.norm();
 
-                        let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
+                        // let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
 
-                        let temp2 = pixel.derivative_current.mantissa.norm();
+                        // let temp2 = pixel.derivative_current.mantissa.norm();
 
-                        let temp_x = pixel.derivative_current.mantissa.re / temp2;
-                        let temp_y = pixel.derivative_current.mantissa.im / temp2;
+                        // let temp_x = pixel.derivative_current.mantissa.re / temp2;
+                        // let temp_y = pixel.derivative_current.mantissa.im / temp2;
 
-                        // println!("{}", f16::from_f64((de / delta_pixel).to_float().tanh()));
-                        let value = (de / delta_pixel).to_float().tanh();
+                        // // println!("{}", f16::from_f64((de / delta_pixel).to_float().tanh()));
+                        // let value = (de / delta_pixel).to_float().tanh();
 
-                        self.distance_x[k] = f16::from_f64(temp_x * value);
-                        self.distance_y[k] = f16::from_f64(temp_y * value);
+                        // u/v is temp
+                        // J is [deri_x, deri_y, -deri_y, deri_x]
+
+                        let mut deri = pixel.derivative_current;
+                        deri.mantissa *= delta_pixel.mantissa;
+                        deri.exponent += delta_pixel.exponent;
+
+                        let deri = deri.to_float();
+
+                        let num = 2.0 * temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln());
+
+                        let mut norm_u = temp1;
+                        let temp3 = temp1.norm();
+                        norm_u.mantissa /= temp3.mantissa;
+                        norm_u.exponent -= temp3.exponent;
+
+                        let norm_u = norm_u.to_float();
+
+                        let mut den = deri;
+                        den.re = norm_u.re * deri.re + norm_u.im * deri.im;
+                        den.im = -norm_u.re * deri.im + norm_u.im * deri.re;
+
+                        self.distance_x[k] = f16::from_f64(num.to_float() / den.re);
+                        self.distance_y[k] = f16::from_f64(num.to_float() / den.im);
 
                         // println!("{} {} {} {}", temp_x * value, temp_y * value, value, ((temp_x * value).powi(2) + (temp_y * value).powi(2)).sqrt());
                     }

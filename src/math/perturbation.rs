@@ -3,6 +3,8 @@ use crate::util::{PixelData, FloatExp};
 use rayon::prelude::*;
 use crate::math::reference::Reference;
 
+use crate::util::ComplexExtended;
+
 pub struct Perturbation {}
 
 impl Perturbation {
@@ -120,15 +122,15 @@ impl Perturbation {
                                 pixel.delta_current.exponent = 0;
                                 break;
                             }
-
-                            pixel.derivative_current.mantissa *= 2.0 * z;
-                            pixel.derivative_current.mantissa += scaled_scale_factor_2;
                         }
 
                         if reference_data.extended_precision_required {
                             // If the reference is small, use the slow extended method
-                            pixel.delta_current *= reference_data.z_extended * 2.0 + pixel.delta_current;
+                            pixel.delta_current *= reference_data.z_extended * 2.0;
                             pixel.delta_current += pixel.delta_reference;
+
+                            pixel.derivative_current *= reference_data.z_extended * 2.0;
+                            pixel.derivative_current += ComplexExtended::new2(1.0, 0.0, 0);
 
                             // reset the scaled counter
                             pixel.delta_current.reduce();
@@ -146,6 +148,9 @@ impl Perturbation {
                             pixel.delta_current.mantissa *= z + reference_data.z_fixed;
                             // 2 additions
                             pixel.delta_current.mantissa += scaled_delta_reference;
+
+                            pixel.derivative_current.mantissa *= 2.0 * z;
+                            pixel.derivative_current.mantissa += scaled_scale_factor_2;
 
                             scaled_iterations += 1;
 
