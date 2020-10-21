@@ -435,6 +435,7 @@ impl SeriesApproximation {
         // println!("{:?}", approximation);
 
         // approximation *= point_delta;
+        approximation.reduce();
         approximation
     }
 }
