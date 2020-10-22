@@ -6,6 +6,8 @@ use std::io::Write;
 use std::cmp::max;
 
 use rand::seq::SliceRandom;
+use rand::Rng;
+
 use rayon::prelude::*;
 use config::Config;
 
@@ -26,6 +28,8 @@ pub struct FractalRenderer {
     series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
     remove_centre: bool,
+    analytic_derivative: bool,
+    jitter: bool,
     experimental: bool,
 }
 
@@ -53,6 +57,8 @@ impl FractalRenderer {
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
+        let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
+        let jitter = settings.get_bool("jitter").unwrap_or(false);
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "RAW" | "EXR" => DataType::RAW,
@@ -122,7 +128,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division),
+            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, analytic_derivative),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -131,6 +137,8 @@ impl FractalRenderer {
             series_approximation,
             render_indices,
             remove_centre,
+            analytic_derivative,
+            jitter,
             experimental
         }
     }
@@ -203,20 +211,32 @@ impl FractalRenderer {
             self.remove_centre = false;
         }
 
+
+
         let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {
-                let i = index % self.image_width;
-                let j = index / self.image_width;
+                let image_x = index % self.image_width;
+                let image_y = index / self.image_width;
+
+                let mut i = image_x as f64;
+                let mut j = image_y as f64;
+
+                if self.jitter {
+                    let mut rng = rand::thread_rng();
+
+                    i += rng.gen_range(-0.2, 0.2);
+                    j += rng.gen_range(-0.2, 0.2);
+                }
 
                 // This could be changed to account for jittering if needed
                 let element = ComplexFixed::new(
-                    i as f64 * delta_pixel * cos_rotate - j as f64 * delta_pixel * sin_rotate + delta_top_left.re, 
-                    i as f64 * delta_pixel * sin_rotate + j as f64 * delta_pixel * cos_rotate + delta_top_left.im
+                    i * delta_pixel * cos_rotate - j * delta_pixel * sin_rotate + delta_top_left.re, 
+                    i * delta_pixel * sin_rotate + j * delta_pixel * cos_rotate + delta_top_left.im
                 );
 
                 let chosen_iteration = if self.experimental {
-                    let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i as f64 / self.image_width as f64).floor() as usize;
-                    let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j as f64 / self.image_height as f64).floor() as usize;
+                    let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i / self.image_width as f64).floor() as usize;
+                    let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j / self.image_height as f64).floor() as usize;
 
                     let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
 
@@ -228,14 +248,20 @@ impl FractalRenderer {
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
 
+                let derivative = if self.analytic_derivative {
+                    self.series_approximation.evaluate_derivative(point_delta, chosen_iteration)
+                } else {
+                    ComplexExtended::new2(1.0, 0.0, 0)
+                };
+
                 PixelData {
-                    image_x: i,
-                    image_y: j,
+                    image_x,
+                    image_y,
                     iteration: chosen_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
                     delta_current: new_delta.clone(),
-                    derivative_current: ComplexFixed::new(1.0, 0.0),
+                    derivative_current: derivative,
                     glitched: false,
                     escaped: false,
                 }
@@ -247,9 +273,13 @@ impl FractalRenderer {
         let iteration_time = Instant::now();
 
         // This one has no offset because it is not a glitch resolving reference
-        Perturbation::iterate(&mut pixel_data, &self.center_reference);
+        if self.analytic_derivative {
+            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference);
+        } else {
+            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference);
+        }
 
-        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference);
+        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference, delta_pixel_extended);
         print!("| {:<15}", iteration_time.elapsed().as_millis());
         std::io::stdout().flush().unwrap();
 
@@ -271,29 +301,18 @@ impl FractalRenderer {
             correction_references += 1;
             glitch_reference.run();
 
-            // Experimental but does not work very well. There are quite a few glitches that still happen with this
-            if false {
+            let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+
+            if self.analytic_derivative {
                 pixel_data.par_iter_mut()
                     .for_each(|pixel| {
-                        let chosen_iteration = {
-                            let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * pixel.image_x as f64 / self.image_width as f64).floor() as usize;
-                            let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * pixel.image_y as f64 / self.image_height as f64).floor() as usize;
-
-                            let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
-
-                            self.series_approximation.valid_interpolation[index]
-                        };
-
-                        let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, chosen_iteration);
-
-                        pixel.iteration = chosen_iteration;
+                        pixel.iteration = glitch_reference.start_iteration;
                         pixel.glitched = false;
-                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, chosen_iteration) - delta_current_reference;
+                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
                         pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                        pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
                 });
             } else {
-                let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
-
                 pixel_data.par_iter_mut()
                     .for_each(|pixel| {
                         pixel.iteration = glitch_reference.start_iteration;
@@ -301,10 +320,15 @@ impl FractalRenderer {
                         pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
                         pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
                 });
-            };
+            }
             
-            Perturbation::iterate(&mut pixel_data, &glitch_reference);
-            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference);
+            if self.analytic_derivative {
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference);
+            } else {
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference);
+            };
+
+            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
