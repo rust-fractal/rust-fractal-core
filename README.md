@@ -34,7 +34,7 @@ Output images are placed in the ```./output``` folder.
 ## Acknowledgements
 - claude (blog, Kalles Fraktaler 2+)
 - pauldelbrot (glitch detection, nanoscope)
-- knightly (superMB)
+- knighty (superMB)
 
 
 
