@@ -160,7 +160,7 @@ pub struct PixelData {
     pub delta_centre: ComplexExtended,
     pub delta_reference: ComplexExtended,
     pub delta_current: ComplexExtended,
-    pub derivative_current: ComplexFixed<f64>,
+    pub derivative_current: ComplexExtended,
     pub glitched: bool,
     pub escaped: bool,
 }
