@@ -1,6 +1,7 @@
 use crate::util::PixelData;
 use crate::math::Reference;
 use crate::util::FloatExtended;
+use crate::util::ComplexFixed;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -120,24 +121,9 @@ impl DataExport {
                             self.rgb[k] = out; 
                             self.rgb[k + 1] = out; 
                             self.rgb[k + 2] = out;
-
-                            // if pixel.image_x == 960 && pixel.image_y > 540 && pixel.image_y < 740 {
-                            //     println!("{:?} {:?} {:?} {:?} {:?} {:?}", 
-                            //         reference.reference_data[pixel.iteration - reference.start_iteration].z_extended,
-                            //         pixel.delta_current,
-                            //         pixel.derivative_current,
-                            //         temp,
-                            //         de,
-                            //         out,
-                            //     );
-                            // }
-                        }
-
-                        
+                        };
                     };
-
-                    // self.iterations[k / 3] = pixel.iteration as u32;
-                }
+                };
             },
             DataType::RAW => {
                 for pixel in pixel_data {
@@ -158,42 +144,31 @@ impl DataExport {
                         let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
                         let temp2 = temp1.norm();
 
-                        // let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
+                        let norm_z_x = FloatExtended::new(
+                            temp1.mantissa.re / temp2.mantissa,
+                            temp1.exponent - temp2.exponent
+                        ).to_float();
 
-                        // let temp2 = pixel.derivative_current.mantissa.norm();
+                        let norm_z_y = FloatExtended::new(
+                            temp1.mantissa.im / temp2.mantissa,
+                            temp1.exponent - temp2.exponent
+                        ).to_float();
 
-                        // let temp_x = pixel.derivative_current.mantissa.re / temp2;
-                        // let temp_y = pixel.derivative_current.mantissa.im / temp2;
+                        let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
+                        let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
 
-                        // // println!("{}", f16::from_f64((de / delta_pixel).to_float().tanh()));
-                        // let value = (de / delta_pixel).to_float().tanh();
+                        let scaled_jxa = (jxa * delta_pixel).to_float();
+                        let scaled_jya = (jya * delta_pixel).to_float();
 
-                        // u/v is temp
-                        // J is [deri_x, deri_y, -deri_y, deri_x]
+                        let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
 
-                        let mut deri = pixel.derivative_current;
-                        deri.mantissa *= delta_pixel.mantissa;
-                        deri.exponent += delta_pixel.exponent;
+                        let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
+                        let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
 
-                        let deri = deri.to_float();
+                        let output = num / ComplexFixed::new(den_1, den_2);
 
-                        let num = 2.0 * temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln());
-
-                        let mut norm_u = temp1;
-                        let temp3 = temp1.norm();
-                        norm_u.mantissa /= temp3.mantissa;
-                        norm_u.exponent -= temp3.exponent;
-
-                        let norm_u = norm_u.to_float();
-
-                        let mut den = deri;
-                        den.re = norm_u.re * deri.re + norm_u.im * deri.im;
-                        den.im = -norm_u.re * deri.im + norm_u.im * deri.re;
-
-                        self.distance_x[k] = f16::from_f64(num.to_float() / den.re);
-                        self.distance_y[k] = f16::from_f64(num.to_float() / den.im);
-
-                        // println!("{} {} {} {}", temp_x * value, temp_y * value, value, ((temp_x * value).powi(2) + (temp_y * value).powi(2)).sqrt());
+                        self.distance_x[k] = f16::from_f64(output.re);
+                        self.distance_y[k] = f16::from_f64(output.im);
                     }
                 }
             },

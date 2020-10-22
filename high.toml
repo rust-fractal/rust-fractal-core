@@ -6,10 +6,10 @@ glitch_percentage = 0.001
 frames = 1
 frame_offset = 0
 zoom_scale = 2.0
-display_glitches = false
+display_glitches = true
 auto_adjust_iterations = true
 remove_centre = false
-export = "png"
+export = "exr"
 
 glitch_tolerance = 1.4e-6
 
