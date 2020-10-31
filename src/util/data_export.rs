@@ -12,6 +12,7 @@ use exr::prelude::simple_image;
 use half::f16;
 
 pub enum DataType {
+    NONE,
     COLOUR,
     RAW,
     KFB,
@@ -43,6 +44,7 @@ impl DataExport {
         let mut distance_y = Vec::new();
 
         match data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 rgb = vec![0u8; image_width * image_height * 3];
             },
@@ -81,6 +83,7 @@ impl DataExport {
         let escape_radius_ln = 1e16f32.ln();
 
         match self.data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 for pixel in pixel_data {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
@@ -228,6 +231,7 @@ impl DataExport {
 
     pub fn save(&mut self, filename: &str, maximum_iteration: usize, approximation_order: usize, zoom: &str) {
         match self.data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 self.save_colour(filename);
             },
@@ -325,6 +329,7 @@ impl DataExport {
 
     pub fn clear_buffers(&mut self) {
         match self.data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
             }
