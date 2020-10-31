@@ -9,3 +9,4 @@
 /.vscode
 *.mp4
 segments.txt
+/benchmarks/output

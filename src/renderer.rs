@@ -31,6 +31,7 @@ pub struct FractalRenderer {
     analytic_derivative: bool,
     jitter: bool,
     experimental: bool,
+    show_output: bool
 }
 
 impl FractalRenderer {
@@ -59,8 +60,10 @@ impl FractalRenderer {
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
         let jitter = settings.get_bool("jitter").unwrap_or(false);
+        let show_output = settings.get_bool("show_output").unwrap_or(true);
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "NONE" => DataType::NONE,
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
             "KFB" => DataType::KFB,
@@ -69,7 +72,7 @@ impl FractalRenderer {
         };
 
         let palette = match data_type {
-            DataType::RAW => {
+            DataType::RAW | DataType::NONE => {
                 Vec::new()
             },
             DataType::KFB | DataType::COLOUR | DataType::BOTH => {
@@ -139,14 +142,18 @@ impl FractalRenderer {
             remove_centre,
             analytic_derivative,
             jitter,
-            experimental
+            experimental,
+            show_output
         }
     }
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
-        print!("{:<6}", frame_index + self.frame_offset);
-        print!("| {:<15}", extended_to_string_short(self.zoom));
-        std::io::stdout().flush().unwrap();
+        if self.show_output {
+            print!("{:<6}", frame_index + self.frame_offset);
+            print!("| {:<15}", extended_to_string_short(self.zoom));
+            std::io::stdout().flush().unwrap();
+        };
+
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
@@ -179,11 +186,13 @@ impl FractalRenderer {
             self.image_height,
             &self.center_reference);
 
-        print!("| {:<15}", approximation_time.elapsed().as_millis());
-        print!("| {:<15}", self.series_approximation.min_valid_iteration);
-        print!("| {:<6}", self.series_approximation.order);
-        print!("| {:<15}", self.maximum_iteration);
-        std::io::stdout().flush().unwrap();
+        if self.show_output {
+            print!("| {:<15}", approximation_time.elapsed().as_millis());
+            print!("| {:<15}", self.series_approximation.min_valid_iteration);
+            print!("| {:<6}", self.series_approximation.order);
+            print!("| {:<15}", self.maximum_iteration);
+            std::io::stdout().flush().unwrap();
+        };
 
         let packing_time = Instant::now();
 
@@ -267,9 +276,11 @@ impl FractalRenderer {
                 }
             }).collect::<Vec<PixelData>>();
 
-        print!("| {:<15}", packing_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
-
+        if self.show_output {
+            print!("| {:<15}", packing_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        };
+        
         let iteration_time = Instant::now();
 
         // This one has no offset because it is not a glitch resolving reference
@@ -277,12 +288,15 @@ impl FractalRenderer {
             Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference);
         } else {
             Perturbation::iterate_normal(&mut pixel_data, &self.center_reference);
-        }
+        };
 
         self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference, delta_pixel_extended);
-        print!("| {:<15}", iteration_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
 
+        if self.show_output {
+            print!("| {:<15}", iteration_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        };
+        
         let correction_time = Instant::now();
         let mut correction_references = 1;
 
@@ -334,22 +348,29 @@ impl FractalRenderer {
             pixel_data.retain(|packet| {
                 packet.glitched
             });
-        }
+        };
 
-        print!("| {:<6}", correction_references);
-        print!("| {:<15}", correction_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
+        if self.show_output {
+            print!("| {:<6}", correction_references);
+            print!("| {:<15}", correction_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        };
         
         let saving_time = Instant::now();
         self.data_export.save(&filename, self.maximum_iteration, self.series_approximation.order, &extended_to_string_long(self.zoom));
-        print!("| {:<15}", saving_time.elapsed().as_millis());
-        println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
+
+        if self.show_output {
+            print!("| {:<15}", saving_time.elapsed().as_millis());
+            println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        }
     }
 
     pub fn render(&mut self) {
         // Print out the status information
-        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Ref", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        if self.show_output {
+            println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Ref", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        };
 
         let mut count = 0;
 
