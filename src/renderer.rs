@@ -12,19 +12,19 @@ use rayon::prelude::*;
 use config::Config;
 
 pub struct FractalRenderer {
-    image_width: usize,
-    image_height: usize,
-    rotate: f64,
-    zoom: FloatExtended,
+    pub image_width: usize,
+    pub image_height: usize,
+    pub rotate: f64,
+    pub zoom: FloatExtended,
     auto_adjust_iterations: bool,
     maximum_iteration: usize,
     glitch_percentage: f64,
-    data_export: DataExport,
+    pub data_export: DataExport,
     start_render_time: Instant,
     remaining_frames: usize,
     frame_offset: usize,
     zoom_scale_factor: f64,
-    center_reference: Reference,
+    pub center_reference: Reference,
     series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
     remove_centre: bool,
@@ -64,6 +64,7 @@ impl FractalRenderer {
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
             "NONE" => DataType::NONE,
+            "GUI" => DataType::GUI,
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
             "KFB" => DataType::KFB,
@@ -75,7 +76,7 @@ impl FractalRenderer {
             DataType::RAW | DataType::NONE => {
                 Vec::new()
             },
-            DataType::KFB | DataType::COLOUR | DataType::BOTH => {
+            DataType::KFB | DataType::COLOUR | DataType::BOTH | DataType::GUI => {
                 if let Ok(colour_values) = settings.get_array("palette") {
                     colour_values.chunks_exact(3).map(|value| {
                         // We assume the palette is in BGR rather than RGB
@@ -145,6 +146,40 @@ impl FractalRenderer {
             experimental,
             show_output
         }
+    }
+
+    pub fn update_location(&mut self, zoom: FloatExtended, mut center_location: ComplexArbitrary) {
+        self.zoom = zoom;
+
+        let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom) / self.image_height as f64;
+        let radius = delta_pixel * self.image_width as f64;
+        let precision = max(64, -radius.exponent + 64);
+
+        center_location.set_prec(precision as u32);
+
+        self.center_reference = Reference::new(center_location.clone(), 
+            center_location.clone(), 
+            1, 
+            self.maximum_iteration, 
+            self.center_reference.data_storage_interval,
+            self.center_reference.glitch_tolerance);
+
+        if self.series_approximation.min_valid_iteration < 1000 {
+            self.series_approximation.order = 8;
+        } else if self.series_approximation.min_valid_iteration < 10000 {
+            self.series_approximation.order = 16;
+        } else if self.series_approximation.min_valid_iteration < 25000 {
+            self.series_approximation.order = 32;
+        } else {
+            self.series_approximation.order = 64;
+        }
+
+        // println!("{} {}", self.series_approximation.min_valid_iteration, self.maximum_iteration);
+
+        if self.series_approximation.min_valid_iteration > self.maximum_iteration / 5 {
+            self.maximum_iteration /= 2;
+            self.maximum_iteration *= 3;
+        } 
     }
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
