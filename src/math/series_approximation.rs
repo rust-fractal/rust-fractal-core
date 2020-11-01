@@ -1,7 +1,7 @@
 use crate::util::{to_extended, ComplexFixed};
 use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
-use rug::Float;
+use crate::util::FloatArbitrary;
 use crate::util::float_extended::FloatExtended;
 use rayon::prelude::*;
 
@@ -377,9 +377,9 @@ impl SeriesApproximation {
         // let iteration_reference = self.data_storage_interval * ((self.min_valid_iteration - 1) / self.data_storage_interval) + 1;
 
         let mut reference_c = center_reference.c.clone();
-        let temp = Float::with_val(precision, reference_delta.exponent).exp2();
-        let temp2 = Float::with_val(precision, reference_delta.mantissa.re);
-        let temp3 = Float::with_val(precision, reference_delta.mantissa.im);
+        let temp = FloatArbitrary::with_val(precision, reference_delta.exponent).exp2();
+        let temp2 = FloatArbitrary::with_val(precision, reference_delta.mantissa.re);
+        let temp3 = FloatArbitrary::with_val(precision, reference_delta.mantissa.im);
 
         *reference_c.mut_real() += &temp2 * &temp;
         *reference_c.mut_imag() += &temp3 * &temp;
@@ -388,9 +388,9 @@ impl SeriesApproximation {
         let mut reference_z = center_reference.high_precision_data[(self.min_valid_iteration - 1) / self.data_storage_interval].clone();
 
         let temp4 = self.evaluate(reference_delta, self.min_valid_iteration);
-        let temp = Float::with_val(precision, temp4.exponent).exp2();
-        let temp2 = Float::with_val(precision, temp4.mantissa.re);
-        let temp3 = Float::with_val(precision, temp4.mantissa.im);
+        let temp = FloatArbitrary::with_val(precision, temp4.exponent).exp2();
+        let temp2 = FloatArbitrary::with_val(precision, temp4.mantissa.re);
+        let temp3 = FloatArbitrary::with_val(precision, temp4.mantissa.im);
 
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;

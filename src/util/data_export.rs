@@ -13,6 +13,7 @@ use half::f16;
 
 pub enum DataType {
     NONE,
+    GUI,
     COLOUR,
     RAW,
     KFB,
@@ -45,7 +46,7 @@ impl DataExport {
 
         match data_type {
             DataType::NONE => {},
-            DataType::COLOUR => {
+            DataType::COLOUR | DataType::GUI => {
                 rgb = vec![0u8; image_width * image_height * 3];
             },
             DataType::RAW => {
@@ -84,7 +85,7 @@ impl DataExport {
 
         match self.data_type {
             DataType::NONE => {},
-            DataType::COLOUR => {
+            DataType::COLOUR | DataType::GUI => {
                 for pixel in pixel_data {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
 
@@ -231,7 +232,7 @@ impl DataExport {
 
     pub fn save(&mut self, filename: &str, maximum_iteration: usize, approximation_order: usize, zoom: &str) {
         match self.data_type {
-            DataType::NONE => {},
+            DataType::NONE | DataType::GUI => {},
             DataType::COLOUR => {
                 self.save_colour(filename);
             },
@@ -330,7 +331,7 @@ impl DataExport {
     pub fn clear_buffers(&mut self) {
         match self.data_type {
             DataType::NONE => {},
-            DataType::COLOUR => {
+            DataType::COLOUR | DataType::GUI => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
             }
             DataType::RAW => {
