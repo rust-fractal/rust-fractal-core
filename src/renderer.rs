@@ -178,6 +178,8 @@ impl FractalRenderer {
             self.maximum_iteration /= 2;
             self.maximum_iteration *= 3;
         } 
+
+        self.data_export.maximum_iteration = self.maximum_iteration;
     }
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
@@ -384,6 +386,9 @@ impl FractalRenderer {
                 packet.glitched
             });
         };
+
+        // Possibly here correct the small glitches
+        self.data_export.interpolate_glitches(&pixel_data);
 
         if self.show_output {
             print!("| {:<6}", correction_references);
