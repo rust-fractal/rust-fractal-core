@@ -25,13 +25,14 @@ pub struct FractalRenderer {
     frame_offset: usize,
     zoom_scale_factor: f64,
     pub center_reference: Reference,
-    series_approximation: SeriesApproximation,
+    pub series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
     remove_centre: bool,
     pub analytic_derivative: bool,
     jitter: bool,
     experimental: bool,
-    show_output: bool
+    show_output: bool,
+    pub render_time: u128,
 }
 
 impl FractalRenderer {
@@ -144,7 +145,8 @@ impl FractalRenderer {
             analytic_derivative,
             jitter,
             experimental,
-            show_output
+            show_output,
+            render_time: 0
         }
     }
 
@@ -164,12 +166,8 @@ impl FractalRenderer {
             self.center_reference.data_storage_interval,
             self.center_reference.glitch_tolerance);
 
-        if self.series_approximation.min_valid_iteration < 1000 {
-            self.series_approximation.order = 8;
-        } else if self.series_approximation.min_valid_iteration < 10000 {
+        if self.series_approximation.min_valid_iteration < 2500 {
             self.series_approximation.order = 16;
-        } else if self.series_approximation.min_valid_iteration < 25000 {
-            self.series_approximation.order = 32;
         } else {
             self.series_approximation.order = 64;
         }
@@ -220,6 +218,8 @@ impl FractalRenderer {
             self.image_width,
             self.image_height,
             &self.center_reference);
+
+        self.data_export.maximum_iteration = self.maximum_iteration;
 
         if self.show_output {
             print!("| {:<15}", approximation_time.elapsed().as_millis());
@@ -325,7 +325,7 @@ impl FractalRenderer {
             Perturbation::iterate_normal(&mut pixel_data, &self.center_reference);
         };
 
-        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference, delta_pixel_extended);
+        self.data_export.export_pixels(&pixel_data, &self.center_reference, delta_pixel_extended);
 
         if self.show_output {
             print!("| {:<15}", iteration_time.elapsed().as_millis());
@@ -377,7 +377,7 @@ impl FractalRenderer {
                 Perturbation::iterate_normal(&mut pixel_data, &glitch_reference);
             };
 
-            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference, delta_pixel_extended);
+            self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
@@ -392,7 +392,9 @@ impl FractalRenderer {
         };
         
         let saving_time = Instant::now();
-        self.data_export.save(&filename, self.maximum_iteration, self.series_approximation.order, &extended_to_string_long(self.zoom));
+        self.data_export.save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
+
+        self.render_time = frame_time.elapsed().as_millis();
 
         if self.show_output {
             print!("| {:<15}", saving_time.elapsed().as_millis());
