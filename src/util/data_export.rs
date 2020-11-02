@@ -445,9 +445,9 @@ impl DataExport {
                         self.rgb[3 * i + 1] = 0u8; 
                         self.rgb[3 * i + 2] = 0u8;
                     } else if self.analytic_derivative {
-                        let output = ComplexFixed::new(f64::from(self.distance_x[i]), f64::from(self.distance_y[i]));
+                        let output = ((f32::from(self.distance_x[i])).powi(2) + (f32::from(self.distance_y[i])).powi(2)).sqrt();
 
-                        let out = (255.0 * output.norm().tanh()) as u8;
+                        let out = (255.0 * output.tanh()) as u8;
 
                         self.rgb[3 * i] = out as u8; 
                         self.rgb[3 * i + 1] = out as u8; 
