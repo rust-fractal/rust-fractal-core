@@ -33,7 +33,7 @@ pub struct DataExport {
     pub display_glitches: bool,
     iteration_division: f32,
     data_type: DataType,
-    analytic_derivative: bool
+    pub analytic_derivative: bool
 }
 
 impl DataExport {

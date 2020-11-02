@@ -28,7 +28,7 @@ pub struct FractalRenderer {
     series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
     remove_centre: bool,
-    analytic_derivative: bool,
+    pub analytic_derivative: bool,
     jitter: bool,
     experimental: bool,
     show_output: bool
