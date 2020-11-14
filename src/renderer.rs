@@ -3,7 +3,7 @@ use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
 use std::io::Write;
-use std::cmp::max;
+use std::cmp::{min, max};
 
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -204,8 +204,12 @@ impl FractalRenderer {
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
-        self.series_approximation.delta_pixel_square = if self.experimental {
-            delta_pixel_extended * delta_pixel_extended
+        let minimum_dimension = min(self.image_width, self.image_height);
+
+        self.series_approximation.delta_pixel_square = if minimum_dimension < 1000 {
+            let fixed_delta_pixel_extended = FloatExtended::new(4.0 / (999.0 * self.zoom.mantissa), -self.zoom.exponent);
+            
+            fixed_delta_pixel_extended * fixed_delta_pixel_extended
         } else {
             delta_pixel_extended * delta_pixel_extended
         };
