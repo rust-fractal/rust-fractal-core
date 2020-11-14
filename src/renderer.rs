@@ -196,6 +196,16 @@ impl FractalRenderer {
             self.center_reference.run();
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference);
+        } else {
+            // If the image width/height changes intraframe (GUI) we need to regenerate some things
+            if self.data_export.image_width != self.image_width || self.data_export.image_height != self.image_height {
+                self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
+
+                self.data_export.image_width = self.image_width;
+                self.data_export.image_height = self.image_height;
+
+                self.data_export.clear_buffers();
+            }
         }
         
         let cos_rotate = self.rotate.cos();
@@ -239,8 +249,6 @@ impl FractalRenderer {
 
         if (frame_index + self.frame_offset) != 0 && self.remove_centre {
             // This will remove the central pixels
-            self.data_export.clear_buffers();
-
             let image_width = self.image_width;
             let image_height = self.image_height;
             let temp = 0.5 - 0.5 / self.zoom_scale_factor;
@@ -260,8 +268,6 @@ impl FractalRenderer {
             // The centre has already been removed
             self.remove_centre = false;
         }
-
-
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {

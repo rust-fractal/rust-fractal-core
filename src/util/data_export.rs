@@ -22,8 +22,8 @@ pub enum DataType {
 }
 
 pub struct DataExport {
-    image_width: usize,
-    image_height: usize,
+    pub image_width: usize,
+    pub image_height: usize,
     pub rgb: Vec<u8>,
     pub palette: Vec<(u8, u8, u8)>,
     pub iterations: Vec<u32>,
