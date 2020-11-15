@@ -211,7 +211,7 @@ impl FractalRenderer {
 
             // Check to see if the series approximation order has changed intraframe
             if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
-                println!("order was: {}, is now: {}", (self.series_approximation.coefficients[0].len() - 1), self.series_approximation.order);
+                // println!("order was: {}, is now: {}", (self.series_approximation.coefficients[0].len() - 1), self.series_approximation.order);
                 self.series_approximation.generate_approximation(&self.center_reference);
             }
         }
