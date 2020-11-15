@@ -17,7 +17,7 @@ pub struct FractalRenderer {
     pub rotate: f64,
     pub zoom: FloatExtended,
     auto_adjust_iterations: bool,
-    maximum_iteration: usize,
+    pub maximum_iteration: usize,
     glitch_percentage: f64,
     pub data_export: DataExport,
     start_render_time: Instant,
@@ -180,6 +180,8 @@ impl FractalRenderer {
         } 
 
         self.data_export.maximum_iteration = self.maximum_iteration;
+        self.center_reference.maximum_iteration = self.maximum_iteration;
+        self.series_approximation.maximum_iteration = self.maximum_iteration;
     }
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
