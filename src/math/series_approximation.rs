@@ -11,7 +11,7 @@ pub struct SeriesApproximation {
     pub maximum_iteration: usize,
     pub delta_pixel_square: FloatExtended,
     pub order: usize,
-    coefficients: Vec<Vec<ComplexExtended>>,
+    pub coefficients: Vec<Vec<ComplexExtended>>,
     probe_start: Vec<ComplexExtended>,
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
