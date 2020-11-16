@@ -395,7 +395,7 @@ impl SeriesApproximation {
         *reference_z.mut_real() += &temp2 * &temp;
         *reference_z.mut_imag() += &temp3 * &temp;
 
-        Reference::new(reference_z, reference_c, self.min_valid_iteration, center_reference.maximum_iteration, self.data_storage_interval, center_reference.glitch_tolerance)
+        Reference::new(reference_z, reference_c, self.min_valid_iteration, center_reference.maximum_iteration, self.data_storage_interval, center_reference.glitch_tolerance, center_reference.zoom)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {

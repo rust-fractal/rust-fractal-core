@@ -106,7 +106,8 @@ impl FractalRenderer {
             1, 
             maximum_iteration, 
             data_storage_interval,
-            glitch_tolerance);
+            glitch_tolerance,
+            zoom);
 
         let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
@@ -164,7 +165,8 @@ impl FractalRenderer {
             1, 
             self.maximum_iteration, 
             self.center_reference.data_storage_interval,
-            self.center_reference.glitch_tolerance);
+            self.center_reference.glitch_tolerance,
+            self.zoom);
 
         if self.series_approximation.min_valid_iteration < 2500 {
             self.series_approximation.order = 16;
