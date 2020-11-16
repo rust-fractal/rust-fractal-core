@@ -33,6 +33,7 @@ pub struct DataExport {
     pub distance_y: Vec<f16>,
     pub display_glitches: bool,
     pub iteration_division: f32,
+    pub iteration_offset: f32,
     data_type: DataType,
     pub analytic_derivative: bool,
     pub maximum_iteration: usize
@@ -85,6 +86,7 @@ impl DataExport {
             distance_y,
             display_glitches,
             iteration_division,
+            iteration_offset: 0.0,
             data_type,
             analytic_derivative,
             maximum_iteration: 0
@@ -112,7 +114,7 @@ impl DataExport {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let temp = (pixel.iteration as f32 + smooth) / self.iteration_division;
+                        let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.iteration_offset;
 
                         let temp2 = temp.floor() as usize % self.palette.len();
                         let temp3 = (temp as usize + 1) % self.palette.len();
@@ -499,7 +501,7 @@ impl DataExport {
             self.rgb[3 * i + 1] = out as u8; 
             self.rgb[3 * i + 2] = out as u8;
         } else {
-            let temp = (self.iterations[i] as f32 + self.smooth_f32[i]) / self.iteration_division;
+            let temp = ((self.iterations[i] as f32 + self.smooth_f32[i]) / self.iteration_division) + self.iteration_offset;
 
             let temp2 = temp.floor() as usize % self.palette.len();
             let temp3 = (temp as usize + 1) % self.palette.len();
