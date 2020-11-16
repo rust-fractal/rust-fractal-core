@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, to_fixed, to_extended};
+use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, to_fixed, to_extended};
 
 #[derive(Clone)]
 pub struct Reference {
@@ -10,6 +10,7 @@ pub struct Reference {
     pub reference_data: Vec<ReferenceIteration>,
     // This is for every 100th iteration, when we do glitch correction the new references will be spawed from these values
     // Storing every iteration is memory intensive.
+    pub zoom: FloatExtended,
     pub data_storage_interval: usize,
     pub high_precision_data: Vec<ComplexArbitrary>,
     pub glitch_tolerance: f64,
@@ -24,7 +25,7 @@ pub struct ReferenceIteration {
 }
 
 impl Reference {
-    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize, data_storage_interval: usize, glitch_tolerance: f64) -> Reference {
+    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize, data_storage_interval: usize, glitch_tolerance: f64, zoom: FloatExtended) -> Reference {
         Reference {
             start_iteration: current_iteration,
             current_iteration,
@@ -32,6 +33,7 @@ impl Reference {
             z,
             c,
             reference_data: Vec::with_capacity(1000),
+            zoom,
             data_storage_interval,
             high_precision_data: Vec::with_capacity(1000),
             glitch_tolerance
