@@ -335,7 +335,28 @@ impl DataExport {
         }
     }
 
-    fn save_colour(&mut self, filename: &str) {
+    pub fn save_colour(&mut self, filename: &str) {
+        // Extension is specified
+        match filename.split_terminator(".").last() {
+            Some(extension) => {
+                match extension {
+                    "jpg" | "jpeg" | "png" => {
+                        image::save_buffer(
+                            filename.to_owned(), 
+                            &self.rgb, 
+                            self.image_width as u32, 
+                            self.image_height as u32, 
+                            image::ColorType::Rgb8).unwrap();
+
+                        return;
+                    }
+                    _ => {}
+                }
+                
+            }
+            _ => {}
+        }
+
         image::save_buffer(
             filename.to_owned() + ".png", 
             &self.rgb, 
@@ -344,7 +365,7 @@ impl DataExport {
             image::ColorType::Rgb8).unwrap();
     }
 
-    fn save_raw(&mut self, filename: &str, approximation_order: usize, zoom: &str) {
+    pub fn save_raw(&mut self, filename: &str, approximation_order: usize, zoom: &str) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F16(self.smooth_f16.clone()));
 
@@ -375,7 +396,7 @@ impl DataExport {
         image.write_to_file(filename.to_owned() + ".exr", simple_image::write_options::high()).unwrap();
     }
 
-    fn save_kfb(&mut self, filename: &str) {
+    pub fn save_kfb(&mut self, filename: &str) {
         let mut file = File::create(filename.to_owned() + ".kfb").unwrap();
 
         file.write_all(b"KFB").unwrap();
