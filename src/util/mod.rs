@@ -12,6 +12,7 @@ pub use recolour_exr::RecolourEXR;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
+pub type FloatArbitrary = rug::Float;
 
 use std::os::raw::{c_double, c_int};
 

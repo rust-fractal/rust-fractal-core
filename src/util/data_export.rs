@@ -7,11 +7,14 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::slice;
 use std::collections::HashMap;
+use std::cmp::{min, max};
 
 use exr::prelude::simple_image;
 use half::f16;
 
 pub enum DataType {
+    NONE,
+    GUI,
     COLOUR,
     RAW,
     KFB,
@@ -19,19 +22,21 @@ pub enum DataType {
 }
 
 pub struct DataExport {
-    image_width: usize,
-    image_height: usize,
+    pub image_width: usize,
+    pub image_height: usize,
     pub rgb: Vec<u8>,
-    palette: Vec<(u8, u8, u8)>,
+    pub palette: Vec<(u8, u8, u8)>,
     pub iterations: Vec<u32>,
     pub smooth_f16: Vec<f16>,
     pub smooth_f32: Vec<f32>,
     pub distance_x: Vec<f16>,
     pub distance_y: Vec<f16>,
     pub display_glitches: bool,
-    iteration_division: f32,
+    pub iteration_division: f32,
+    pub iteration_offset: f32,
     data_type: DataType,
-    analytic_derivative: bool
+    pub analytic_derivative: bool,
+    pub maximum_iteration: usize
 }
 
 impl DataExport {
@@ -43,9 +48,16 @@ impl DataExport {
         let mut distance_y = Vec::new();
 
         match data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 rgb = vec![0u8; image_width * image_height * 3];
             },
+            DataType::GUI => {
+                rgb = vec![0u8; image_width * image_height * 3];
+                smooth_f32 = vec![0.0f32; image_width * image_height];
+                distance_x = vec![f16::ZERO; image_width * image_height];
+                distance_y = vec![f16::ZERO; image_width * image_height];
+            }
             DataType::RAW => {
                 smooth_f16 = vec![f16::ZERO; image_width * image_height];
                 distance_x = vec![f16::ZERO; image_width * image_height];
@@ -57,6 +69,8 @@ impl DataExport {
             DataType::BOTH => {
                 rgb = vec![0u8; image_width * image_height * 3];
                 smooth_f16 = vec![f16::ZERO; image_width * image_height];
+                distance_x = vec![f16::ZERO; image_width * image_height];
+                distance_y = vec![f16::ZERO; image_width * image_height];
             }
         }
 
@@ -72,15 +86,18 @@ impl DataExport {
             distance_y,
             display_glitches,
             iteration_division,
+            iteration_offset: 0.0,
             data_type,
-            analytic_derivative
+            analytic_derivative,
+            maximum_iteration: 0
         }
     }
 
-    pub fn export_pixels(&mut self, pixel_data: &[PixelData], maximum_iteration: usize, reference: &Reference, delta_pixel: FloatExtended) {
+    pub fn export_pixels(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended) {
         let escape_radius_ln = 1e16f32.ln();
 
         match self.data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 for pixel in pixel_data {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
@@ -89,7 +106,7 @@ impl DataExport {
                         self.rgb[k] = 255;
                         self.rgb[k + 1] = 0;
                         self.rgb[k + 2] = 0;
-                    } else if pixel.iteration >= maximum_iteration {
+                    } else if pixel.iteration >= self.maximum_iteration {
                         self.rgb[k] = 0;
                         self.rgb[k + 1] = 0;
                         self.rgb[k + 2] = 0;
@@ -97,7 +114,7 @@ impl DataExport {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let temp = (pixel.iteration as f32 + smooth) / self.iteration_division;
+                        let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.iteration_offset;
 
                         let temp2 = temp.floor() as usize % self.palette.len();
                         let temp3 = (temp as usize + 1) % self.palette.len();
@@ -110,7 +127,7 @@ impl DataExport {
                         self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
                         self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
 
-                        if self.analytic_derivative && pixel.iteration < maximum_iteration {
+                        if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
                             // let temp = pixel.delta_current.norm();
                             let temp = (reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current).norm();
 
@@ -125,13 +142,64 @@ impl DataExport {
                     };
                 };
             },
+            DataType::GUI => {
+                for pixel in pixel_data {
+                    let k = pixel.image_y * self.image_width + pixel.image_x;
+
+                    if pixel.glitched && self.display_glitches {
+                        self.rgb[3 * k] = 255;
+                        self.rgb[3 * k + 1] = 0;
+                        self.rgb[3 * k + 2] = 0;
+                    } else {
+                        self.iterations[k] = pixel.iteration as u32;
+
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                        let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
+
+                        self.smooth_f32[k] = smooth;
+
+                        if self.analytic_derivative {
+                            let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
+                            let temp2 = temp1.norm();
+
+                            let norm_z_x = FloatExtended::new(
+                                temp1.mantissa.re / temp2.mantissa,
+                                temp1.exponent - temp2.exponent
+                            ).to_float();
+
+                            let norm_z_y = FloatExtended::new(
+                                temp1.mantissa.im / temp2.mantissa,
+                                temp1.exponent - temp2.exponent
+                            ).to_float();
+
+                            let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
+                            let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
+
+                            let scaled_jxa = (jxa * delta_pixel).to_float();
+                            let scaled_jya = (jya * delta_pixel).to_float();
+
+                            let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
+
+                            let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
+                            let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
+
+                            let output = num / ComplexFixed::new(den_1, den_2);
+
+                            self.distance_x[k] = f16::from_f64(output.re);
+                            self.distance_y[k] = f16::from_f64(output.im);
+                        };
+
+                        self.colour_index(k)
+                    };
+                };
+            },
             DataType::RAW => {
                 for pixel in pixel_data {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
 
                     self.iterations[k] = if pixel.glitched {
                         0x00000000
-                    } else if pixel.iteration >= maximum_iteration {
+                    } else if pixel.iteration >= self.maximum_iteration {
                         0xFFFFFFFF
                     } else {
                         pixel.iteration as u32
@@ -140,7 +208,7 @@ impl DataExport {
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth_f16[k] = f16::from_f32(1.0 - (z_norm.ln() / escape_radius_ln).log2());
 
-                    if self.analytic_derivative && pixel.iteration < maximum_iteration {
+                    if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
                         let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
                         let temp2 = temp1.norm();
 
@@ -178,7 +246,7 @@ impl DataExport {
 
                     self.iterations[k] = if pixel.glitched {
                         0x00000000
-                    } else if pixel.iteration >= maximum_iteration {
+                    } else if pixel.iteration >= self.maximum_iteration {
                         0xFFFFFFFF
                     } else {
                         pixel.iteration as u32
@@ -190,61 +258,105 @@ impl DataExport {
             },
             DataType::BOTH => {
                 for pixel in pixel_data {
-                    let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
+                    let k = pixel.image_y * self.image_width + pixel.image_x;
 
                     if pixel.glitched && self.display_glitches {
-                        self.rgb[k] = 255;
-                        self.rgb[k + 1] = 0;
-                        self.rgb[k + 2] = 0;
-                        self.iterations[k / 3] = 0x00000000;
-                    } else if pixel.iteration >= maximum_iteration {
-                        self.rgb[k] = 0;
-                        self.rgb[k + 1] = 0;
-                        self.rgb[k + 2] = 0;
-                        self.iterations[k / 3] = 0xFFFFFFFF;
+                        self.rgb[3 * k] = 255;
+                        self.rgb[3 * k + 1] = 0;
+                        self.rgb[3 * k + 2] = 0;
+                        self.iterations[k] = 0x00000000;
+                    } else if pixel.iteration >= self.maximum_iteration {
+                        self.rgb[3 * k] = 0;
+                        self.rgb[3 * k + 1] = 0;
+                        self.rgb[3 * k + 2] = 0;
+                        self.iterations[k] = 0xFFFFFFFF;
                     } else {
+                        self.iterations[k] = pixel.iteration as u32;
+
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let temp = (pixel.iteration as f32 + smooth) / self.iteration_division;
+                        self.smooth_f16[k] = f16::from_f32(smooth);
 
-                        let temp2 = temp.floor() as usize % self.palette.len();
-                        let temp3 = (temp as usize + 1) % self.palette.len();
-                        let temp4 = temp.fract();
+                        if self.analytic_derivative {
+                            let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
+                            let temp2 = temp1.norm();
 
-                        let colour1 = self.palette[temp2];
-                        let colour2 = self.palette[temp3];
+                            let norm_z_x = FloatExtended::new(
+                                temp1.mantissa.re / temp2.mantissa,
+                                temp1.exponent - temp2.exponent
+                            ).to_float();
 
-                        self.rgb[k] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
-                        self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
-                        self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
-                        self.iterations[k / 3] = pixel.iteration as u32;
-                        self.smooth_f16[k / 3] = f16::from_f32(smooth)
+                            let norm_z_y = FloatExtended::new(
+                                temp1.mantissa.im / temp2.mantissa,
+                                temp1.exponent - temp2.exponent
+                            ).to_float();
+
+                            let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
+                            let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
+
+                            let scaled_jxa = (jxa * delta_pixel).to_float();
+                            let scaled_jya = (jya * delta_pixel).to_float();
+
+                            let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
+
+                            let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
+                            let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
+
+                            let output = num / ComplexFixed::new(den_1, den_2);
+
+                            self.distance_x[k] = f16::from_f64(output.re);
+                            self.distance_y[k] = f16::from_f64(output.im);
+                        };
+
+                        self.colour_index(k)
                     };
-                }
+                };
             }
         }
     }
 
-    pub fn save(&mut self, filename: &str, maximum_iteration: usize, approximation_order: usize, zoom: &str) {
+    pub fn save(&mut self, filename: &str, approximation_order: usize, zoom: &str) {
         match self.data_type {
+            DataType::NONE | DataType::GUI => {},
             DataType::COLOUR => {
                 self.save_colour(filename);
             },
             DataType::RAW => {
-                self.save_raw(filename, maximum_iteration, approximation_order, zoom);
+                self.save_raw(filename, approximation_order, zoom);
             },
             DataType::KFB => {
-                self.save_kfb(filename, maximum_iteration);
+                self.save_kfb(filename);
             }
             DataType::BOTH => {
                 self.save_colour(filename);
-                self.save_raw(filename, maximum_iteration, approximation_order, zoom);
+                self.save_raw(filename, approximation_order, zoom);
             }
         }
     }
 
-    fn save_colour(&mut self, filename: &str) {
+    pub fn save_colour(&mut self, filename: &str) {
+        // Extension is specified
+        match filename.split_terminator(".").last() {
+            Some(extension) => {
+                match extension {
+                    "jpg" | "jpeg" | "png" => {
+                        image::save_buffer(
+                            filename.to_owned(), 
+                            &self.rgb, 
+                            self.image_width as u32, 
+                            self.image_height as u32, 
+                            image::ColorType::Rgb8).unwrap();
+
+                        return;
+                    }
+                    _ => {}
+                }
+                
+            }
+            _ => {}
+        }
+
         image::save_buffer(
             filename.to_owned() + ".png", 
             &self.rgb, 
@@ -253,7 +365,7 @@ impl DataExport {
             image::ColorType::Rgb8).unwrap();
     }
 
-    fn save_raw(&mut self, filename: &str, maximum_iteration: usize, approximation_order: usize, zoom: &str) {
+    pub fn save_raw(&mut self, filename: &str, approximation_order: usize, zoom: &str) {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F16(self.smooth_f16.clone()));
 
@@ -272,7 +384,7 @@ impl DataExport {
 
         let mut attributes = HashMap::new();
         attributes.insert(simple_image::Text::from("IterationsBias").unwrap(), exr::meta::attribute::AttributeValue::I32(0));
-        attributes.insert(simple_image::Text::from("Iterations").unwrap(), exr::meta::attribute::AttributeValue::I32(maximum_iteration as i32));
+        attributes.insert(simple_image::Text::from("Iterations").unwrap(), exr::meta::attribute::AttributeValue::I32(self.maximum_iteration as i32));
         attributes.insert(simple_image::Text::from("Zoom").unwrap(), exr::meta::attribute::AttributeValue::Text(simple_image::Text::from(zoom).unwrap()));
         attributes.insert(simple_image::Text::from("approximation_order").unwrap(), exr::meta::attribute::AttributeValue::I32(approximation_order as i32));
 
@@ -284,7 +396,7 @@ impl DataExport {
         image.write_to_file(filename.to_owned() + ".exr", simple_image::write_options::high()).unwrap();
     }
 
-    fn save_kfb(&mut self, filename: &str, maximum_iteration: usize) {
+    pub fn save_kfb(&mut self, filename: &str) {
         let mut file = File::create(filename.to_owned() + ".kfb").unwrap();
 
         file.write_all(b"KFB").unwrap();
@@ -295,7 +407,7 @@ impl DataExport {
         let test3 = [1u32, self.palette.len() as u32];
 
         // Maxmimum iteration
-        let test6 = [maximum_iteration as u32];
+        let test6 = [self.maximum_iteration as u32];
 
         file.write_all(unsafe {
             slice::from_raw_parts(test1.as_ptr() as *const u8, 4)
@@ -325,12 +437,22 @@ impl DataExport {
 
     pub fn clear_buffers(&mut self) {
         match self.data_type {
+            DataType::NONE => {},
             DataType::COLOUR => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
+            }
+            DataType::GUI => {
+                self.rgb = vec![0u8; self.image_width * self.image_height * 3];
+                self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
+                self.smooth_f32 = vec![0.0f32; self.image_width * self.image_height];
+                self.distance_x = vec![f16::ZERO; self.image_width * self.image_height];
+                self.distance_y = vec![f16::ZERO; self.image_width * self.image_height];
             }
             DataType::RAW => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth_f16 = vec![f16::ZERO; self.image_width * self.image_height];
+                self.distance_x = vec![f16::ZERO; self.image_width * self.image_height];
+                self.distance_y = vec![f16::ZERO; self.image_width * self.image_height];
             },
             DataType::KFB => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
@@ -340,7 +462,78 @@ impl DataExport {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth_f16 = vec![f16::ZERO; self.image_width * self.image_height];
+                self.distance_x = vec![f16::ZERO; self.image_width * self.image_height];
+                self.distance_y = vec![f16::ZERO; self.image_width * self.image_height];
             }
+        }
+    }
+
+    pub fn regenerate(&mut self) {
+        match self.data_type {
+            DataType::GUI => {
+                for i in 0..self.iterations.len() {
+                    self.colour_index(i);
+                }
+            },
+            _ => {}
+        }
+    }
+
+    pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
+        if !self.display_glitches {
+            match self.data_type {
+                DataType::GUI => {
+                    for pixel in pixel_data {
+                        let k = pixel.image_y * self.image_width + pixel.image_x;
+
+                        let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
+                        let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
+
+                        let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
+                        let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
+
+                        self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
+                        self.smooth_f32[k] = (self.smooth_f32[k_up] + self.smooth_f32[k_down] + self.smooth_f32[k_left] + self.smooth_f32[k_right]) / 4.0;
+
+                        if self.analytic_derivative {
+                            self.distance_x[k] = f16::from_f32((f32::from(self.distance_x[k_up]) + f32::from(self.distance_x[k_down]) + f32::from(self.distance_x[k_left]) + f32::from(self.distance_x[k_right])) / 4.0);
+                            self.distance_y[k] = f16::from_f32((f32::from(self.distance_y[k_up]) + f32::from(self.distance_y[k_down]) + f32::from(self.distance_y[k_left]) + f32::from(self.distance_y[k_right])) / 4.0);
+                        }
+
+                        self.colour_index(k);
+                    }
+                },
+                _ => {}
+            }
+        }
+    }
+
+    pub fn colour_index(&mut self, i: usize) {
+        if self.iterations[i] >= self.maximum_iteration as u32 {
+            self.rgb[3 * i] = 0u8; 
+            self.rgb[3 * i + 1] = 0u8; 
+            self.rgb[3 * i + 2] = 0u8;
+        } else if self.analytic_derivative {
+            let output = ((f32::from(self.distance_x[i])).powi(2) + (f32::from(self.distance_y[i])).powi(2)).sqrt();
+
+            let out = (255.0 * output.tanh()) as u8;
+
+            self.rgb[3 * i] = out as u8; 
+            self.rgb[3 * i + 1] = out as u8; 
+            self.rgb[3 * i + 2] = out as u8;
+        } else {
+            let temp = ((self.iterations[i] as f32 + self.smooth_f32[i]) / self.iteration_division) + self.iteration_offset;
+
+            let temp2 = temp.floor() as usize % self.palette.len();
+            let temp3 = (temp as usize + 1) % self.palette.len();
+            let temp4 = temp.fract();
+
+            let colour1 = self.palette[temp2];
+            let colour2 = self.palette[temp3];
+
+            self.rgb[3 * i] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
+            self.rgb[3 * i + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
+            self.rgb[3 * i + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
         }
     }
 }
