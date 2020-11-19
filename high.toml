@@ -9,7 +9,7 @@ zoom_scale = 2.0
 display_glitches = false
 auto_adjust_iterations = true
 remove_centre = false
-export = "png"
+export = "exr"
 
 glitch_tolerance = 1.4e-6
 

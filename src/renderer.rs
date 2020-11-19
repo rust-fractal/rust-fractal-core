@@ -3,7 +3,7 @@ use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::Instant;
 use std::io::Write;
-use std::cmp::max;
+use std::cmp::{min, max};
 
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -12,25 +12,27 @@ use rayon::prelude::*;
 use config::Config;
 
 pub struct FractalRenderer {
-    image_width: usize,
-    image_height: usize,
-    rotate: f64,
-    zoom: FloatExtended,
+    pub image_width: usize,
+    pub image_height: usize,
+    pub rotate: f64,
+    pub zoom: FloatExtended,
     auto_adjust_iterations: bool,
-    maximum_iteration: usize,
+    pub maximum_iteration: usize,
     glitch_percentage: f64,
-    data_export: DataExport,
+    pub data_export: DataExport,
     start_render_time: Instant,
     remaining_frames: usize,
     frame_offset: usize,
     zoom_scale_factor: f64,
-    center_reference: Reference,
-    series_approximation: SeriesApproximation,
+    pub center_reference: Reference,
+    pub series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
     remove_centre: bool,
-    analytic_derivative: bool,
+    pub analytic_derivative: bool,
     jitter: bool,
     experimental: bool,
+    show_output: bool,
+    pub render_time: u128,
 }
 
 impl FractalRenderer {
@@ -59,8 +61,11 @@ impl FractalRenderer {
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
         let jitter = settings.get_bool("jitter").unwrap_or(false);
+        let show_output = settings.get_bool("show_output").unwrap_or(true);
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "NONE" => DataType::NONE,
+            "GUI" => DataType::GUI,
             "RAW" | "EXR" => DataType::RAW,
             "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
             "KFB" => DataType::KFB,
@@ -69,10 +74,10 @@ impl FractalRenderer {
         };
 
         let palette = match data_type {
-            DataType::RAW => {
+            DataType::RAW | DataType::NONE => {
                 Vec::new()
             },
-            DataType::KFB | DataType::COLOUR | DataType::BOTH => {
+            DataType::KFB | DataType::COLOUR | DataType::BOTH | DataType::GUI => {
                 if let Ok(colour_values) = settings.get_array("palette") {
                     colour_values.chunks_exact(3).map(|value| {
                         // We assume the palette is in BGR rather than RGB
@@ -101,7 +106,8 @@ impl FractalRenderer {
             1, 
             maximum_iteration, 
             data_storage_interval,
-            glitch_tolerance);
+            glitch_tolerance,
+            zoom);
 
         let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
@@ -139,14 +145,54 @@ impl FractalRenderer {
             remove_centre,
             analytic_derivative,
             jitter,
-            experimental
+            experimental,
+            show_output,
+            render_time: 0
         }
     }
 
+    pub fn update_location(&mut self, zoom: FloatExtended, mut center_location: ComplexArbitrary) {
+        self.zoom = zoom;
+
+        let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom) / self.image_height as f64;
+        let radius = delta_pixel * self.image_width as f64;
+        let precision = max(64, -radius.exponent + 64);
+
+        center_location.set_prec(precision as u32);
+
+        self.center_reference = Reference::new(center_location.clone(), 
+            center_location.clone(), 
+            1, 
+            self.maximum_iteration, 
+            self.center_reference.data_storage_interval,
+            self.center_reference.glitch_tolerance,
+            self.zoom);
+
+        if self.series_approximation.min_valid_iteration < 2500 {
+            self.series_approximation.order = 16;
+        } else {
+            self.series_approximation.order = 64;
+        }
+
+        // println!("{} {}", self.series_approximation.min_valid_iteration, self.maximum_iteration);
+
+        if self.series_approximation.min_valid_iteration > self.maximum_iteration / 5 {
+            self.maximum_iteration /= 2;
+            self.maximum_iteration *= 3;
+        } 
+
+        self.data_export.maximum_iteration = self.maximum_iteration;
+        self.center_reference.maximum_iteration = self.maximum_iteration;
+        self.series_approximation.maximum_iteration = self.maximum_iteration;
+    }
+
     pub fn render_frame(&mut self, frame_index: usize, filename: String) {
-        print!("{:<6}", frame_index + self.frame_offset);
-        print!("| {:<15}", extended_to_string_short(self.zoom));
-        std::io::stdout().flush().unwrap();
+        if self.show_output {
+            print!("{:<6}", frame_index + self.frame_offset);
+            print!("| {:<15}", extended_to_string_short(self.zoom));
+            std::io::stdout().flush().unwrap();
+        };
+
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
@@ -154,6 +200,22 @@ impl FractalRenderer {
             self.center_reference.run();
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference);
+        } else {
+            // If the image width/height changes intraframe (GUI) we need to regenerate some things
+            if self.data_export.image_width != self.image_width || self.data_export.image_height != self.image_height {
+                self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
+
+                self.data_export.image_width = self.image_width;
+                self.data_export.image_height = self.image_height;
+
+                self.data_export.clear_buffers();
+            }
+
+            // Check to see if the series approximation order has changed intraframe
+            if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
+                // println!("order was: {}, is now: {}", (self.series_approximation.coefficients[0].len() - 1), self.series_approximation.order);
+                self.series_approximation.generate_approximation(&self.center_reference);
+            }
         }
         
         let cos_rotate = self.rotate.cos();
@@ -162,8 +224,12 @@ impl FractalRenderer {
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
-        self.series_approximation.delta_pixel_square = if self.experimental {
-            delta_pixel_extended * delta_pixel_extended
+        let minimum_dimension = min(self.image_width, self.image_height);
+
+        self.series_approximation.delta_pixel_square = if minimum_dimension < 1000 {
+            let fixed_delta_pixel_extended = FloatExtended::new(4.0 / (999.0 * self.zoom.mantissa), -self.zoom.exponent);
+            
+            fixed_delta_pixel_extended * fixed_delta_pixel_extended
         } else {
             delta_pixel_extended * delta_pixel_extended
         };
@@ -179,18 +245,20 @@ impl FractalRenderer {
             self.image_height,
             &self.center_reference);
 
-        print!("| {:<15}", approximation_time.elapsed().as_millis());
-        print!("| {:<15}", self.series_approximation.min_valid_iteration);
-        print!("| {:<6}", self.series_approximation.order);
-        print!("| {:<15}", self.maximum_iteration);
-        std::io::stdout().flush().unwrap();
+        self.data_export.maximum_iteration = self.maximum_iteration;
+
+        if self.show_output {
+            print!("| {:<15}", approximation_time.elapsed().as_millis());
+            print!("| {:<15}", self.series_approximation.min_valid_iteration);
+            print!("| {:<6}", self.series_approximation.order);
+            print!("| {:<15}", self.maximum_iteration);
+            std::io::stdout().flush().unwrap();
+        };
 
         let packing_time = Instant::now();
 
         if (frame_index + self.frame_offset) != 0 && self.remove_centre {
             // This will remove the central pixels
-            self.data_export.clear_buffers();
-
             let image_width = self.image_width;
             let image_height = self.image_height;
             let temp = 0.5 - 0.5 / self.zoom_scale_factor;
@@ -210,8 +278,6 @@ impl FractalRenderer {
             // The centre has already been removed
             self.remove_centre = false;
         }
-
-
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {
@@ -267,9 +333,11 @@ impl FractalRenderer {
                 }
             }).collect::<Vec<PixelData>>();
 
-        print!("| {:<15}", packing_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
-
+        if self.show_output {
+            print!("| {:<15}", packing_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        };
+        
         let iteration_time = Instant::now();
 
         // This one has no offset because it is not a glitch resolving reference
@@ -277,12 +345,15 @@ impl FractalRenderer {
             Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference);
         } else {
             Perturbation::iterate_normal(&mut pixel_data, &self.center_reference);
-        }
+        };
 
-        self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &self.center_reference, delta_pixel_extended);
-        print!("| {:<15}", iteration_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
+        self.data_export.export_pixels(&pixel_data, &self.center_reference, delta_pixel_extended);
 
+        if self.show_output {
+            print!("| {:<15}", iteration_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        };
+        
         let correction_time = Instant::now();
         let mut correction_references = 1;
 
@@ -328,28 +399,40 @@ impl FractalRenderer {
                 Perturbation::iterate_normal(&mut pixel_data, &glitch_reference);
             };
 
-            self.data_export.export_pixels(&pixel_data, self.maximum_iteration, &glitch_reference, delta_pixel_extended);
+            self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
                 packet.glitched
             });
-        }
+        };
 
-        print!("| {:<6}", correction_references);
-        print!("| {:<15}", correction_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
+        // Possibly here correct the small glitches
+        self.data_export.interpolate_glitches(&pixel_data);
+
+        if self.show_output {
+            print!("| {:<6}", correction_references);
+            print!("| {:<15}", correction_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        };
         
         let saving_time = Instant::now();
-        self.data_export.save(&filename, self.maximum_iteration, self.series_approximation.order, &extended_to_string_long(self.zoom));
-        print!("| {:<15}", saving_time.elapsed().as_millis());
-        println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
-        std::io::stdout().flush().unwrap();
+        self.data_export.save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
+
+        self.render_time = frame_time.elapsed().as_millis();
+
+        if self.show_output {
+            print!("| {:<15}", saving_time.elapsed().as_millis());
+            println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
+            std::io::stdout().flush().unwrap();
+        }
     }
 
     pub fn render(&mut self) {
         // Print out the status information
-        println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Ref", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        if self.show_output {
+            println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Ref", "Correct [ms]", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+        };
 
         let mut count = 0;
 
