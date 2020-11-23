@@ -5,10 +5,12 @@ use crate::math::reference::Reference;
 
 use crate::util::ComplexExtended;
 
+use atomic_counter::{AtomicCounter, ConsistentCounter};
+
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference) {
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &ConsistentCounter) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
                 for pixel in pixel_data {
@@ -41,6 +43,7 @@ impl Perturbation {
                                 pixel.escaped = true;
                                 pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                 pixel.delta_current.exponent = 0;
+                                pixels_complete.inc();
                                 break;
                             }
                         }
@@ -81,12 +84,13 @@ impl Perturbation {
 
                     if !pixel.escaped && !pixel.glitched {
                         pixel.iteration = reference.current_iteration;
+                        pixels_complete.inc();
                     }
                 }
             });
     }
 
-    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference) {
+    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &ConsistentCounter) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
                 for pixel in pixel_data {
@@ -120,6 +124,7 @@ impl Perturbation {
                                 pixel.escaped = true;
                                 pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                 pixel.delta_current.exponent = 0;
+                                pixels_complete.inc();
                                 break;
                             }
                         }
@@ -172,6 +177,7 @@ impl Perturbation {
 
                     if !pixel.escaped && !pixel.glitched {
                         pixel.iteration = reference.current_iteration;
+                        pixels_complete.inc();
                     }
                 }
             });

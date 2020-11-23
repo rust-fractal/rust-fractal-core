@@ -1,7 +1,7 @@
 use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::io::Write;
 use std::cmp::{min, max};
 
@@ -10,6 +10,12 @@ use rand::Rng;
 
 use rayon::prelude::*;
 use config::Config;
+
+use std::thread;
+use std::sync::Arc;
+
+use atomic_counter::{AtomicCounter, ConsistentCounter};
+
 
 pub struct FractalRenderer {
     pub image_width: usize,
@@ -340,11 +346,24 @@ impl FractalRenderer {
         
         let iteration_time = Instant::now();
 
+        let mut pixels_complete = Arc::new(ConsistentCounter::new(0));
+
+        let testing = Arc::clone(&pixels_complete);
+
+        let total_pixels = (self.image_width * self.image_height) as f64;
+
+        thread::spawn(move || {
+            loop {
+                thread::sleep(Duration::from_millis(50));
+                println!("{:.2}", 100.0 * testing.get() as f64 / total_pixels);
+            }
+        });
+
         // This one has no offset because it is not a glitch resolving reference
         if self.analytic_derivative {
-            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference);
+            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference, &mut pixels_complete);
         } else {
-            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference);
+            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference, &mut pixels_complete);
         };
 
         self.data_export.export_pixels(&pixel_data, &self.center_reference, delta_pixel_extended);
@@ -394,9 +413,9 @@ impl FractalRenderer {
             }
             
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &mut pixels_complete);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference);
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &mut pixels_complete);
             };
 
             self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
