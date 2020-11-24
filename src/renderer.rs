@@ -254,9 +254,9 @@ impl FractalRenderer {
 
                             // println!("{} {} {}", thread_counter_1.get(), thread_counter_2.get(), thread_counter_3.get());
 
-                            percentage_complete += 40.0 * thread_counter_1.get() as f64 / thread_counter_3.get() as f64;
-                            percentage_complete += 40.0 * thread_counter_2.get() as f64 / thread_counter_3.get() as f64;
-                            percentage_complete += 20.0 * thread_counter_4.get() as f64 / 2.0;
+                            percentage_complete += 45.0 * thread_counter_1.get() as f64 / thread_counter_3.get() as f64;
+                            percentage_complete += 45.0 * thread_counter_2.get() as f64 / thread_counter_3.get() as f64;
+                            percentage_complete += 10.0 * thread_counter_4.get() as f64 / 2.0;
 
                             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", percentage_complete));
                             std::io::stdout().flush().unwrap();

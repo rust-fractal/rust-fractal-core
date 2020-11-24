@@ -70,12 +70,11 @@ impl SeriesApproximation {
         let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
         let mut previous_coefficients = self.coefficients[0].clone();
+        let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
 
         // Can be changed later into a better loop - this function could also return some more information
         // Go through all remaining iterations
         for i in 1..self.maximum_iteration {
-            let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
-
             // This is checking if the approximation can step forward so takes the next iteration
             next_coefficients[0] = center_reference.reference_data[i].z_extended;
             next_coefficients[1] = previous_coefficients[0] * previous_coefficients[1] * 2.0 + add_value;
@@ -112,7 +111,7 @@ impl SeriesApproximation {
             // only every 100th iteration (101, 201 etc)
             // This is 0, 100, 200 -> 1, 101, 201
             if i % self.data_storage_interval == 0 {
-                self.coefficients.push(next_coefficients);
+                self.coefficients.push(next_coefficients.clone());
             }
 
             // self.coefficients.push(next_coefficients);
