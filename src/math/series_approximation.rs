@@ -7,6 +7,10 @@ use rayon::prelude::*;
 
 use std::cmp::max;
 
+use atomic_counter::{AtomicCounter, RelaxedCounter};
+
+use std::sync::Arc;
+
 pub struct SeriesApproximation {
     pub maximum_iteration: usize,
     pub delta_pixel_square: FloatExtended,
@@ -55,7 +59,7 @@ impl SeriesApproximation {
         }
     }
 
-    pub fn generate_approximation(&mut self, center_reference: &Reference) {
+    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: Option<&Arc<RelaxedCounter>>) {
         // Reset the coefficients
         self.coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1]; 1];
 
@@ -98,7 +102,13 @@ impl SeriesApproximation {
 
             previous_coefficients = next_coefficients.clone();
 
-
+            match &series_approximation_counter {
+                Some(complete) => {
+                    complete.inc();
+                },
+                _ => {}
+            }
+            
             // only every 100th iteration (101, 201 etc)
             // This is 0, 100, 200 -> 1, 101, 201
             if i % self.data_storage_interval == 0 {
@@ -117,7 +127,8 @@ impl SeriesApproximation {
         delta_pixel: f64,
         image_width: usize,
         image_height: usize,
-        center_reference: &Reference) {
+        center_reference: &Reference,
+        series_validation_counter: Option<&Arc<RelaxedCounter>>) {
         // Delete the previous probes and calculate new ones
         self.probe_start = Vec::new();
         self.approximation_probes = Vec::new();
@@ -201,6 +212,13 @@ impl SeriesApproximation {
             }
 
             first_valid_iterations += 1;
+        }
+
+        match &series_validation_counter {
+            Some(complete) => {
+                complete.inc();
+            },
+            _ => {}
         }
 
         self.min_valid_iteration = first_valid_iterations;
@@ -320,6 +338,13 @@ impl SeriesApproximation {
                 };
                 // println!("{:?}, {}, {}, {}", valid_iterations, self.min_valid_iteration, current_probe_check_value, next_probe_check_value);
             }
+        }
+
+        match &series_validation_counter {
+            Some(complete) => {
+                complete.inc();
+            },
+            _ => {}
         }
 
         self.valid_iterations = valid_iterations;

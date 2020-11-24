@@ -9,7 +9,7 @@ zoom_scale = 2.0
 display_glitches = false
 auto_adjust_iterations = true
 remove_centre = false
-export = "exr"
+export = "png"
 
 glitch_tolerance = 1.4e-6
 
@@ -22,5 +22,5 @@ valid_iteration_probe_multiplier = 0.01
 
 experimental = true  
 
-analytic_derivative = true
+analytic_derivative = false
 jitter = false

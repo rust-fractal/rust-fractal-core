@@ -1,5 +1,9 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, to_fixed, to_extended};
 
+use atomic_counter::{AtomicCounter, RelaxedCounter};
+
+use std::sync::Arc;
+
 #[derive(Clone)]
 pub struct Reference {
     pub start_iteration: usize,
@@ -69,7 +73,7 @@ impl Reference {
     }
 
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self, reference_counter: Option<&Arc<RelaxedCounter>>, reference_maximum_iteration_counter: Option<&Arc<RelaxedCounter>>) {
         let z_fixed = to_fixed(&self.z);
         let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
@@ -96,7 +100,27 @@ impl Reference {
                 }
             }
 
+            match &reference_counter {
+                Some(complete) => {
+                    complete.inc();
+                },
+                _ => {}
+            }
+
             if !self.step() {
+                match &reference_counter {
+                    Some(complete) => {
+                        // Set the maximum value
+                        match &reference_maximum_iteration_counter {
+                            Some(maximum_iteration_counter) => {
+                                maximum_iteration_counter.add(usize::max_value() - self.maximum_iteration + complete.get() + 1);
+                            },
+                            _ => {}
+                        }
+                    },
+                    _ => {}
+                }
+
                 break;
             };
         }
