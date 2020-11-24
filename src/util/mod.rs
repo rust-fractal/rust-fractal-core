@@ -66,7 +66,12 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
     let temp: Vec<&str> = string.split('E').collect();
 
     let first = temp[0].parse::<f64>().unwrap();
-    let second = temp[1].parse::<f64>().unwrap() * LOG2_10;
+
+    let second = if temp.len() < 2 {
+        0.0
+    } else {
+        temp[1].parse::<f64>().unwrap() * LOG2_10
+    };
 
     FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
 }
