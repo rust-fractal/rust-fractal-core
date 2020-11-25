@@ -59,7 +59,7 @@ impl SeriesApproximation {
         }
     }
 
-    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: Option<&Arc<RelaxedCounter>>) {
+    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<RelaxedCounter>) {
         // Reset the coefficients
         self.coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1]; 1];
 
@@ -101,12 +101,7 @@ impl SeriesApproximation {
 
             previous_coefficients = next_coefficients.clone();
 
-            match &series_approximation_counter {
-                Some(complete) => {
-                    complete.inc();
-                },
-                _ => {}
-            }
+            series_approximation_counter.inc();
             
             // only every 100th iteration (101, 201 etc)
             // This is 0, 100, 200 -> 1, 101, 201
@@ -127,7 +122,7 @@ impl SeriesApproximation {
         image_width: usize,
         image_height: usize,
         center_reference: &Reference,
-        series_validation_counter: Option<&Arc<RelaxedCounter>>) {
+        series_validation_counter: &Arc<RelaxedCounter>) {
         // Delete the previous probes and calculate new ones
         self.probe_start = Vec::new();
         self.approximation_probes = Vec::new();
@@ -213,12 +208,7 @@ impl SeriesApproximation {
             first_valid_iterations += 1;
         }
 
-        match &series_validation_counter {
-            Some(complete) => {
-                complete.inc();
-            },
-            _ => {}
-        }
+        series_validation_counter.inc();
 
         self.min_valid_iteration = first_valid_iterations;
 
@@ -339,12 +329,7 @@ impl SeriesApproximation {
             }
         }
 
-        match &series_validation_counter {
-            Some(complete) => {
-                complete.inc();
-            },
-            _ => {}
-        }
+        series_validation_counter.inc();
 
         self.valid_iterations = valid_iterations;
 

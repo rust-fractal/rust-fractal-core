@@ -1,4 +1,4 @@
-use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette};
+use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette, ProgressCounters};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::time::{Duration, Instant};
@@ -15,7 +15,7 @@ use std::thread;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use atomic_counter::{AtomicCounter, RelaxedCounter};
+use atomic_counter::AtomicCounter;
 
 
 pub struct FractalRenderer {
@@ -39,6 +39,7 @@ pub struct FractalRenderer {
     jitter: bool,
     experimental: bool,
     show_output: bool,
+    pub progress: ProgressCounters,
     pub render_time: u128,
 }
 
@@ -154,6 +155,7 @@ impl FractalRenderer {
             jitter,
             experimental,
             show_output,
+            progress: ProgressCounters::new(maximum_iteration),
             render_time: 0
         }
     }
@@ -203,43 +205,13 @@ impl FractalRenderer {
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
 
-        let reference_complete = Arc::new(RelaxedCounter::new(0));
-        let series_approximation_complete = Arc::new(RelaxedCounter::new(0));
-        let series_validaton_complete = Arc::new(RelaxedCounter::new(0));
-
-        let reference_counter = if self.show_output {
-            Some(&reference_complete)
-        } else {
-            None
-        };
-
-        let series_approximation_counter = if self.show_output {
-            Some(&series_approximation_complete)
-        } else {
-            None
-        };
-
-        let series_validation_counter = if self.show_output {
-            Some(&series_validaton_complete)
-        } else {
-            None
-        };
-
         let (tx, rx) = mpsc::channel();
 
-        let reference_maximum_iteration = Arc::new(RelaxedCounter::new(self.maximum_iteration));
-
-        let reference_maximum_iteration_counter = if self.show_output {
-            Some(&reference_maximum_iteration)
-        } else {
-            None
-        };
-
         if self.show_output {
-            let thread_counter_1 = Arc::clone(&reference_complete);
-            let thread_counter_2 = Arc::clone(&series_approximation_complete);
-            let thread_counter_3 = Arc::clone(&reference_maximum_iteration);
-            let thread_counter_4 = Arc::clone(&series_validaton_complete);
+            let thread_counter_1 = self.progress.reference.clone();
+            let thread_counter_2 = self.progress.series_approximation.clone();
+            let thread_counter_3 = self.progress.reference_maximum.clone();
+            let thread_counter_4 = self.progress.series_validation.clone();
             print!("|               ");
 
             thread::spawn(move || {
@@ -269,9 +241,9 @@ impl FractalRenderer {
         };
 
         if frame_index == 0 {
-            self.center_reference.run(reference_counter, reference_maximum_iteration_counter);
+            self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum);
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
-            self.series_approximation.generate_approximation(&self.center_reference, series_approximation_counter);
+            self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
         } else {
             // If the image width/height changes intraframe (GUI) we need to regenerate some things
             if self.data_export.image_width != self.image_width || self.data_export.image_height != self.image_height {
@@ -286,7 +258,7 @@ impl FractalRenderer {
             // Check to see if the series approximation order has changed intraframe
             if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
                 // println!("order was: {}, is now: {}", (self.series_approximation.coefficients[0].len() - 1), self.series_approximation.order);
-                self.series_approximation.generate_approximation(&self.center_reference, series_approximation_counter);
+                self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
             }
         }
         
@@ -316,7 +288,7 @@ impl FractalRenderer {
             self.image_width,
             self.image_height,
             &self.center_reference,
-            series_validation_counter);
+            &self.progress.series_validation);
 
         self.data_export.maximum_iteration = self.maximum_iteration;
 
@@ -415,20 +387,12 @@ impl FractalRenderer {
         
         let iteration_time = Instant::now();
 
-        let pixels_complete = Arc::new(RelaxedCounter::new(0));
-        
-        let counter = if self.show_output {
-            Some(&pixels_complete)
-        } else {
-            None
-        };
-
         let total_pixels = self.render_indices.len() as f64;
 
         let (tx, rx) = mpsc::channel();
 
         if self.show_output {
-            let thread_counter = Arc::clone(&pixels_complete);
+            let thread_counter = Arc::clone(&self.progress.iteration);
             print!("|               ");
 
             thread::spawn(move || {
@@ -449,9 +413,9 @@ impl FractalRenderer {
 
         // This one has no offset because it is not a glitch resolving reference
         if self.analytic_derivative {
-            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference, counter);
+            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference, &self.progress.iteration);
         } else {
-            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference, counter);
+            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference, &self.progress.iteration);
         };
 
         tx.send(()).unwrap();
@@ -477,7 +441,7 @@ impl FractalRenderer {
         let (tx, rx) = mpsc::channel();
 
         if self.show_output {
-            let thread_counter = Arc::clone(&pixels_complete);
+            let thread_counter = Arc::clone(&self.progress.iteration);
             print!("|               ");
 
             thread::spawn(move || {
@@ -504,7 +468,7 @@ impl FractalRenderer {
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
             correction_references += 1;
-            glitch_reference.run(None, None);
+            glitch_reference.run(&self.progress.reference, &self.progress.reference_maximum);
 
             let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
@@ -528,9 +492,9 @@ impl FractalRenderer {
             }
             
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, counter);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, counter);
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration);
             };
 
             self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
@@ -556,6 +520,8 @@ impl FractalRenderer {
         self.data_export.save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
 
         self.render_time = frame_time.elapsed().as_millis();
+
+        self.progress.reset(self.maximum_iteration);
 
         if self.show_output {
             print!("| {:<15}", saving_time.elapsed().as_millis());
@@ -590,7 +556,7 @@ impl FractalRenderer {
                     // Overwrite the series approximation order
                     self.series_approximation.order = 8;
                     self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
-                    self.series_approximation.generate_approximation(&self.center_reference, None);
+                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
                 }
 
                 // Logic in here to automatically adjust the maximum number of iterations
@@ -608,10 +574,10 @@ impl FractalRenderer {
             } else {
                 if self.series_approximation.min_valid_iteration < 1000 && self.series_approximation.order > 16 {
                     self.series_approximation.order = 16;
-                    self.series_approximation.generate_approximation(&self.center_reference, None);
+                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
                 } else if self.series_approximation.min_valid_iteration < 10000 && self.series_approximation.order > 32 {
                     self.series_approximation.order = 32;
-                    self.series_approximation.generate_approximation(&self.center_reference, None);
+                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
                 }
             }
             

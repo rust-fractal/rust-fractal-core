@@ -5,10 +5,12 @@ pub mod data_export;
 pub mod float_extended;
 pub mod complex_extended;
 pub mod recolour_exr;
+pub mod progress;
 
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
 pub use recolour_exr::RecolourEXR;
+pub use progress::ProgressCounters;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
