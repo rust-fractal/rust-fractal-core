@@ -292,6 +292,8 @@ impl FractalRenderer {
             &self.center_reference,
             &self.progress.series_validation);
 
+        self.progress.min_series_approximation.add(self.series_approximation.min_valid_iteration);
+
         self.data_export.maximum_iteration = self.maximum_iteration;
 
         tx.send(()).unwrap();
