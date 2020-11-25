@@ -15,7 +15,7 @@ impl ProgressCounters {
     pub fn new(maximum_iteration: usize) -> ProgressCounters {
         ProgressCounters {
             reference: Arc::new(RelaxedCounter::new(0)),
-            reference_maximum: Arc::new(RelaxedCounter::new(maximum_iteration)),
+            reference_maximum: Arc::new(RelaxedCounter::new(maximum_iteration - 1)),
             series_approximation: Arc::new(RelaxedCounter::new(0)),
             series_validation: Arc::new(RelaxedCounter::new(0)),
             iteration: Arc::new(RelaxedCounter::new(0)),
