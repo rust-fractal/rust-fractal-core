@@ -73,7 +73,7 @@ impl Reference {
     }
 
 
-    pub fn run(&mut self, reference_counter: Option<&Arc<RelaxedCounter>>, reference_maximum_iteration_counter: Option<&Arc<RelaxedCounter>>) {
+    pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>) {
         let z_fixed = to_fixed(&self.z);
         let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
@@ -100,26 +100,10 @@ impl Reference {
                 }
             }
 
-            match &reference_counter {
-                Some(complete) => {
-                    complete.inc();
-                },
-                _ => {}
-            }
+            reference_counter.inc();
 
             if !self.step() {
-                match &reference_counter {
-                    Some(complete) => {
-                        // Set the maximum value
-                        match &reference_maximum_iteration_counter {
-                            Some(maximum_iteration_counter) => {
-                                maximum_iteration_counter.add(usize::max_value() - self.maximum_iteration + complete.get() + 1);
-                            },
-                            _ => {}
-                        }
-                    },
-                    _ => {}
-                }
+                reference_maximum_iteration_counter.add(usize::max_value() - self.maximum_iteration + reference_counter.get() + 1);
 
                 break;
             };
