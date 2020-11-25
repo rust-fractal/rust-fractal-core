@@ -15,7 +15,7 @@ use std::thread;
 use std::sync::Arc;
 use std::sync::mpsc;
 
-use atomic_counter::AtomicCounter;
+use atomic_counter::{AtomicCounter, RelaxedCounter};
 
 
 pub struct FractalRenderer {
@@ -257,7 +257,9 @@ impl FractalRenderer {
 
             // Check to see if the series approximation order has changed intraframe
             if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
-                // println!("order was: {}, is now: {}", (self.series_approximation.coefficients[0].len() - 1), self.series_approximation.order);
+                // TODO make it so that the value is set back to zero, rather than remade
+                // self.progress.reset_series_approximation();
+
                 self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
             }
         }
@@ -436,6 +438,8 @@ impl FractalRenderer {
         });
 
         let glitched_pixels = pixel_data.len() as f64;
+        self.progress.glitched_maximum.add(pixel_data.len());
+
         let complete_pixels = total_pixels - glitched_pixels;
 
         let (tx, rx) = mpsc::channel();
@@ -468,7 +472,7 @@ impl FractalRenderer {
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
             correction_references += 1;
-            glitch_reference.run(&self.progress.reference, &self.progress.reference_maximum);
+            glitch_reference.run(&Arc::new(RelaxedCounter::new(0)), &Arc::new(RelaxedCounter::new(0)));
 
             let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
@@ -521,7 +525,7 @@ impl FractalRenderer {
 
         self.render_time = frame_time.elapsed().as_millis();
 
-        self.progress.reset(self.maximum_iteration);
+        self.progress.reset();
 
         if self.show_output {
             print!("| {:<15}", saving_time.elapsed().as_millis());
