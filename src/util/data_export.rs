@@ -40,7 +40,7 @@ pub struct DataExport {
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, analytic_derivative: bool) -> Self {
+    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, iteration_offset: f32, analytic_derivative: bool) -> Self {
         let mut rgb = Vec::new();
         let mut smooth_f16 = Vec::new();
         let mut smooth_f32 = Vec::new();
@@ -86,7 +86,7 @@ impl DataExport {
             distance_y,
             display_glitches,
             iteration_division,
-            iteration_offset: 0.0,
+            iteration_offset,
             data_type,
             analytic_derivative,
             maximum_iteration: 0

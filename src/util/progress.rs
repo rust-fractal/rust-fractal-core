@@ -10,6 +10,7 @@ pub struct ProgressCounters {
     pub series_validation: Arc<RelaxedCounter>,
     pub iteration: Arc<RelaxedCounter>,
     pub glitched_maximum: Arc<RelaxedCounter>,
+    pub stop_flag: Arc<RelaxedCounter>
 }
 
 impl ProgressCounters {
@@ -22,6 +23,7 @@ impl ProgressCounters {
             series_validation: Arc::new(RelaxedCounter::new(0)),
             iteration: Arc::new(RelaxedCounter::new(0)),
             glitched_maximum: Arc::new(RelaxedCounter::new(0)),
+            stop_flag: Arc::new(RelaxedCounter::new(0)),
         }
     }
 

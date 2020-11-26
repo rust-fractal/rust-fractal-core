@@ -63,6 +63,7 @@ impl FractalRenderer {
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
+        let iteration_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
@@ -142,7 +143,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, analytic_derivative),
+            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, iteration_offset, analytic_derivative),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -241,6 +242,8 @@ impl FractalRenderer {
         };
 
         if frame_index == 0 {
+            self.data_export.maximum_iteration = self.maximum_iteration;
+
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum);
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation);
@@ -294,7 +297,7 @@ impl FractalRenderer {
 
         self.progress.min_series_approximation.add(self.series_approximation.min_valid_iteration);
 
-        self.data_export.maximum_iteration = self.maximum_iteration;
+        // self.data_export.maximum_iteration = self.maximum_iteration;
 
         tx.send(()).unwrap();
 
