@@ -271,6 +271,10 @@ impl SeriesApproximation {
                                     derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
                                 };
 
+                                probe.reduce();
+                                // series_probe.reduce();
+                                // derivative_probe.reduce();
+
                                 let relative_error = (probe - series_probe).norm_square();
                                 let mut derivative = derivative_probe.norm_square();
 
@@ -280,10 +284,14 @@ impl SeriesApproximation {
                                     derivative.exponent = 0;
                                 }
 
+                                // println!("checking at: {}", *probe_iteration_level);
+                                // println!("relative error: {} derivative: {} delta_square: {}", relative_error, derivative, self.delta_pixel_square);
+                                // println!("probe: {} series_probe: {}", probe, series_probe);
+
                                 // The first element is reduced, the second might need to be reduced a little more
                                 // Check that the error over the derivative is less than the pixel spacing
-                                if relative_error / derivative > self.delta_pixel_square {
-                                    // println!("{} ", *probe_iteration_level);
+                                if relative_error / derivative > self.delta_pixel_square || relative_error.exponent > 0 {
+                                    // println!("exceeded at: {} ", *probe_iteration_level);
 
                                     if *probe_iteration_level <= (current_probe_check_value + self.data_storage_interval + 1) {
                                         *probe_iteration_level = next_probe_check_value;
@@ -354,7 +362,18 @@ impl SeriesApproximation {
             }
         }
 
-        // println!("{:?}", self.valid_interpolation);
+        println!("series approximation valid interpolation buffer:");
+        let temp_size = self.probe_sampling - 1;
+        for i in 0..temp_size {
+            let test = &self.valid_interpolation[(i * temp_size)..((i + 1) * temp_size)];
+            print!("[");
+
+            for element in test {
+                print!("{:>8},", element);
+            }
+
+            print!("\x08]\n");
+        }
 
         if !self.experimental {
             self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];
