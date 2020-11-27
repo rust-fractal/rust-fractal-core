@@ -73,7 +73,7 @@ impl Reference {
     }
 
 
-    pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>) {
+    pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         let z_fixed = to_fixed(&self.z);
         let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
@@ -99,6 +99,10 @@ impl Reference {
                     self.high_precision_data.push(self.z.clone());
                 }
             }
+
+            if stop_flag.get() >= 1 {
+                return
+            };
 
             reference_counter.inc();
 

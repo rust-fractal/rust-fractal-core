@@ -59,7 +59,7 @@ impl SeriesApproximation {
         }
     }
 
-    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<RelaxedCounter>) {
+    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         // Reset the coefficients
         self.coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1]; 1];
 
@@ -75,6 +75,10 @@ impl SeriesApproximation {
         // Can be changed later into a better loop - this function could also return some more information
         // Go through all remaining iterations
         for i in 1..self.maximum_iteration {
+            if stop_flag.get() >= 1 {
+                return
+            };
+
             // This is checking if the approximation can step forward so takes the next iteration
             next_coefficients[0] = center_reference.reference_data[i].z_extended;
             next_coefficients[1] = previous_coefficients[0] * previous_coefficients[1] * 2.0 + add_value;
