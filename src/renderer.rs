@@ -161,41 +161,6 @@ impl FractalRenderer {
         }
     }
 
-    pub fn update_location(&mut self, zoom: FloatExtended, mut center_location: ComplexArbitrary) {
-        self.zoom = zoom;
-
-        let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / self.zoom) / self.image_height as f64;
-        let radius = delta_pixel * self.image_width as f64;
-        let precision = max(64, -radius.exponent + 64);
-
-        center_location.set_prec(precision as u32);
-
-        self.center_reference = Reference::new(center_location.clone(), 
-            center_location.clone(), 
-            1, 
-            self.maximum_iteration, 
-            self.center_reference.data_storage_interval,
-            self.center_reference.glitch_tolerance,
-            self.zoom);
-
-        if self.series_approximation.min_valid_iteration < 2500 {
-            self.series_approximation.order = 16;
-        } else {
-            self.series_approximation.order = 64;
-        }
-
-        // println!("{} {}", self.series_approximation.min_valid_iteration, self.maximum_iteration);
-
-        if self.series_approximation.min_valid_iteration > self.maximum_iteration / 5 {
-            self.maximum_iteration /= 2;
-            self.maximum_iteration *= 3;
-        } 
-
-        self.data_export.maximum_iteration = self.maximum_iteration;
-        self.center_reference.maximum_iteration = self.maximum_iteration;
-        self.series_approximation.maximum_iteration = self.maximum_iteration;
-    }
-
     pub fn render_frame(&mut self, frame_index: usize, filename: String, stop_flag: Option<Arc<RelaxedCounter>>) {
         if self.show_output {
             print!("{:<6}", frame_index + self.frame_offset);
