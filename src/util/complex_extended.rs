@@ -47,7 +47,12 @@ impl ComplexExtended {
 
     #[inline]
     pub fn reduce(&mut self) {
-        if self.mantissa.re.abs() > self.mantissa.im.abs() {
+        let positive_real = self.mantissa.re.abs();
+        let positive_imag = self.mantissa.im.abs();
+
+        if positive_real == 0.0 && positive_imag == 0.0 {
+            self.exponent = 0
+        } else if positive_real > positive_imag {
             let (temp_mantissa, added_exponent) = self.mantissa.re.frexp();
             self.mantissa.re = temp_mantissa;
             self.mantissa.im = self.mantissa.im.ldexp(-added_exponent);
