@@ -12,9 +12,13 @@ use std::sync::Arc;
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>) {
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
+                if stop_flag.get() >= 1 {
+                    return;
+                }
+
                 let mut new_pixels_complete = 0;
 
                 for pixel in pixel_data {
@@ -96,9 +100,13 @@ impl Perturbation {
             });
     }
 
-    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>) {
+    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
+                if stop_flag.get() >= 1 {
+                    return;
+                }
+
                 let mut new_pixels_complete = 0;
 
                 for pixel in pixel_data {
