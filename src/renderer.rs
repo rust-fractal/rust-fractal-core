@@ -217,6 +217,7 @@ impl FractalRenderer {
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag);
 
             if stop_flag.get() >= 1 {
+                self.progress.reset();
                 self.render_time = frame_time.elapsed().as_millis();
                 return;
             };
@@ -244,6 +245,7 @@ impl FractalRenderer {
         }
 
         if stop_flag.get() >= 1 {
+            self.progress.reset();
             self.render_time = frame_time.elapsed().as_millis();
             return;
         };
@@ -276,9 +278,12 @@ impl FractalRenderer {
             &self.center_reference,
             &self.progress.series_validation);
 
-        self.progress.min_series_approximation.add(self.series_approximation.min_valid_iteration);
+        // -1 because we already know that 1 iteration can be skipped (take z = c)
+        self.progress.min_series_approximation.add(self.series_approximation.min_valid_iteration - 1);
+        self.progress.max_series_approximation.add(self.series_approximation.max_valid_iteration - 1);
 
         if stop_flag.get() >= 1 {
+            self.progress.reset();
             self.render_time = frame_time.elapsed().as_millis();
             return;
         };
@@ -377,6 +382,7 @@ impl FractalRenderer {
         };
 
         if stop_flag.get() >= 1 {
+            self.progress.reset();
             self.render_time = frame_time.elapsed().as_millis();
             return;
         };
@@ -470,6 +476,7 @@ impl FractalRenderer {
 
             if stop_flag.get() >= 1 {
                 self.render_time = frame_time.elapsed().as_millis();
+                self.progress.reset();
                 return;
             };
 

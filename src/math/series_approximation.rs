@@ -20,6 +20,7 @@ pub struct SeriesApproximation {
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
     pub min_valid_iteration: usize,
+    pub max_valid_iteration: usize,
     pub valid_iterations: Vec<usize>,
     pub valid_interpolation: Vec<usize>,
     pub probe_sampling: usize,
@@ -49,6 +50,7 @@ impl SeriesApproximation {
             approximation_probes: Vec::new(),
             approximation_probes_derivative: Vec::new(),
             min_valid_iteration: 1,
+            max_valid_iteration: 1,
             valid_iterations: Vec::new(),
             valid_interpolation: Vec::new(),
             probe_sampling,
@@ -359,6 +361,8 @@ impl SeriesApproximation {
                 self.valid_interpolation.push(min_interpolation);
             }
         }
+
+        self.max_valid_iteration = self.valid_interpolation.iter().max().unwrap().clone();
 
         // println!("series approximation valid interpolation buffer:");
         // let temp_size = self.probe_sampling - 1;
