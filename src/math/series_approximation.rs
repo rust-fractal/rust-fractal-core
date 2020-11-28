@@ -272,8 +272,6 @@ impl SeriesApproximation {
                                 };
 
                                 probe.reduce();
-                                // series_probe.reduce();
-                                // derivative_probe.reduce();
 
                                 let relative_error = (probe - series_probe).norm_square();
                                 let mut derivative = derivative_probe.norm_square();
@@ -362,18 +360,18 @@ impl SeriesApproximation {
             }
         }
 
-        println!("series approximation valid interpolation buffer:");
-        let temp_size = self.probe_sampling - 1;
-        for i in 0..temp_size {
-            let test = &self.valid_interpolation[(i * temp_size)..((i + 1) * temp_size)];
-            print!("[");
+        // println!("series approximation valid interpolation buffer:");
+        // let temp_size = self.probe_sampling - 1;
+        // for i in 0..temp_size {
+        //     let test = &self.valid_interpolation[(i * temp_size)..((i + 1) * temp_size)];
+        //     print!("[");
 
-            for element in test {
-                print!("{:>8},", element);
-            }
+        //     for element in test {
+        //         print!("{:>8},", element);
+        //     }
 
-            print!("\x08]\n");
-        }
+        //     print!("\x08]\n");
+        // }
 
         if !self.experimental {
             self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];

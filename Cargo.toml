@@ -28,3 +28,4 @@ lto = "fat"
 codegen-units = 1
 #debug = true
 opt-level=3
+#incremental = true
