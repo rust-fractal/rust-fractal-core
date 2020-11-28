@@ -7,6 +7,7 @@ pub struct ProgressCounters {
     pub reference_maximum: Arc<RelaxedCounter>,
     pub series_approximation: Arc<RelaxedCounter>,
     pub min_series_approximation: Arc<RelaxedCounter>,
+    pub max_series_approximation: Arc<RelaxedCounter>,
     pub series_validation: Arc<RelaxedCounter>,
     pub iteration: Arc<RelaxedCounter>,
     pub glitched_maximum: Arc<RelaxedCounter>,
@@ -18,7 +19,8 @@ impl ProgressCounters {
             reference: Arc::new(RelaxedCounter::new(0)),
             reference_maximum: Arc::new(RelaxedCounter::new(maximum_iteration - 1)),
             series_approximation: Arc::new(RelaxedCounter::new(0)),
-            min_series_approximation: Arc::new(RelaxedCounter::new(0)),
+            min_series_approximation: Arc::new(RelaxedCounter::new(1)),
+            max_series_approximation: Arc::new(RelaxedCounter::new(1)),
             series_validation: Arc::new(RelaxedCounter::new(0)),
             iteration: Arc::new(RelaxedCounter::new(0)),
             glitched_maximum: Arc::new(RelaxedCounter::new(0))
@@ -28,7 +30,8 @@ impl ProgressCounters {
     // TODO just set these to zero rather than reset
     // Reset without the series approximation changed
     pub fn reset(&mut self) {
-        self.min_series_approximation = Arc::new(RelaxedCounter::new(0));
+        self.min_series_approximation = Arc::new(RelaxedCounter::new(1));
+        self.max_series_approximation = Arc::new(RelaxedCounter::new(1));
         self.series_validation = Arc::new(RelaxedCounter::new(0));
         self.iteration = Arc::new(RelaxedCounter::new(0));
         self.glitched_maximum = Arc::new(RelaxedCounter::new(0));
