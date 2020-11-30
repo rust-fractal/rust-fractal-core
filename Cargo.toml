@@ -16,6 +16,7 @@ clap = "^3.0.0-beta.1"
 config = "^0.9"
 half = "^1.6.0"
 atomic-counter = "^1.0.1"
+color_space = "^0.5.3"
 
 [dependencies.rug]
 version = "1.10"
