@@ -7,6 +7,10 @@ use rayon::prelude::*;
 
 use std::cmp::max;
 
+use atomic_counter::{AtomicCounter, RelaxedCounter};
+
+use std::sync::Arc;
+
 pub struct SeriesApproximation {
     pub maximum_iteration: usize,
     pub delta_pixel_square: FloatExtended,
@@ -16,6 +20,7 @@ pub struct SeriesApproximation {
     approximation_probes: Vec<Vec<ComplexExtended>>,
     approximation_probes_derivative: Vec<Vec<ComplexExtended>>,
     pub min_valid_iteration: usize,
+    pub max_valid_iteration: usize,
     pub valid_iterations: Vec<usize>,
     pub valid_interpolation: Vec<usize>,
     pub probe_sampling: usize,
@@ -45,6 +50,7 @@ impl SeriesApproximation {
             approximation_probes: Vec::new(),
             approximation_probes_derivative: Vec::new(),
             min_valid_iteration: 1,
+            max_valid_iteration: 1,
             valid_iterations: Vec::new(),
             valid_interpolation: Vec::new(),
             probe_sampling,
@@ -55,7 +61,7 @@ impl SeriesApproximation {
         }
     }
 
-    pub fn generate_approximation(&mut self, center_reference: &Reference) {
+    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         // Reset the coefficients
         self.coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1]; 1];
 
@@ -66,11 +72,14 @@ impl SeriesApproximation {
         let add_value = ComplexExtended::new2(1.0, 0.0, 0);
 
         let mut previous_coefficients = self.coefficients[0].clone();
+        let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
 
         // Can be changed later into a better loop - this function could also return some more information
         // Go through all remaining iterations
         for i in 1..self.maximum_iteration {
-            let mut next_coefficients = vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1];
+            if stop_flag.get() >= 1 {
+                return
+            };
 
             // This is checking if the approximation can step forward so takes the next iteration
             next_coefficients[0] = center_reference.reference_data[i].z_extended;
@@ -98,11 +107,12 @@ impl SeriesApproximation {
 
             previous_coefficients = next_coefficients.clone();
 
-
+            series_approximation_counter.inc();
+            
             // only every 100th iteration (101, 201 etc)
             // This is 0, 100, 200 -> 1, 101, 201
             if i % self.data_storage_interval == 0 {
-                self.coefficients.push(next_coefficients);
+                self.coefficients.push(next_coefficients.clone());
             }
 
             // self.coefficients.push(next_coefficients);
@@ -117,7 +127,8 @@ impl SeriesApproximation {
         delta_pixel: f64,
         image_width: usize,
         image_height: usize,
-        center_reference: &Reference) {
+        center_reference: &Reference,
+        series_validation_counter: &Arc<RelaxedCounter>) {
         // Delete the previous probes and calculate new ones
         self.probe_start = Vec::new();
         self.approximation_probes = Vec::new();
@@ -203,6 +214,8 @@ impl SeriesApproximation {
             first_valid_iterations += 1;
         }
 
+        series_validation_counter.inc();
+
         self.min_valid_iteration = first_valid_iterations;
 
         // println!("{}", self.min_valid_iteration);
@@ -260,6 +273,8 @@ impl SeriesApproximation {
                                     derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
                                 };
 
+                                probe.reduce();
+
                                 let relative_error = (probe - series_probe).norm_square();
                                 let mut derivative = derivative_probe.norm_square();
 
@@ -269,10 +284,14 @@ impl SeriesApproximation {
                                     derivative.exponent = 0;
                                 }
 
+                                // println!("checking at: {}", *probe_iteration_level);
+                                // println!("relative error: {} derivative: {} delta_square: {}", relative_error, derivative, self.delta_pixel_square);
+                                // println!("probe: {} series_probe: {}", probe, series_probe);
+
                                 // The first element is reduced, the second might need to be reduced a little more
                                 // Check that the error over the derivative is less than the pixel spacing
-                                if relative_error / derivative > self.delta_pixel_square {
-                                    // println!("{} ", *probe_iteration_level);
+                                if relative_error / derivative > self.delta_pixel_square || relative_error.exponent > 0 {
+                                    // println!("exceeded at: {} ", *probe_iteration_level);
 
                                     if *probe_iteration_level <= (current_probe_check_value + self.data_storage_interval + 1) {
                                         *probe_iteration_level = next_probe_check_value;
@@ -322,6 +341,8 @@ impl SeriesApproximation {
             }
         }
 
+        series_validation_counter.inc();
+
         self.valid_iterations = valid_iterations;
 
         // Also, here we do the interpolation and set up the array
@@ -341,7 +362,20 @@ impl SeriesApproximation {
             }
         }
 
-        // println!("{:?}", self.valid_interpolation);
+        self.max_valid_iteration = self.valid_interpolation.iter().max().unwrap().clone();
+
+        // println!("series approximation valid interpolation buffer:");
+        // let temp_size = self.probe_sampling - 1;
+        // for i in 0..temp_size {
+        //     let test = &self.valid_interpolation[(i * temp_size)..((i + 1) * temp_size)];
+        //     print!("[");
+
+        //     for element in test {
+        //         print!("{:>8},", element);
+        //     }
+
+        //     print!("\x08]\n");
+        // }
 
         if !self.experimental {
             self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];

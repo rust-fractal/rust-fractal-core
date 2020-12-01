@@ -5,10 +5,12 @@ pub mod data_export;
 pub mod float_extended;
 pub mod complex_extended;
 pub mod recolour_exr;
+pub mod progress;
 
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
 pub use recolour_exr::RecolourEXR;
+pub use progress::ProgressCounters;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
 pub type ComplexArbitrary = rug::Complex;
@@ -66,7 +68,12 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
     let temp: Vec<&str> = string.split('E').collect();
 
     let first = temp[0].parse::<f64>().unwrap();
-    let second = temp[1].parse::<f64>().unwrap() * LOG2_10;
+
+    let second = if temp.len() < 2 {
+        0.0
+    } else {
+        temp[1].parse::<f64>().unwrap() * LOG2_10
+    };
 
     FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
 }
