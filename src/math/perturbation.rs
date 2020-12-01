@@ -5,12 +5,22 @@ use crate::math::reference::Reference;
 
 use crate::util::ComplexExtended;
 
+use atomic_counter::{AtomicCounter, RelaxedCounter};
+
+use std::sync::Arc;
+
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference) {
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
+                if stop_flag.get() >= 1 {
+                    return;
+                }
+
+                let mut new_pixels_complete = 0;
+
                 for pixel in pixel_data {
                     let mut scaled_iterations = 0;
                     let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
@@ -41,6 +51,7 @@ impl Perturbation {
                                 pixel.escaped = true;
                                 pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                 pixel.delta_current.exponent = 0;
+                                new_pixels_complete += 1;
                                 break;
                             }
                         }
@@ -81,14 +92,23 @@ impl Perturbation {
 
                     if !pixel.escaped && !pixel.glitched {
                         pixel.iteration = reference.current_iteration;
+                        new_pixels_complete += 1;
                     }
                 }
+
+                pixels_complete.add(new_pixels_complete);
             });
     }
 
-    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference) {
+    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
+                if stop_flag.get() >= 1 {
+                    return;
+                }
+
+                let mut new_pixels_complete = 0;
+
                 for pixel in pixel_data {
                     let mut scaled_iterations = 0;
                     let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
@@ -120,6 +140,7 @@ impl Perturbation {
                                 pixel.escaped = true;
                                 pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                 pixel.delta_current.exponent = 0;
+                                new_pixels_complete += 1;
                                 break;
                             }
                         }
@@ -172,8 +193,11 @@ impl Perturbation {
 
                     if !pixel.escaped && !pixel.glitched {
                         pixel.iteration = reference.current_iteration;
+                        new_pixels_complete += 1;
                     }
                 }
+
+                pixels_complete.add(new_pixels_complete);
             });
     }
 }

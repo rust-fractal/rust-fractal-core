@@ -1,6 +1,6 @@
 [package]
 name = "rust_fractal"
-version = "0.13.0"
+version = "0.14.0"
 authors = ["jackyarndley <34801340+jackyarndley@users.noreply.github.com>"]
 description = "Fast, efficient mandelbrot set renderer."
 edition = "2018"
@@ -15,6 +15,8 @@ smallvec = "^1.4.2"
 clap = "^3.0.0-beta.1"
 config = "^0.9"
 half = "^1.6.0"
+atomic-counter = "^1.0.1"
+color_space = "^0.5.3"
 
 [dependencies.rug]
 version = "1.10"
@@ -27,3 +29,4 @@ lto = "fat"
 codegen-units = 1
 #debug = true
 opt-level=3
+#incremental = true
