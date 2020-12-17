@@ -220,7 +220,7 @@ impl SeriesApproximation {
 
         series_validation_counter.inc();
 
-        self.min_valid_iteration = self.data_storage_interval * (first_valid_iterations % self.data_storage_interval) + 1;
+        self.min_valid_iteration = self.data_storage_interval * ((first_valid_iterations - 1) / self.data_storage_interval) + 1;
 
         // println!("{}", self.min_valid_iteration);
 
