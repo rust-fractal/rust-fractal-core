@@ -33,14 +33,16 @@ pub struct DataExport {
     pub distance_y: Vec<f32>,
     pub display_glitches: bool,
     pub iteration_division: f32,
-    pub iteration_offset: f32,
+    pub palette_offset: f32,
+    palette_length: usize,
+    scaled_offset: f32,
     data_type: DataType,
     pub analytic_derivative: bool,
     pub maximum_iteration: usize
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, iteration_offset: f32, analytic_derivative: bool) -> Self {
+    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, palette_offset: f32, analytic_derivative: bool) -> Self {
         let mut rgb = Vec::new();
         let mut smooth = Vec::new();
         let mut distance_x = Vec::new();
@@ -73,6 +75,8 @@ impl DataExport {
             }
         }
 
+        let palette_length = palette.len();
+
         DataExport {
             image_width,
             image_height,
@@ -84,7 +88,9 @@ impl DataExport {
             distance_y,
             display_glitches,
             iteration_division,
-            iteration_offset,
+            palette_offset,
+            palette_length,
+            scaled_offset: palette_offset * palette_length as f32,
             data_type,
             analytic_derivative,
             maximum_iteration: 0
@@ -112,10 +118,10 @@ impl DataExport {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.iteration_offset;
+                        let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.scaled_offset;
 
-                        let temp2 = temp.floor() as usize % self.palette.len();
-                        let temp3 = (temp as usize + 1) % self.palette.len();
+                        let temp2 = temp.floor() as usize % self.palette_length;
+                        let temp3 = (temp as usize + 1) % self.palette_length;
                         let temp4 = temp.fract();
 
                         let colour1 = self.palette[temp2];
@@ -402,7 +408,7 @@ impl DataExport {
         let test1 = [self.image_width as u32, self.image_height as u32];
 
         // iteration division??
-        let test3 = [1u32, self.palette.len() as u32];
+        let test3 = [1u32, self.palette_length as u32];
 
         // Maxmimum iteration
         let test6 = [self.maximum_iteration as u32];
@@ -420,7 +426,7 @@ impl DataExport {
         }).unwrap();
 
         file.write_all(unsafe {
-            slice::from_raw_parts(self.palette.as_ptr() as *const u8, 3 * self.palette.len())
+            slice::from_raw_parts(self.palette.as_ptr() as *const u8, 3 * self.palette_length)
         }).unwrap();
 
         file.write_all(unsafe {
@@ -537,10 +543,10 @@ impl DataExport {
             // self.rgb[3 * i + 1] = out as u8; 
             // self.rgb[3 * i + 2] = out as u8;
         } else {
-            let temp = ((self.iterations[i] as f32 + self.smooth[i]) / self.iteration_division) + self.iteration_offset;
+            let temp = ((self.iterations[i] as f32 + self.smooth[i]) / self.iteration_division) + self.scaled_offset;
 
-            let temp2 = temp.floor() as usize % self.palette.len();
-            let temp3 = (temp as usize + 1) % self.palette.len();
+            let temp2 = temp.floor() as usize % self.palette_length;
+            let temp3 = (temp as usize + 1) % self.palette_length;
             let temp4 = temp.fract();
 
             let colour1 = self.palette[temp2];
@@ -550,5 +556,19 @@ impl DataExport {
             self.rgb[3 * i + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
             self.rgb[3 * i + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
         }
+    }
+
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32) {
+        match palette {
+            Some(palette) => {
+                self.palette = palette;
+                self.palette_length = self.palette.len();
+            },
+            None => {}
+        };
+
+        self.iteration_division = iteration_division;
+        self.palette_offset = palette_offset;
+        self.scaled_offset = palette_offset * self.palette_length as f32;
     }
 }
