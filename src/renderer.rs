@@ -540,6 +540,35 @@ impl FractalRenderer {
         }
     }
 
+    // Returns true if the maximum iterations has been increased
+    pub fn adjust_iterations(&mut self) -> bool {
+        if self.auto_adjust_iterations {
+            if 4 * self.series_approximation.max_valid_iteration > self.maximum_iteration {
+                self.maximum_iteration *= 3;
+                self.maximum_iteration /= 2;
+                return true;
+            }
+
+            if 8 * self.series_approximation.max_valid_iteration < self.maximum_iteration {
+                self.maximum_iteration *= 3;
+                self.maximum_iteration /= 4;
+
+                if self.maximum_iteration < 1000 {
+                    self.maximum_iteration = 1000;
+                }
+
+                self.data_export.maximum_iteration = self.maximum_iteration;
+                
+                if self.center_reference.current_iteration > self.maximum_iteration {
+                    self.center_reference.current_iteration = self.maximum_iteration;
+                }
+
+                self.center_reference.maximum_iteration = self.maximum_iteration;
+            }
+        }
+        false
+    }
+
     pub fn render(&mut self) {
         // Print out the status information
         if self.show_output {
