@@ -23,7 +23,7 @@ pub struct FractalRenderer {
     pub image_height: usize,
     pub rotate: f64,
     pub zoom: FloatExtended,
-    auto_adjust_iterations: bool,
+    pub auto_adjust_iterations: bool,
     pub maximum_iteration: usize,
     pub glitch_percentage: f64,
     pub data_export: DataExport,
