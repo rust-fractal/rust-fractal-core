@@ -366,7 +366,12 @@ impl SeriesApproximation {
             }
         }
 
-        self.max_valid_iteration = self.valid_interpolation.iter().max().unwrap().clone();
+        
+        self.max_valid_iteration = if self.experimental {
+            self.valid_interpolation.iter().max().unwrap().clone()
+        } else {
+            self.min_valid_iteration
+        };
 
         // println!("series approximation valid interpolation buffer:");
         // let temp_size = self.probe_sampling - 1;
