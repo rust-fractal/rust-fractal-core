@@ -37,6 +37,7 @@ pub struct FractalRenderer {
     pub remove_centre: bool,
     pub analytic_derivative: bool,
     pub jitter: bool,
+    pub jitter_factor: f64,
     pub experimental: bool,
     show_output: bool,
     pub progress: ProgressCounters,
@@ -154,6 +155,7 @@ impl FractalRenderer {
             remove_centre,
             analytic_derivative,
             jitter,
+            jitter_factor: 10.0,
             experimental,
             show_output,
             progress: ProgressCounters::new(maximum_iteration),
@@ -330,19 +332,6 @@ impl FractalRenderer {
                 let mut i = image_x as f64;
                 let mut j = image_y as f64;
 
-                if self.jitter {
-                    let mut rng = rand::thread_rng();
-
-                    i += rng.gen_range(-0.2, 0.2);
-                    j += rng.gen_range(-0.2, 0.2);
-                }
-
-                // This could be changed to account for jittering if needed
-                let element = ComplexFixed::new(
-                    i * delta_pixel * cos_rotate - j * delta_pixel * sin_rotate + delta_top_left.re, 
-                    i * delta_pixel * sin_rotate + j * delta_pixel * cos_rotate + delta_top_left.im
-                );
-
                 let chosen_iteration = if self.experimental {
                     let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i / self.image_width as f64).floor() as usize;
                     let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j / self.image_height as f64).floor() as usize;
@@ -353,6 +342,19 @@ impl FractalRenderer {
                 } else {
                     self.series_approximation.min_valid_iteration
                 };
+
+                if self.jitter {
+                    let mut rng = rand::thread_rng();
+
+                    i += rng.gen_range(-self.jitter_factor, self.jitter_factor);
+                    j += rng.gen_range(-self.jitter_factor, self.jitter_factor);
+                }
+
+                // This could be changed to account for jittering if needed
+                let element = ComplexFixed::new(
+                    i * delta_pixel * cos_rotate - j * delta_pixel * sin_rotate + delta_top_left.re, 
+                    i * delta_pixel * sin_rotate + j * delta_pixel * cos_rotate + delta_top_left.im
+                );
 
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
@@ -510,6 +512,7 @@ impl FractalRenderer {
             self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
+            // TODO maybe there is a function to split into two vectors, we only need to export the non glitched pixels
             pixel_data.retain(|packet| {
                 packet.glitched
             });
@@ -518,7 +521,8 @@ impl FractalRenderer {
         tx.send(()).unwrap();
 
         // Possibly here correct the small glitches
-        self.data_export.interpolate_glitches(&pixel_data);
+        // self.data_export.interpolate_glitches(&pixel_data);
+        // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
         if self.show_output {
             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", correction_time.elapsed().as_millis());

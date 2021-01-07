@@ -31,6 +31,7 @@ pub struct DataExport {
     pub smooth: Vec<f32>,
     pub distance_x: Vec<f32>,
     pub distance_y: Vec<f32>,
+    pub glitched: Vec<bool>,
     pub display_glitches: bool,
     pub iteration_division: f32,
     pub palette_offset: f32,
@@ -47,6 +48,7 @@ impl DataExport {
         let mut smooth = Vec::new();
         let mut distance_x = Vec::new();
         let mut distance_y = Vec::new();
+        let mut glitched = Vec::new();
 
         match data_type {
             DataType::NONE => {},
@@ -58,6 +60,7 @@ impl DataExport {
                 smooth = vec![0.0f32; image_width * image_height];
                 distance_x = vec![0.0f32; image_width * image_height];
                 distance_y = vec![0.0f32; image_width * image_height];
+                glitched = vec![false; image_width * image_height];
             }
             DataType::RAW => {
                 smooth = vec![0.0f32; image_width * image_height];
@@ -86,6 +89,7 @@ impl DataExport {
             smooth,
             distance_x,
             distance_y,
+            glitched,
             display_glitches,
             iteration_division,
             palette_offset,
@@ -149,6 +153,12 @@ impl DataExport {
             DataType::GUI => {
                 for pixel in pixel_data {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
+
+                    if pixel.glitched {
+                        self.glitched[k] = true;
+                    } else {
+                        self.glitched[k] = false;
+                    };
 
                     if pixel.glitched && self.display_glitches {
                         self.rgb[3 * k] = 255;
@@ -451,6 +461,7 @@ impl DataExport {
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
                 self.distance_x = vec![0.0f32; self.image_width * self.image_height];
                 self.distance_y = vec![0.0f32; self.image_width * self.image_height];
+                self.glitched = vec![false; self.image_width * self.image_height];
             }
             DataType::RAW => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
@@ -513,7 +524,11 @@ impl DataExport {
     }
 
     pub fn colour_index(&mut self, i: usize) {
-        if self.iterations[i] >= self.maximum_iteration as u32 {
+        if self.glitched[i] && self.display_glitches {
+            self.rgb[3 * i] = 255u8; 
+            self.rgb[3 * i + 1] = 0u8; 
+            self.rgb[3 * i + 2] = 0u8;
+        } else if self.iterations[i] >= self.maximum_iteration as u32 {
             self.rgb[3 * i] = 0u8; 
             self.rgb[3 * i + 1] = 0u8; 
             self.rgb[3 * i + 2] = 0u8;
