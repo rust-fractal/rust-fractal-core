@@ -71,6 +71,7 @@ impl FractalRenderer {
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
         let jitter = settings.get_bool("jitter").unwrap_or(false);
+        let jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         let show_output = settings.get_bool("show_output").unwrap_or(true);
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
@@ -155,7 +156,7 @@ impl FractalRenderer {
             remove_centre,
             analytic_derivative,
             jitter,
-            jitter_factor: 10.0,
+            jitter_factor,
             experimental,
             show_output,
             progress: ProgressCounters::new(maximum_iteration),
