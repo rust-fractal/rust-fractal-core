@@ -13,6 +13,7 @@ use std::f32::consts::TAU;
 use exr::prelude::simple_image;
 use color_space::{Rgb, Hsv};
 
+#[derive(PartialEq)]
 pub enum DataType {
     NONE,
     GUI,
@@ -35,9 +36,10 @@ pub struct DataExport {
     pub display_glitches: bool,
     pub iteration_division: f32,
     pub palette_offset: f32,
+    pub centre_removed: bool,
     palette_length: usize,
     scaled_offset: f32,
-    data_type: DataType,
+    pub data_type: DataType,
     pub analytic_derivative: bool,
     pub maximum_iteration: usize
 }
@@ -93,6 +95,7 @@ impl DataExport {
             display_glitches,
             iteration_division,
             palette_offset,
+            centre_removed: false,
             palette_length,
             scaled_offset: palette_offset * palette_length as f32,
             data_type,
