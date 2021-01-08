@@ -302,26 +302,35 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
-        if (frame_index + self.frame_offset) != 0 && self.remove_centre {
-            // This will remove the central pixels
-            let image_width = self.image_width;
-            let image_height = self.image_height;
-            let temp = 0.5 - 0.5 / self.zoom_scale_factor;
+        if !self.remove_centre && self.data_export.centre_removed {
+            self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
 
-            // Set up new render indices
-            self.render_indices.retain(|index| {
-                let i = index % image_width;
-                let j = index / image_width;
+            self.data_export.centre_removed = false;
+        }
 
-                // Add one to avoid rescaling artifacts
-                let val1 = (image_width as f64 * temp).ceil() as usize;
-                let val2 = (image_height as f64 * temp).ceil() as usize;
+        // If the remove_centre flag is set, and either it is not the first frame or gui mode is enabled
+        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.data_type == DataType::GUI) {
+            if !self.data_export.centre_removed {
+                // This will remove the central pixels
+                let image_width = self.image_width;
+                let image_height = self.image_height;
+                let temp = 0.5 - 0.5 / self.zoom_scale_factor;
 
-                i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
-            });
+                // Set up new render indices
+                self.render_indices.retain(|index| {
+                    let i = index % image_width;
+                    let j = index / image_width;
 
-            // The centre has already been removed
-            self.remove_centre = false;
+                    // Add one to avoid rescaling artifacts
+                    let val1 = (image_width as f64 * temp).ceil() as usize;
+                    let val2 = (image_height as f64 * temp).ceil() as usize;
+
+                    i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
+                });
+
+                // The centre has already been removed
+                self.data_export.centre_removed = true;
+            }
         }
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
