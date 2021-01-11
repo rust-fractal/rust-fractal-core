@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::cmp::{min, max};
 use std::f32::consts::TAU;
 
-use exr::prelude::simple_image;
+use exr::{prelude::simple_image};
 use color_space::{Rgb, Hsv};
 
 #[derive(PartialEq)]
@@ -354,24 +354,20 @@ impl DataExport {
 
     pub fn save_colour(&mut self, filename: &str) {
         // Extension is specified
-        match filename.split_terminator(".").last() {
-            Some(extension) => {
-                match extension {
-                    "jpg" | "jpeg" | "png" => {
-                        image::save_buffer(
-                            filename.to_owned(), 
-                            &self.rgb, 
-                            self.image_width as u32, 
-                            self.image_height as u32, 
-                            image::ColorType::Rgb8).unwrap();
+        if let Some(extension) = filename.split_terminator('.').last() {
+            match extension {
+                "jpg" | "jpeg" | "png" => {
+                    image::save_buffer(
+                        filename.to_owned(), 
+                        &self.rgb, 
+                        self.image_width as u32, 
+                        self.image_height as u32, 
+                        image::ColorType::Rgb8).unwrap();
 
-                        return;
-                    }
-                    _ => {}
+                    return;
                 }
-                
+                _ => {}
             }
-            _ => {}
         }
 
         image::save_buffer(
@@ -487,41 +483,35 @@ impl DataExport {
     }
 
     pub fn regenerate(&mut self) {
-        match self.data_type {
-            DataType::GUI => {
-                for i in 0..self.iterations.len() {
-                    self.colour_index(i);
-                }
-            },
-            _ => {}
+        if self.data_type == DataType::GUI {
+            for i in 0..self.iterations.len() {
+                self.colour_index(i);
+            }
         }
     }
 
     pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
         if !self.display_glitches {
-            match self.data_type {
-                DataType::GUI => {
-                    for pixel in pixel_data {
-                        let k = pixel.image_y * self.image_width + pixel.image_x;
+            if self.data_type == DataType::GUI {
+                for pixel in pixel_data {
+                    let k = pixel.image_y * self.image_width + pixel.image_x;
 
-                        let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
-                        let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
+                    let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
+                    let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
 
-                        let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
-                        let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
+                    let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
+                    let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
 
-                        self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
-                        self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
+                    self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
+                    self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
 
-                        if self.analytic_derivative {
-                            self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
-                            self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
-                        }
-
-                        self.colour_index(k);
+                    if self.analytic_derivative {
+                        self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
+                        self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
                     }
-                },
-                _ => {}
+
+                    self.colour_index(k);
+                }
             }
         }
     }
@@ -577,12 +567,9 @@ impl DataExport {
     }
 
     pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32) {
-        match palette {
-            Some(palette) => {
-                self.palette = palette;
-                self.palette_length = self.palette.len();
-            },
-            None => {}
+        if let Some(palette) = palette {
+            self.palette = palette;
+            self.palette_length = self.palette.len();
         };
 
         self.iteration_division = iteration_division;

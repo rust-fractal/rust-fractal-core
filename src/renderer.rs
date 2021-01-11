@@ -109,11 +109,11 @@ impl FractalRenderer {
 
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
-            ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
+            ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("provided location not valid"));
         let auto_approximation = get_approximation_terms(approximation_order, image_width, image_height);
 
         let reference = Reference::new(center_location.clone(), 
-            center_location.clone(), 
+            center_location, 
             1, 
             maximum_iteration, 
             data_storage_interval,
@@ -381,7 +381,7 @@ impl FractalRenderer {
                     iteration: chosen_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
-                    delta_current: new_delta.clone(),
+                    delta_current: new_delta,
                     derivative_current: derivative,
                     glitched: false,
                     escaped: false,

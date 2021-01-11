@@ -196,7 +196,7 @@ impl SeriesApproximation {
 
                 // Check to make sure that the derivative is greater than or equal to 1
                 if derivative.to_float() < 1.0 {
-                    derivative.mantissa = 1.0;
+                    derivative.mantissa = 1.0; 
                     derivative.exponent = 0;
                 }
 
@@ -323,7 +323,7 @@ impl SeriesApproximation {
                 });
 
             // we have now iterated all the values, we need to update those which skipped too quickly
-            self.min_valid_iteration = valid_iterations.iter().min().unwrap().clone();
+            self.min_valid_iteration = *valid_iterations.iter().min().unwrap();
 
             // this would indicate that no more of the probes are bad
             if self.min_valid_iteration != next_probe_check_value  || self.min_valid_iteration == 1 {
@@ -357,10 +357,10 @@ impl SeriesApproximation {
                 // this is the index into the main array
                 let index = j * self.probe_sampling + i;
 
-                let min_interpolation = [self.valid_iterations[index], 
+                let min_interpolation = *[self.valid_iterations[index], 
                     self.valid_iterations[index + 1], 
                     self.valid_iterations[index + self.probe_sampling], 
-                    self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap().clone();
+                    self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap();
 
                 self.valid_interpolation.push(min_interpolation);
             }
@@ -368,7 +368,7 @@ impl SeriesApproximation {
 
         
         self.max_valid_iteration = if self.experimental {
-            self.valid_interpolation.iter().max().unwrap().clone()
+            *self.valid_interpolation.iter().max().unwrap()
         } else {
             self.min_valid_iteration
         };
