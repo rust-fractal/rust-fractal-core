@@ -1,5 +1,4 @@
 use std::f64::consts::{LOG2_10, LOG10_2};
-use std::cmp::{min, max};
 
 pub mod data_export;
 pub mod float_extended;
@@ -106,7 +105,7 @@ pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: us
 pub fn get_approximation_terms(approximation_order: usize, image_width: usize, image_height: usize) -> usize {
     if approximation_order == 0 {
         let auto = (((image_width * image_height) as f64).log(1e6).powf(6.619) * 16.0f64) as usize;
-        min(max(auto, 3), 64)
+        auto.clamp(3, 64)
     } else {
         approximation_order
     }

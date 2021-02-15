@@ -23,21 +23,22 @@ pub struct FractalRenderer {
     pub image_height: usize,
     pub rotate: f64,
     pub zoom: FloatExtended,
-    auto_adjust_iterations: bool,
+    pub auto_adjust_iterations: bool,
     pub maximum_iteration: usize,
-    glitch_percentage: f64,
+    pub glitch_percentage: f64,
     pub data_export: DataExport,
     start_render_time: Instant,
-    remaining_frames: usize,
+    pub remaining_frames: usize,
     frame_offset: usize,
     zoom_scale_factor: f64,
     pub center_reference: Reference,
     pub series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
-    remove_centre: bool,
+    pub remove_centre: bool,
     pub analytic_derivative: bool,
-    jitter: bool,
-    experimental: bool,
+    pub jitter: bool,
+    pub jitter_factor: f64,
+    pub experimental: bool,
     show_output: bool,
     pub progress: ProgressCounters,
     pub render_time: u128
@@ -63,13 +64,14 @@ impl FractalRenderer {
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
-        let iteration_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
+        let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
         let jitter = settings.get_bool("jitter").unwrap_or(false);
+        let jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         let show_output = settings.get_bool("show_output").unwrap_or(true);
         
         let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
@@ -107,11 +109,11 @@ impl FractalRenderer {
 
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
-            ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("Location is not valid!"));
+            ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("provided location not valid"));
         let auto_approximation = get_approximation_terms(approximation_order, image_width, image_height);
 
         let reference = Reference::new(center_location.clone(), 
-            center_location.clone(), 
+            center_location, 
             1, 
             maximum_iteration, 
             data_storage_interval,
@@ -143,7 +145,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, iteration_offset, analytic_derivative),
+            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, palette_offset, analytic_derivative),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -154,6 +156,7 @@ impl FractalRenderer {
             remove_centre,
             analytic_derivative,
             jitter,
+            jitter_factor,
             experimental,
             show_output,
             progress: ProgressCounters::new(maximum_iteration),
@@ -300,26 +303,35 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
-        if (frame_index + self.frame_offset) != 0 && self.remove_centre {
-            // This will remove the central pixels
-            let image_width = self.image_width;
-            let image_height = self.image_height;
-            let temp = 0.5 - 0.5 / self.zoom_scale_factor;
+        if !self.remove_centre && self.data_export.centre_removed {
+            self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
 
-            // Set up new render indices
-            self.render_indices.retain(|index| {
-                let i = index % image_width;
-                let j = index / image_width;
+            self.data_export.centre_removed = false;
+        }
 
-                // Add one to avoid rescaling artifacts
-                let val1 = (image_width as f64 * temp).ceil() as usize;
-                let val2 = (image_height as f64 * temp).ceil() as usize;
+        // If the remove_centre flag is set, and either it is not the first frame or gui mode is enabled
+        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.data_type == DataType::GUI) {
+            if !self.data_export.centre_removed {
+                // This will remove the central pixels
+                let image_width = self.image_width;
+                let image_height = self.image_height;
+                let temp = 0.5 - 0.5 / self.zoom_scale_factor;
 
-                i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
-            });
+                // Set up new render indices
+                self.render_indices.retain(|index| {
+                    let i = index % image_width;
+                    let j = index / image_width;
 
-            // The centre has already been removed
-            self.remove_centre = false;
+                    // Add one to avoid rescaling artifacts
+                    let val1 = (image_width as f64 * temp).ceil() as usize;
+                    let val2 = (image_height as f64 * temp).ceil() as usize;
+
+                    i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
+                });
+
+                // The centre has already been removed
+                self.data_export.centre_removed = true;
+            }
         }
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
@@ -329,19 +341,6 @@ impl FractalRenderer {
 
                 let mut i = image_x as f64;
                 let mut j = image_y as f64;
-
-                if self.jitter {
-                    let mut rng = rand::thread_rng();
-
-                    i += rng.gen_range(-0.2, 0.2);
-                    j += rng.gen_range(-0.2, 0.2);
-                }
-
-                // This could be changed to account for jittering if needed
-                let element = ComplexFixed::new(
-                    i * delta_pixel * cos_rotate - j * delta_pixel * sin_rotate + delta_top_left.re, 
-                    i * delta_pixel * sin_rotate + j * delta_pixel * cos_rotate + delta_top_left.im
-                );
 
                 let chosen_iteration = if self.experimental {
                     let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i / self.image_width as f64).floor() as usize;
@@ -353,6 +352,19 @@ impl FractalRenderer {
                 } else {
                     self.series_approximation.min_valid_iteration
                 };
+
+                if self.jitter {
+                    let mut rng = rand::thread_rng();
+
+                    i += rng.gen_range(-self.jitter_factor, self.jitter_factor);
+                    j += rng.gen_range(-self.jitter_factor, self.jitter_factor);
+                }
+
+                // This could be changed to account for jittering if needed
+                let element = ComplexFixed::new(
+                    i * delta_pixel * cos_rotate - j * delta_pixel * sin_rotate + delta_top_left.re, 
+                    i * delta_pixel * sin_rotate + j * delta_pixel * cos_rotate + delta_top_left.im
+                );
 
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
@@ -369,7 +381,7 @@ impl FractalRenderer {
                     iteration: chosen_iteration,
                     delta_centre: point_delta,
                     delta_reference: point_delta,
-                    delta_current: new_delta.clone(),
+                    delta_current: new_delta,
                     derivative_current: derivative,
                     glitched: false,
                     escaped: false,
@@ -510,6 +522,7 @@ impl FractalRenderer {
             self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
+            // TODO maybe there is a function to split into two vectors, we only need to export the non glitched pixels
             pixel_data.retain(|packet| {
                 packet.glitched
             });
@@ -518,7 +531,8 @@ impl FractalRenderer {
         tx.send(()).unwrap();
 
         // Possibly here correct the small glitches
-        self.data_export.interpolate_glitches(&pixel_data);
+        // self.data_export.interpolate_glitches(&pixel_data);
+        // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
         if self.show_output {
             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", correction_time.elapsed().as_millis());
@@ -538,6 +552,35 @@ impl FractalRenderer {
             println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
             std::io::stdout().flush().unwrap();
         }
+    }
+
+    // Returns true if the maximum iterations has been increased
+    pub fn adjust_iterations(&mut self) -> bool {
+        if self.auto_adjust_iterations {
+            if 4 * self.series_approximation.max_valid_iteration > self.maximum_iteration {
+                self.maximum_iteration *= 3;
+                self.maximum_iteration /= 2;
+                return true;
+            }
+
+            if 8 * self.series_approximation.max_valid_iteration < self.maximum_iteration {
+                self.maximum_iteration *= 3;
+                self.maximum_iteration /= 4;
+
+                if self.maximum_iteration < 1000 {
+                    self.maximum_iteration = 1000;
+                }
+
+                self.data_export.maximum_iteration = self.maximum_iteration;
+                
+                if self.center_reference.current_iteration > self.maximum_iteration {
+                    self.center_reference.current_iteration = self.maximum_iteration;
+                }
+
+                self.center_reference.maximum_iteration = self.maximum_iteration;
+            }
+        }
+        false
     }
 
     pub fn render(&mut self) {
