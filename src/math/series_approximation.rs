@@ -162,6 +162,8 @@ impl SeriesApproximation {
             1
         };
 
+        // println!("{} {} {} {}", self.min_valid_iteration, first_valid_iterations, test_val, self.maximum_iteration);
+
         // TODO make this adapt for the division (defaults to 1 so same)
         let mut probe = self.evaluate(self.probe_start[i], first_valid_iterations);
         
@@ -194,13 +196,15 @@ impl SeriesApproximation {
 
                 // Check to make sure that the derivative is greater than or equal to 1
                 if derivative.to_float() < 1.0 {
-                    derivative.mantissa = 1.0;
+                    derivative.mantissa = 1.0; 
                     derivative.exponent = 0;
                 }
 
                 // The first element is reduced, the second might need to be reduced a little more
                 // Check that the error over the derivative is less than the pixel spacing
                 if relative_error / derivative > self.delta_pixel_square {
+                    // println!("rel: {}, deri: {}, delta: {}", relative_error, derivative, self.delta_pixel_square);
+
                     first_valid_iterations = if first_valid_iterations > self.data_storage_interval {
                         first_valid_iterations - self.data_storage_interval + 1
                     } else {
@@ -216,7 +220,7 @@ impl SeriesApproximation {
 
         series_validation_counter.inc();
 
-        self.min_valid_iteration = first_valid_iterations;
+        self.min_valid_iteration = self.data_storage_interval * ((first_valid_iterations - 1) / self.data_storage_interval) + 1;
 
         // println!("{}", self.min_valid_iteration);
 
@@ -319,7 +323,7 @@ impl SeriesApproximation {
                 });
 
             // we have now iterated all the values, we need to update those which skipped too quickly
-            self.min_valid_iteration = valid_iterations.iter().min().unwrap().clone();
+            self.min_valid_iteration = *valid_iterations.iter().min().unwrap();
 
             // this would indicate that no more of the probes are bad
             if self.min_valid_iteration != next_probe_check_value  || self.min_valid_iteration == 1 {
@@ -353,16 +357,21 @@ impl SeriesApproximation {
                 // this is the index into the main array
                 let index = j * self.probe_sampling + i;
 
-                let min_interpolation = [self.valid_iterations[index], 
+                let min_interpolation = *[self.valid_iterations[index], 
                     self.valid_iterations[index + 1], 
                     self.valid_iterations[index + self.probe_sampling], 
-                    self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap().clone();
+                    self.valid_iterations[index + self.probe_sampling + 1]].iter().min().unwrap();
 
                 self.valid_interpolation.push(min_interpolation);
             }
         }
 
-        self.max_valid_iteration = self.valid_interpolation.iter().max().unwrap().clone();
+        
+        self.max_valid_iteration = if self.experimental {
+            *self.valid_interpolation.iter().max().unwrap()
+        } else {
+            self.min_valid_iteration
+        };
 
         // println!("series approximation valid interpolation buffer:");
         // let temp_size = self.probe_sampling - 1;

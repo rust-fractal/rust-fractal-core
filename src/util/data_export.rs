@@ -10,9 +10,10 @@ use std::collections::HashMap;
 use std::cmp::{min, max};
 use std::f32::consts::TAU;
 
-use exr::prelude::simple_image;
+use exr::{prelude::simple_image};
 use color_space::{Rgb, Hsv};
 
+#[derive(PartialEq)]
 pub enum DataType {
     NONE,
     GUI,
@@ -31,20 +32,25 @@ pub struct DataExport {
     pub smooth: Vec<f32>,
     pub distance_x: Vec<f32>,
     pub distance_y: Vec<f32>,
+    pub glitched: Vec<bool>,
     pub display_glitches: bool,
     pub iteration_division: f32,
-    pub iteration_offset: f32,
-    data_type: DataType,
+    pub palette_offset: f32,
+    pub centre_removed: bool,
+    palette_length: usize,
+    scaled_offset: f32,
+    pub data_type: DataType,
     pub analytic_derivative: bool,
     pub maximum_iteration: usize
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, iteration_offset: f32, analytic_derivative: bool) -> Self {
+    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette: Vec<(u8, u8, u8)>, iteration_division: f32, palette_offset: f32, analytic_derivative: bool) -> Self {
         let mut rgb = Vec::new();
         let mut smooth = Vec::new();
         let mut distance_x = Vec::new();
         let mut distance_y = Vec::new();
+        let mut glitched = Vec::new();
 
         match data_type {
             DataType::NONE => {},
@@ -56,6 +62,7 @@ impl DataExport {
                 smooth = vec![0.0f32; image_width * image_height];
                 distance_x = vec![0.0f32; image_width * image_height];
                 distance_y = vec![0.0f32; image_width * image_height];
+                glitched = vec![false; image_width * image_height];
             }
             DataType::RAW => {
                 smooth = vec![0.0f32; image_width * image_height];
@@ -73,6 +80,8 @@ impl DataExport {
             }
         }
 
+        let palette_length = palette.len();
+
         DataExport {
             image_width,
             image_height,
@@ -82,9 +91,13 @@ impl DataExport {
             smooth,
             distance_x,
             distance_y,
+            glitched,
             display_glitches,
             iteration_division,
-            iteration_offset,
+            palette_offset,
+            centre_removed: false,
+            palette_length,
+            scaled_offset: palette_offset * palette_length as f32,
             data_type,
             analytic_derivative,
             maximum_iteration: 0
@@ -112,10 +125,10 @@ impl DataExport {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
-                        let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.iteration_offset;
+                        let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.scaled_offset;
 
-                        let temp2 = temp.floor() as usize % self.palette.len();
-                        let temp3 = (temp as usize + 1) % self.palette.len();
+                        let temp2 = temp.floor() as usize % self.palette_length;
+                        let temp3 = (temp as usize + 1) % self.palette_length;
                         let temp4 = temp.fract();
 
                         let colour1 = self.palette[temp2];
@@ -143,6 +156,12 @@ impl DataExport {
             DataType::GUI => {
                 for pixel in pixel_data {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
+
+                    if pixel.glitched {
+                        self.glitched[k] = true;
+                    } else {
+                        self.glitched[k] = false;
+                    };
 
                     if pixel.glitched && self.display_glitches {
                         self.rgb[3 * k] = 255;
@@ -335,24 +354,20 @@ impl DataExport {
 
     pub fn save_colour(&mut self, filename: &str) {
         // Extension is specified
-        match filename.split_terminator(".").last() {
-            Some(extension) => {
-                match extension {
-                    "jpg" | "jpeg" | "png" => {
-                        image::save_buffer(
-                            filename.to_owned(), 
-                            &self.rgb, 
-                            self.image_width as u32, 
-                            self.image_height as u32, 
-                            image::ColorType::Rgb8).unwrap();
+        if let Some(extension) = filename.split_terminator('.').last() {
+            match extension {
+                "jpg" | "jpeg" | "png" => {
+                    image::save_buffer(
+                        filename.to_owned(), 
+                        &self.rgb, 
+                        self.image_width as u32, 
+                        self.image_height as u32, 
+                        image::ColorType::Rgb8).unwrap();
 
-                        return;
-                    }
-                    _ => {}
+                    return;
                 }
-                
+                _ => {}
             }
-            _ => {}
         }
 
         image::save_buffer(
@@ -402,7 +417,7 @@ impl DataExport {
         let test1 = [self.image_width as u32, self.image_height as u32];
 
         // iteration division??
-        let test3 = [1u32, self.palette.len() as u32];
+        let test3 = [1u32, self.palette_length as u32];
 
         // Maxmimum iteration
         let test6 = [self.maximum_iteration as u32];
@@ -420,7 +435,7 @@ impl DataExport {
         }).unwrap();
 
         file.write_all(unsafe {
-            slice::from_raw_parts(self.palette.as_ptr() as *const u8, 3 * self.palette.len())
+            slice::from_raw_parts(self.palette.as_ptr() as *const u8, 3 * self.palette_length)
         }).unwrap();
 
         file.write_all(unsafe {
@@ -445,6 +460,7 @@ impl DataExport {
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
                 self.distance_x = vec![0.0f32; self.image_width * self.image_height];
                 self.distance_y = vec![0.0f32; self.image_width * self.image_height];
+                self.glitched = vec![false; self.image_width * self.image_height];
             }
             DataType::RAW => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
@@ -467,47 +483,45 @@ impl DataExport {
     }
 
     pub fn regenerate(&mut self) {
-        match self.data_type {
-            DataType::GUI => {
-                for i in 0..self.iterations.len() {
-                    self.colour_index(i);
-                }
-            },
-            _ => {}
+        if self.data_type == DataType::GUI {
+            for i in 0..self.iterations.len() {
+                self.colour_index(i);
+            }
         }
     }
 
     pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
         if !self.display_glitches {
-            match self.data_type {
-                DataType::GUI => {
-                    for pixel in pixel_data {
-                        let k = pixel.image_y * self.image_width + pixel.image_x;
+            if self.data_type == DataType::GUI {
+                for pixel in pixel_data {
+                    let k = pixel.image_y * self.image_width + pixel.image_x;
 
-                        let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
-                        let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
+                    let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
+                    let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
 
-                        let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
-                        let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
+                    let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
+                    let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
 
-                        self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
-                        self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
+                    self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
+                    self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
 
-                        if self.analytic_derivative {
-                            self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
-                            self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
-                        }
-
-                        self.colour_index(k);
+                    if self.analytic_derivative {
+                        self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
+                        self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
                     }
-                },
-                _ => {}
+
+                    self.colour_index(k);
+                }
             }
         }
     }
 
     pub fn colour_index(&mut self, i: usize) {
-        if self.iterations[i] >= self.maximum_iteration as u32 {
+        if self.glitched[i] && self.display_glitches {
+            self.rgb[3 * i] = 255u8; 
+            self.rgb[3 * i + 1] = 0u8; 
+            self.rgb[3 * i + 2] = 0u8;
+        } else if self.iterations[i] >= self.maximum_iteration as u32 {
             self.rgb[3 * i] = 0u8; 
             self.rgb[3 * i + 1] = 0u8; 
             self.rgb[3 * i + 2] = 0u8;
@@ -520,8 +534,8 @@ impl DataExport {
             let mut hue = angle / TAU;
             hue -= hue.floor();
 
-            let saturation = (1.0 / (1.0 + length)).max(0.0).min(1.0);
-            let value = length.max(0.0).min(1.0);
+            let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
+            let value = length.clamp(0.0, 1.0);
 
             let hsv = Hsv::new(hue as f64 * 360.0, saturation as f64, value as f64);
             let rgb = Rgb::from(hsv);
@@ -537,10 +551,10 @@ impl DataExport {
             // self.rgb[3 * i + 1] = out as u8; 
             // self.rgb[3 * i + 2] = out as u8;
         } else {
-            let temp = ((self.iterations[i] as f32 + self.smooth[i]) / self.iteration_division) + self.iteration_offset;
+            let temp = ((self.iterations[i] as f32 + self.smooth[i]) / self.iteration_division) + self.scaled_offset;
 
-            let temp2 = temp.floor() as usize % self.palette.len();
-            let temp3 = (temp as usize + 1) % self.palette.len();
+            let temp2 = temp.floor() as usize % self.palette_length;
+            let temp3 = (temp as usize + 1) % self.palette_length;
             let temp4 = temp.fract();
 
             let colour1 = self.palette[temp2];
@@ -550,5 +564,16 @@ impl DataExport {
             self.rgb[3 * i + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
             self.rgb[3 * i + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
         }
+    }
+
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32) {
+        if let Some(palette) = palette {
+            self.palette = palette;
+            self.palette_length = self.palette.len();
+        };
+
+        self.iteration_division = iteration_division;
+        self.palette_offset = palette_offset;
+        self.scaled_offset = palette_offset * self.palette_length as f32;
     }
 }
