@@ -534,8 +534,8 @@ impl DataExport {
             let mut hue = angle / TAU;
             hue -= hue.floor();
 
-            let saturation = (1.0 / (1.0 + length)).max(0.0).min(1.0);
-            let value = length.max(0.0).min(1.0);
+            let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
+            let value = length.clamp(0.0, 1.0);
 
             let hsv = Hsv::new(hue as f64 * 360.0, saturation as f64, value as f64);
             let rgb = Rgb::from(hsv);
