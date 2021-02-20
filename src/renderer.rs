@@ -317,14 +317,14 @@ impl FractalRenderer {
                 let image_height = self.image_height;
                 let temp = 0.5 - 0.5 / self.zoom_scale_factor;
 
+                // Add one to avoid rescaling artifacts
+                let val1 = (image_width as f64 * temp).ceil() as usize;
+                let val2 = (image_height as f64 * temp).ceil() as usize;
+
                 // Set up new render indices
                 self.render_indices.retain(|index| {
                     let i = index % image_width;
                     let j = index / image_width;
-
-                    // Add one to avoid rescaling artifacts
-                    let val1 = (image_width as f64 * temp).ceil() as usize;
-                    let val2 = (image_height as f64 * temp).ceil() as usize;
 
                     i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
                 });

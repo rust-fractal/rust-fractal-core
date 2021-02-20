@@ -56,6 +56,7 @@ impl Reference {
 
         // This is if we need to use the extended precision for the reference
         if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+            // this is stored without the offset
             self.extended_iterations.push(self.current_iteration);
         }
 
@@ -88,6 +89,8 @@ impl Reference {
         }
 
         // We pack these together as they are always accessed together
+        // The first iteration is z_1=c = iteration 1 is index 0
+        // access with iteration - start_iteration
         self.reference_data.push(
             ReferenceIteration {
                 z: z_fixed,
@@ -119,6 +122,8 @@ impl Reference {
                 break;
             };
         }
+
+        // println!("{:?}", self.extended_iterations);
     }
 }
 
