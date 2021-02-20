@@ -122,7 +122,7 @@ impl DataExport {
                         self.rgb[k + 1] = 0;
                         self.rgb[k + 2] = 0;
                     } else {
-                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
                         let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.scaled_offset;
@@ -140,7 +140,7 @@ impl DataExport {
 
                         if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
                             // let temp = pixel.delta_current.norm();
-                            let temp = (reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current).norm();
+                            let temp = (reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current).norm();
 
                             let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
 
@@ -170,13 +170,13 @@ impl DataExport {
                     } else {
                         self.iterations[k] = pixel.iteration as u32;
 
-                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
                         self.smooth[k] = smooth;
 
                         if self.analytic_derivative {
-                            let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
+                            let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();
 
                             let norm_z_x = FloatExtended::new(
@@ -222,11 +222,11 @@ impl DataExport {
                         pixel.iteration as u32
                     };
 
-                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
                     if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
-                        let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
+                        let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                         let temp2 = temp1.norm();
 
                         let norm_z_x = FloatExtended::new(
@@ -269,7 +269,7 @@ impl DataExport {
                         pixel.iteration as u32
                     };
 
-                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 }
             },
@@ -290,13 +290,13 @@ impl DataExport {
                     } else {
                         self.iterations[k] = pixel.iteration as u32;
 
-                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z_fixed + pixel.delta_current.mantissa).norm_sqr() as f32;
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
 
                         self.smooth[k] = smooth;
 
                         if self.analytic_derivative {
-                            let temp1 = reference.reference_data[pixel.iteration - reference.start_iteration].z_extended + pixel.delta_current;
+                            let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();
 
                             let norm_z_x = FloatExtended::new(
