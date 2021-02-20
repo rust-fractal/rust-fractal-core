@@ -12,6 +12,8 @@ pub struct Reference {
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
     pub reference_data: Vec<ReferenceIteration>,
+    pub extended_iterations: Vec<usize>,
+    pub reference_data_extended: Vec<ComplexExtended>,
     // This is for every 100th iteration, when we do glitch correction the new references will be spawed from these values
     // Storing every iteration is memory intensive.
     pub zoom: FloatExtended,
@@ -22,10 +24,8 @@ pub struct Reference {
 
 #[derive(Clone)]
 pub struct ReferenceIteration {
-    pub z_fixed: ComplexFixed<f64>,
-    pub z_extended: ComplexExtended,
-    pub z_tolerance: f64,
-    pub extended_precision_required: bool
+    pub z: ComplexFixed<f64>,
+    pub tolerance: f64,
 }
 
 impl Reference {
@@ -36,10 +36,12 @@ impl Reference {
             maximum_iteration,
             z,
             c,
-            reference_data: Vec::with_capacity(1000),
+            reference_data: Vec::new(),
+            extended_iterations: Vec::new(),
+            reference_data_extended: Vec::new(),
             zoom,
             data_storage_interval,
-            high_precision_data: Vec::with_capacity(1000),
+            high_precision_data: Vec::new(),
             glitch_tolerance
         }
     }
@@ -50,22 +52,25 @@ impl Reference {
         self.current_iteration += 1;
 
         let z_fixed = to_fixed(&self.z);
-        let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+        let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+
+        // This is if we need to use the extended precision for the reference
+        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+            self.extended_iterations.push(self.current_iteration);
+        }
+
+        // We pack these together as they are always accessed together
+        self.reference_data.push(
+            ReferenceIteration {
+                z: z_fixed,
+                tolerance,
+            }
+        );
 
         let mut z_extended = to_extended(&self.z);
         z_extended.reduce();
 
-        // This is if we need to use the extended precision for the reference
-        let extended_precision_required = z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300;
-
-        self.reference_data.push(
-            ReferenceIteration {
-                z_fixed,
-                z_extended,
-                z_tolerance,
-                extended_precision_required,
-            }
-        );
+        self.reference_data_extended.push(z_extended);
 
         // If the value is not small we do the escape check, otherwise it has not escaped
         // as we do the check for 65536 on the perturbation, we need this to be more than that squared
@@ -75,23 +80,25 @@ impl Reference {
 
     pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
         let z_fixed = to_fixed(&self.z);
-        let z_tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+        let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+
+        // This is if we need to use the extended precision for the reference
+        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+            self.extended_iterations.push(self.current_iteration);
+        }
+
+        // We pack these together as they are always accessed together
+        self.reference_data.push(
+            ReferenceIteration {
+                z: z_fixed,
+                tolerance,
+            }
+        );
 
         let mut z_extended = to_extended(&self.z);
         z_extended.reduce();
 
-        let extended_precision_required = z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300;
-
-        // This is if we need to use the extended precision for the reference
-        // We could use only the complex extended and check if the exponent is zero
-        self.reference_data.push(
-            ReferenceIteration {
-                z_fixed,
-                z_extended,
-                z_tolerance,
-                extended_precision_required,
-            }
-        );
+        self.reference_data_extended.push(z_extended);
 
         while self.current_iteration < self.maximum_iteration {
             if self.start_iteration == 1 {
