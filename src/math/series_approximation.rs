@@ -82,7 +82,7 @@ impl SeriesApproximation {
             };
 
             // This is checking if the approximation can step forward so takes the next iteration
-            next_coefficients[0] = center_reference.reference_data[i].z_extended;
+            next_coefficients[0] = center_reference.reference_data_extended[i];
             next_coefficients[1] = previous_coefficients[0] * previous_coefficients[1] * 2.0 + add_value;
             next_coefficients[0].reduce();
             next_coefficients[1].reduce();
@@ -169,7 +169,7 @@ impl SeriesApproximation {
         
         while first_valid_iterations < self.maximum_iteration {
             // step the probe points using perturbation
-            probe = probe * (center_reference.reference_data[first_valid_iterations - 1].z_extended * 2.0 + probe);
+            probe = probe * (center_reference.reference_data_extended[first_valid_iterations - 1] * 2.0 + probe);
             probe += self.probe_start[i];
 
             // This is not done on every iteration
@@ -256,7 +256,7 @@ impl SeriesApproximation {
 
                         while *probe_iteration_level < self.maximum_iteration {
                             // step the probe points using perturbation
-                            probe = probe * (center_reference.reference_data[*probe_iteration_level - 1].z_extended * 2.0 + probe);
+                            probe = probe * (center_reference.reference_data_extended[*probe_iteration_level - 1] * 2.0 + probe);
                             probe += self.probe_start[i];
 
                             // This is not done on every iteration
