@@ -38,6 +38,8 @@ impl Perturbation {
                         .unwrap_or((0, &0xFFFFFFFF));
 
                     let mut first_extended_index = first_extended_index;
+
+                    // both of these contain the offsets
                     let mut additional_extended_iteration = first_extended_iteration - pixel.iteration;
                     let mut additional_iterations = 0;
 
@@ -52,7 +54,7 @@ impl Perturbation {
                         };
 
                         if additional_extended_iteration - additional_iterations <= 250 {
-                            let temp = additional_extended_iteration - additional_iterations - 1;
+                            let temp = additional_extended_iteration - additional_iterations;
 
                             if temp < next_iteration_batch {
                                 next_iteration_batch = temp;
@@ -62,6 +64,8 @@ impl Perturbation {
                             if first_extended_index < reference.extended_iterations.len() - 1 {
                                 first_extended_index += 1;
                                 additional_extended_iteration = reference.extended_iterations[first_extended_index] - pixel.iteration;
+                            } else {
+                                additional_extended_iteration = 0xFFFFFFFF;
                             }
                         };
 
@@ -115,12 +119,12 @@ impl Perturbation {
                                 pixel.delta_current.mantissa *= z + reference_data.z;
                                 // 2 additions
                                 pixel.delta_current.mantissa += scaled_delta_reference;
-                            }
 
-                            additional_iterations += next_iteration_batch
+                                additional_iterations += 1;
+                            }
                         }
 
-                        if pixel.iteration + additional_iterations > reference.current_iteration {
+                        if pixel.iteration + additional_iterations >= reference.current_iteration {
                             pixel.iteration = reference.current_iteration;
                             new_pixels_complete += 1;
                             break;
@@ -197,6 +201,8 @@ impl Perturbation {
                         .unwrap_or((0, &0xFFFFFFFF));
 
                     let mut first_extended_index = first_extended_index;
+
+                    // both of these contain the offsets
                     let mut additional_extended_iteration = first_extended_iteration - pixel.iteration;
                     let mut additional_iterations = 0;
 
@@ -210,8 +216,8 @@ impl Perturbation {
                             next_iteration_batch = reference.current_iteration - pixel.iteration + additional_iterations
                         };
 
-                        if additional_extended_iteration - additional_iterations <= 250 {
-                            let temp = additional_extended_iteration - additional_iterations - 1;
+                        if additional_extended_iteration - additional_iterations < 250 {
+                            let temp = additional_extended_iteration - additional_iterations;
 
                             if temp < next_iteration_batch {
                                 next_iteration_batch = temp;
@@ -221,6 +227,8 @@ impl Perturbation {
                             if first_extended_index < reference.extended_iterations.len() - 1 {
                                 first_extended_index += 1;
                                 additional_extended_iteration = reference.extended_iterations[first_extended_index] - pixel.iteration;
+                            } else {
+                                additional_extended_iteration = 0xFFFFFFFF;
                             }
                         };
 
@@ -263,7 +271,6 @@ impl Perturbation {
                             }
 
                             if pixel.glitched || pixel.escaped {
-                                pixel.derivative_current.reduce();
                                 break;
                             }
                         } else {
@@ -281,9 +288,9 @@ impl Perturbation {
 
                                 pixel.derivative_current.mantissa *= 2.0 * z;
                                 pixel.derivative_current.mantissa += scaled_scale_factor_2;
-                            }
 
-                            additional_iterations += next_iteration_batch
+                                additional_iterations += 1;
+                            }
                         }
 
                         // check if the pixel escapes
@@ -320,11 +327,11 @@ impl Perturbation {
                                 }
                             }
 
-                            pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
-                            pixel.delta_current += pixel.delta_reference;
-
                             pixel.derivative_current *= (reference.reference_data_extended[val1 + additional_iterations] + pixel.delta_current) * 2.0;
                             pixel.derivative_current += ComplexExtended::new2(1.0, 0.0, 0);
+
+                            pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
+                            pixel.delta_current += pixel.delta_reference;
 
                             additional_iterations += 1;
                         }
@@ -336,6 +343,8 @@ impl Perturbation {
                         scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.derivative_current.exponent);
                         scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
                     }
+
+                    pixel.derivative_current.reduce();
                 }
 
                 pixels_complete.add(new_pixels_complete);
