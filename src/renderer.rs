@@ -12,7 +12,7 @@ use rayon::prelude::*;
 use config::Config;
 
 use std::thread;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 
 use atomic_counter::{AtomicCounter, RelaxedCounter};
@@ -26,7 +26,7 @@ pub struct FractalRenderer {
     pub auto_adjust_iterations: bool,
     pub maximum_iteration: usize,
     pub glitch_percentage: f64,
-    pub data_export: DataExport,
+    pub data_export: Arc<Mutex<DataExport>>,
     start_render_time: Instant,
     pub remaining_frames: usize,
     frame_offset: usize,
@@ -145,7 +145,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, palette_offset, analytic_derivative),
+            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, palette_offset, analytic_derivative))),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -215,7 +215,7 @@ impl FractalRenderer {
         };
 
         if frame_index == 0 {
-            self.data_export.maximum_iteration = self.maximum_iteration;
+            self.data_export.lock().unwrap().maximum_iteration = self.maximum_iteration;
 
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag);
 
@@ -228,15 +228,19 @@ impl FractalRenderer {
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &stop_flag);
         } else {
+            let mut export = self.data_export.lock().unwrap();
+
             // If the image width/height changes intraframe (GUI) we need to regenerate some things
-            if self.data_export.image_width != self.image_width || self.data_export.image_height != self.image_height {
+            if export.image_width != self.image_width || export.image_height != self.image_height {
                 self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
 
-                self.data_export.image_width = self.image_width;
-                self.data_export.image_height = self.image_height;
+                export.image_width = self.image_width;
+                export.image_height = self.image_height;
 
-                self.data_export.clear_buffers();
+                export.clear_buffers();
             }
+
+            drop(export);
 
             // Check to see if the series approximation order has changed intraframe
             if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
@@ -303,15 +307,15 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
-        if !self.remove_centre && self.data_export.centre_removed {
+        if !self.remove_centre && self.data_export.lock().unwrap().centre_removed {
             self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
 
-            self.data_export.centre_removed = false;
+            self.data_export.lock().unwrap().centre_removed = false;
         }
 
         // If the remove_centre flag is set, and either it is not the first frame or gui mode is enabled
-        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.data_type == DataType::GUI) {
-            if !self.data_export.centre_removed {
+        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.lock().unwrap().data_type == DataType::GUI) {
+            if !self.data_export.lock().unwrap().centre_removed {
                 // This will remove the central pixels
                 let image_width = self.image_width;
                 let image_height = self.image_height;
@@ -330,7 +334,7 @@ impl FractalRenderer {
                 });
 
                 // The centre has already been removed
-                self.data_export.centre_removed = true;
+                self.data_export.lock().unwrap().centre_removed = true;
             }
         }
 
@@ -427,14 +431,14 @@ impl FractalRenderer {
 
         // This one has no offset because it is not a glitch resolving reference
         if self.analytic_derivative {
-            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference, &self.progress.iteration, &stop_flag);
+            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
         } else {
-            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference, &self.progress.iteration, &stop_flag);
+            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
         };
 
         tx.send(()).unwrap();
 
-        self.data_export.export_pixels(&pixel_data, &self.center_reference, delta_pixel_extended);
+        // self.data_export.export_pixels(&pixel_data, &self.center_reference, delta_pixel_extended);
 
         if self.show_output {
             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", iteration_time.elapsed().as_millis());
@@ -514,12 +518,12 @@ impl FractalRenderer {
             }
             
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag);
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
             };
 
-            self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
+            // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
             // Remove all non-glitched points from the remaining points
             // TODO maybe there is a function to split into two vectors, we only need to export the non glitched pixels
@@ -541,7 +545,7 @@ impl FractalRenderer {
         };
         
         let saving_time = Instant::now();
-        self.data_export.save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
+        self.data_export.lock().unwrap().save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
 
         self.render_time = frame_time.elapsed().as_millis();
 
@@ -571,7 +575,7 @@ impl FractalRenderer {
                     self.maximum_iteration = 1000;
                 }
 
-                self.data_export.maximum_iteration = self.maximum_iteration;
+                self.data_export.lock().unwrap().maximum_iteration = self.maximum_iteration;
                 
                 if self.center_reference.current_iteration > self.maximum_iteration {
                     self.center_reference.current_iteration = self.maximum_iteration;

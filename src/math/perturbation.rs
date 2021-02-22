@@ -1,4 +1,4 @@
-use crate::util::{PixelData, FloatExp};
+use crate::util::{FloatExp, FloatExtended, PixelData, data_export::DataExport};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
@@ -7,12 +7,12 @@ use crate::util::ComplexExtended;
 
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 
-use std::{sync::Arc};
+use std::sync::{Arc, Mutex};
 
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
                 if stop_flag.get() >= 1 {
@@ -49,11 +49,11 @@ impl Perturbation {
                         let mut need_extended_iteration = false;
 
                         // check if we need to stop because of max iterations (within 250 of max)
-                        if reference.current_iteration - pixel.iteration + additional_iterations < 250 {
-                            next_iteration_batch = reference.current_iteration - pixel.iteration + additional_iterations
+                        if reference.current_iteration - pixel.iteration - additional_iterations < 250 {
+                            next_iteration_batch = reference.current_iteration - pixel.iteration - additional_iterations
                         };
 
-                        if additional_extended_iteration - additional_iterations <= 250 {
+                        if additional_extended_iteration - additional_iterations < 250 {
                             let temp = additional_extended_iteration - additional_iterations;
 
                             if temp < next_iteration_batch {
@@ -68,6 +68,8 @@ impl Perturbation {
                                 additional_extended_iteration = 0xFFFFFFFF;
                             }
                         };
+
+                        // println!("{}, {}, {}", next_iteration_batch, additional_iterations + pixel.iteration, reference.current_iteration);
 
                         let need_escape_check = pixel.delta_current.exponent > -500;
 
@@ -84,6 +86,9 @@ impl Perturbation {
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     break;
                                 }
         
@@ -92,6 +97,9 @@ impl Perturbation {
                                     pixel.escaped = true;
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     new_pixels_complete += 1;
                                     break;
                                 }
@@ -126,6 +134,9 @@ impl Perturbation {
 
                         if pixel.iteration + additional_iterations >= reference.current_iteration {
                             pixel.iteration = reference.current_iteration;
+
+                            data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                             new_pixels_complete += 1;
                             break;
                         }
@@ -144,6 +155,9 @@ impl Perturbation {
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     break;
                                 }
         
@@ -152,6 +166,9 @@ impl Perturbation {
                                     pixel.escaped = true;
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     new_pixels_complete += 1;
                                     break;
                                 }
@@ -174,7 +191,7 @@ impl Perturbation {
             });
     }
 
-    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
+    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended) {
         pixel_data.par_chunks_mut(4)
             .for_each(|pixel_data| {
                 if stop_flag.get() >= 1 {
@@ -247,6 +264,9 @@ impl Perturbation {
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     break;
                                 }
         
@@ -255,6 +275,9 @@ impl Perturbation {
                                     pixel.escaped = true;
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     new_pixels_complete += 1;
                                     break;
                                 }
@@ -296,6 +319,9 @@ impl Perturbation {
                         // check if the pixel escapes
                         if pixel.iteration + additional_iterations > reference.current_iteration {
                             pixel.iteration = reference.current_iteration;
+
+                            data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                             new_pixels_complete += 1;
                             break;
                         }
@@ -314,6 +340,9 @@ impl Perturbation {
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     break;
                                 }
         
@@ -322,6 +351,9 @@ impl Perturbation {
                                     pixel.escaped = true;
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
+
+                                    data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);
+
                                     new_pixels_complete += 1;
                                     break;
                                 }
