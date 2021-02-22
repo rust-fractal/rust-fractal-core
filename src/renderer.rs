@@ -1,11 +1,11 @@
 use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette, ProgressCounters};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
-use std::time::{Duration, Instant};
+use std::{cmp::Ordering, time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
-use rand::seq::SliceRandom;
+use rand::{seq::SliceRandom, thread_rng};
 use rand::Rng;
 
 use rayon::prelude::*;
@@ -129,7 +129,7 @@ impl FractalRenderer {
             valid_iteration_probe_multiplier,
             data_storage_interval);
 
-        let render_indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
+        let render_indices = FractalRenderer::generate_render_indices(image_width, image_height);
 
         // Change the zoom level to the correct one for the frame offset
         for _ in 0..frame_offset {
@@ -308,7 +308,7 @@ impl FractalRenderer {
         let packing_time = Instant::now();
 
         if !self.remove_centre && self.data_export.lock().unwrap().centre_removed {
-            self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
+            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
 
             self.data_export.lock().unwrap().centre_removed = false;
         }
@@ -640,6 +640,73 @@ impl FractalRenderer {
             
             self.remaining_frames -= 1;
             count += 1;
+        }
+    }
+
+    pub fn generate_render_indices(image_width: usize, image_height: usize) -> Vec<usize> {
+        let chooser = 3;
+        let mut indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
+
+        match chooser {
+            1 => {
+                indices.shuffle(&mut thread_rng());
+                indices
+            }
+            2 => {
+                indices.sort_by(|a, b| {
+                    // let tests = [16, 8, 4, 2];
+                    let mut output = false;
+
+                    let a_i = a % image_width;
+                    let a_j = a / image_width;
+
+                    let b_i = b % image_width;
+                    let b_j = b / image_width;
+
+                    // for test in tests.iter() {
+                        
+                    // }
+
+                    if a % 2 == 0 && b % 2 != 0 {
+                        output = true;
+                    } else {
+                        if a < b {
+                            output = true;
+                        }
+                    }
+
+                    if output {
+                        Ordering::Less
+                    } else {
+                        Ordering::Greater
+                    }
+                });
+
+                indices
+            }
+            3 => {
+                indices.sort_by(|a, b| {
+                    let a_i = a % image_width;
+                    let a_j = a / image_width;
+
+                    let b_i = b % image_width;
+                    let b_j = b / image_width;
+
+                    let a_dist = (a_i - image_width / 2).pow(2) + (a_j - image_height / 2).pow(2);
+                    let b_dist = (b_i - image_width / 2).pow(2) + (b_j - image_height / 2).pow(2);
+
+                    if a_dist <= b_dist {
+                        Ordering::Less
+                    } else {
+                        Ordering::Greater
+                    }
+                });
+
+                indices
+            }
+            0 | _ => {
+                indices
+            }
         }
     }
 }
