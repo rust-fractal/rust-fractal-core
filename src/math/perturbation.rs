@@ -229,8 +229,8 @@ impl Perturbation {
                         let mut need_extended_iteration = false;
 
                         // check if we need to stop because of max iterations (within 250 of max)
-                        if reference.current_iteration - pixel.iteration + additional_iterations < 250 {
-                            next_iteration_batch = reference.current_iteration - pixel.iteration + additional_iterations
+                        if reference.current_iteration - pixel.iteration - additional_iterations < 250 {
+                            next_iteration_batch = reference.current_iteration - pixel.iteration - additional_iterations
                         };
 
                         if additional_extended_iteration - additional_iterations < 250 {
@@ -317,7 +317,7 @@ impl Perturbation {
                         }
 
                         // check if the pixel escapes
-                        if pixel.iteration + additional_iterations > reference.current_iteration {
+                        if pixel.iteration + additional_iterations >= reference.current_iteration {
                             pixel.iteration = reference.current_iteration;
 
                             data_export.lock().unwrap().export_pixels(&[pixel.clone()], reference, delta_pixel);

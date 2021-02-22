@@ -232,7 +232,7 @@ impl FractalRenderer {
 
             // If the image width/height changes intraframe (GUI) we need to regenerate some things
             if export.image_width != self.image_width || export.image_height != self.image_height {
-                self.render_indices = (0..(self.image_width * self.image_height)).collect::<Vec<usize>>();
+                self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
 
                 export.image_width = self.image_width;
                 export.image_height = self.image_height;
@@ -644,7 +644,7 @@ impl FractalRenderer {
     }
 
     pub fn generate_render_indices(image_width: usize, image_height: usize) -> Vec<usize> {
-        let chooser = 3;
+        let chooser = 1;
         let mut indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         match chooser {
@@ -653,38 +653,6 @@ impl FractalRenderer {
                 indices
             }
             2 => {
-                indices.sort_by(|a, b| {
-                    // let tests = [16, 8, 4, 2];
-                    let mut output = false;
-
-                    let a_i = a % image_width;
-                    let a_j = a / image_width;
-
-                    let b_i = b % image_width;
-                    let b_j = b / image_width;
-
-                    // for test in tests.iter() {
-                        
-                    // }
-
-                    if a % 2 == 0 && b % 2 != 0 {
-                        output = true;
-                    } else {
-                        if a < b {
-                            output = true;
-                        }
-                    }
-
-                    if output {
-                        Ordering::Less
-                    } else {
-                        Ordering::Greater
-                    }
-                });
-
-                indices
-            }
-            3 => {
                 indices.sort_by(|a, b| {
                     let a_i = a % image_width;
                     let a_j = a / image_width;
