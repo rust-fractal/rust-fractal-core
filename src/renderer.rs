@@ -246,6 +246,7 @@ impl FractalRenderer {
             if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
                 // TODO make it so that the value is set back to zero, rather than remade
                 // self.progress.reset_series_approximation();
+                self.series_approximation.min_valid_iteration = 1;
 
                 self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &stop_flag);
             }
