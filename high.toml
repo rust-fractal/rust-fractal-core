@@ -1,7 +1,7 @@
-image_width = 1920
-image_height = 1080
+image_width = 5000
+image_height = 4000
 rotate = 0
-approximation_order = 64
+approximation_order = 16
 glitch_percentage = 0.001
 frames = 1
 frame_offset = 0
