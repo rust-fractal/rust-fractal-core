@@ -12,8 +12,8 @@ use rayon::prelude::*;
 use config::Config;
 
 use std::thread;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
+use parking_lot::Mutex;
 
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 
@@ -215,7 +215,7 @@ impl FractalRenderer {
         };
 
         if frame_index == 0 {
-            self.data_export.lock().unwrap().maximum_iteration = self.maximum_iteration;
+            self.data_export.lock().maximum_iteration = self.maximum_iteration;
 
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag);
 
@@ -228,7 +228,7 @@ impl FractalRenderer {
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &stop_flag);
         } else {
-            let mut export = self.data_export.lock().unwrap();
+            let mut export = self.data_export.lock();
 
             // If the image width/height changes intraframe (GUI) we need to regenerate some things
             if export.image_width != self.image_width || export.image_height != self.image_height {
@@ -308,15 +308,15 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
-        if !self.remove_centre && self.data_export.lock().unwrap().centre_removed {
+        if !self.remove_centre && self.data_export.lock().centre_removed {
             self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
 
-            self.data_export.lock().unwrap().centre_removed = false;
+            self.data_export.lock().centre_removed = false;
         }
 
         // If the remove_centre flag is set, and either it is not the first frame or gui mode is enabled
-        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.lock().unwrap().data_type == DataType::GUI) {
-            if !self.data_export.lock().unwrap().centre_removed {
+        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.lock().data_type == DataType::GUI) {
+            if !self.data_export.lock().centre_removed {
                 // This will remove the central pixels
                 let image_width = self.image_width;
                 let image_height = self.image_height;
@@ -335,7 +335,7 @@ impl FractalRenderer {
                 });
 
                 // The centre has already been removed
-                self.data_export.lock().unwrap().centre_removed = true;
+                self.data_export.lock().centre_removed = true;
             }
         }
 
@@ -558,7 +558,7 @@ impl FractalRenderer {
         };
         
         let saving_time = Instant::now();
-        self.data_export.lock().unwrap().save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
+        self.data_export.lock().save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
 
         self.render_time = frame_time.elapsed().as_millis();
 
@@ -588,7 +588,7 @@ impl FractalRenderer {
                     self.maximum_iteration = 1000;
                 }
 
-                self.data_export.lock().unwrap().maximum_iteration = self.maximum_iteration;
+                self.data_export.lock().maximum_iteration = self.maximum_iteration;
                 
                 if self.center_reference.current_iteration > self.maximum_iteration {
                     self.center_reference.current_iteration = self.maximum_iteration;

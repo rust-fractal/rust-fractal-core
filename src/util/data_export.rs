@@ -165,7 +165,7 @@ impl DataExport {
                     // self.rgb[3 * k + 1] = 0;
                     // self.rgb[3 * k + 2] = 0;
 
-                    self.set_rgb_with_scale(k, [255, 0, 0], scale);
+                    self.set_rgb_with_scale(k, [255, 0, 0], scale, pixel.image_x, pixel.image_y);
 
                 } else {
                     self.iterations[k] = pixel.iteration as u32;
@@ -206,7 +206,7 @@ impl DataExport {
                         self.distance_y[k] = output.im as f32;
                     };
 
-                    self.colour_index(k, scale)
+                    self.colour_index(k, scale, pixel.image_x, pixel.image_y)
                 };
             },
             DataType::RAW => {
@@ -320,7 +320,7 @@ impl DataExport {
                         self.distance_y[k] = output.im as f32;
                     };
 
-                    self.colour_index(k, 1)
+                    self.colour_index(k, 1, 0, 0)
                 };
             }
         }
@@ -428,7 +428,7 @@ impl DataExport {
                             self.distance_y[k] = output.im as f32;
                         };
 
-                        self.colour_index(k, 1)
+                        self.colour_index(k, 1, 0, 0)
                     };
                 };
             },
@@ -548,7 +548,7 @@ impl DataExport {
                             self.distance_y[k] = output.im as f32;
                         };
 
-                        self.colour_index(k, 1)
+                        self.colour_index(k, 1, 0, 0)
                     };
                 };
             }
@@ -707,7 +707,7 @@ impl DataExport {
     pub fn regenerate(&mut self) {
         if self.data_type == DataType::GUI {
             for i in 0..self.iterations.len() {
-                self.colour_index(i, 1);
+                self.colour_index(i, 1, 0, 0);
             }
         }
     }
@@ -732,23 +732,23 @@ impl DataExport {
                         self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
                     }
 
-                    self.colour_index(k, 1);
+                    self.colour_index(k, 1, 0, 0);
                 }
             }
         }
     }
 
-    pub fn colour_index(&mut self, i: usize, scale: usize) {
+    pub fn colour_index(&mut self, i: usize, scale: usize, image_x: usize, image_y: usize) {
         if self.glitched[i] && self.display_glitches {
             // self.rgb[3 * i] = 255u8; 
             // self.rgb[3 * i + 1] = 0u8; 
             // self.rgb[3 * i + 2] = 0u8;
-            self.set_rgb_with_scale(i, [255, 0, 0], scale)
+            self.set_rgb_with_scale(i, [255, 0, 0], scale, image_x, image_y)
         } else if self.iterations[i] >= self.maximum_iteration as u32 {
             self.rgb[3 * i] = 0u8; 
             self.rgb[3 * i + 1] = 0u8; 
             self.rgb[3 * i + 2] = 0u8;
-            self.set_rgb_with_scale(i, [0, 0, 0], scale)
+            self.set_rgb_with_scale(i, [0, 0, 0], scale, image_x, image_y)
         } else if self.analytic_derivative {
             let length = (self.distance_x[i].powi(2) + self.distance_y[i].powi(2)).sqrt();
             
@@ -767,7 +767,7 @@ impl DataExport {
             // self.rgb[3 * i] = rgb.r as u8; 
             // self.rgb[3 * i + 1] = rgb.g as u8; 
             // self.rgb[3 * i + 2] = rgb.b as u8;
-            self.set_rgb_with_scale(i, [rgb.r as u8, rgb.g as u8, rgb.b as u8], scale)
+            self.set_rgb_with_scale(i, [rgb.r as u8, rgb.g as u8, rgb.b as u8], scale, image_x, image_y)
 
             // default colouring algorithm
             // let out = (255.0 * length) as u8;
@@ -791,11 +791,12 @@ impl DataExport {
             let value = [(colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8,
                 (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8,
                 (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8];
-            self.set_rgb_with_scale(i, value, scale)
+            self.set_rgb_with_scale(i, value, scale, image_x, image_y)
 
         }
     }
 
+    #[inline]
     pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32) {
         if let Some(palette) = palette {
             self.palette = palette;
@@ -807,26 +808,22 @@ impl DataExport {
         self.scaled_offset = palette_offset * self.palette_length as f32;
     }
 
-    pub fn set_rgb_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize) {
+    pub fn set_rgb_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize, image_x: usize, image_y: usize) {
         if scale > 1 {
-            // TODO optimise this
-            let corner_x = index % self.image_width;
-            let corner_y = index / self.image_width;
-
-            let horizontal = if corner_x + scale < self.image_width {
+            let horizontal = if image_x + scale < self.image_width {
                 scale
             } else {
-                self.image_width - corner_x
+                self.image_width - image_x
             };
 
-            let vertical = if corner_y + scale < self.image_height {
+            let vertical = if image_y + scale < self.image_height {
                 scale
             } else {
-                self.image_height - corner_y
+                self.image_height - image_y
             };
 
-            for i in corner_x..(corner_x + horizontal) {
-                for j in corner_y..(corner_y + vertical) {
+            for i in image_x..(image_x + horizontal) {
+                for j in image_y..(image_y + vertical) {
                     self.rgb[3 * (j * self.image_width + i)] = value[0];
                     self.rgb[3 * (j * self.image_width + i) + 1] = value[1];
                     self.rgb[3 * (j * self.image_width + i) + 2] = value[2];

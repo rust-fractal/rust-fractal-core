@@ -7,7 +7,8 @@ use crate::util::ComplexExtended;
 
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use parking_lot::Mutex;
 
 pub struct Perturbation {}
 
@@ -87,7 +88,7 @@ impl Perturbation {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     break;
                                 }
@@ -98,7 +99,7 @@ impl Perturbation {
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     new_pixels_complete += 1;
                                     break;
@@ -135,7 +136,7 @@ impl Perturbation {
                         if pixel.iteration + additional_iterations >= reference.current_iteration {
                             pixel.iteration = reference.current_iteration;
 
-                            data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                            data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                             new_pixels_complete += 1;
                             break;
@@ -156,7 +157,7 @@ impl Perturbation {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     break;
                                 }
@@ -167,7 +168,7 @@ impl Perturbation {
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     new_pixels_complete += 1;
                                     break;
@@ -266,7 +267,7 @@ impl Perturbation {
                                     pixel.glitched = true;
 
                                     // possible instead of a lock, send a message to a queue to render the pixel
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     break;
                                 }
@@ -277,7 +278,7 @@ impl Perturbation {
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     new_pixels_complete += 1;
                                     break;
@@ -321,7 +322,7 @@ impl Perturbation {
                         if pixel.iteration + additional_iterations >= reference.current_iteration {
                             pixel.iteration = reference.current_iteration;
 
-                            data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                            data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                             new_pixels_complete += 1;
                             break;
@@ -342,7 +343,7 @@ impl Perturbation {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     break;
                                 }
@@ -353,7 +354,7 @@ impl Perturbation {
                                     pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                     pixel.delta_current.exponent = 0;
 
-                                    data_export.lock().unwrap().export_pixel(pixel, reference, delta_pixel, scale);
+                                    data_export.lock().export_pixel(pixel, reference, delta_pixel, scale);
 
                                     new_pixels_complete += 1;
                                     break;
