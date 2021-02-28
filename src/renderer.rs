@@ -236,9 +236,9 @@ impl FractalRenderer {
 
                 export.image_width = self.image_width;
                 export.image_height = self.image_height;
-
-                export.clear_buffers();
             }
+            
+            export.clear_buffers();
 
             drop(export);
 
@@ -430,12 +430,24 @@ impl FractalRenderer {
             });
         };
 
-        // This one has no offset because it is not a glitch resolving reference
-        if self.analytic_derivative {
-            Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
-        } else {
-            Perturbation::iterate_normal(&mut pixel_data, &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
-        };
+        let values = [16usize, 8, 4, 2, 1];
+        let mut previous_value = 0;
+        let number_pixels = self.render_indices.len();
+
+        for value in values.iter() {
+            println!("{}", value);
+            let end_value = number_pixels / (value * value);
+
+            // This one has no offset because it is not a glitch resolving reference
+            if self.analytic_derivative {
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value);
+            } else {
+                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value);
+            };
+
+            previous_value = end_value;
+        }
+        
 
         tx.send(()).unwrap();
 
@@ -519,9 +531,9 @@ impl FractalRenderer {
             }
             
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended);
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1);
             };
 
             // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
@@ -645,7 +657,7 @@ impl FractalRenderer {
     }
 
     pub fn generate_render_indices(image_width: usize, image_height: usize) -> Vec<usize> {
-        let chooser = 1;
+        let chooser = 4;
         let mut indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
         match chooser {
@@ -669,6 +681,89 @@ impl FractalRenderer {
                     } else {
                         Ordering::Greater
                     }
+                });
+
+                indices
+            }
+            3 => {
+                indices.sort_by(|a, b| {
+                    let a_i = a % image_width;
+                    let a_j = a / image_width;
+
+                    let b_i = b % image_width;
+                    let b_j = b / image_width;
+
+                    let temp1 = a_i % 2 == 0;
+                    let temp2 = a_j % 2 == 0;
+                    let temp3 = b_i % 2 == 0;
+                    let temp4 = b_j % 2 == 0;
+
+                    if temp1 && temp2 {
+                        if !temp3 || !temp4 {
+                            Ordering::Less
+                        } else if a < b {
+                            Ordering::Less
+                        } else {
+                            Ordering::Greater
+                        }
+                    } else if temp1 && !temp2 {
+                        if !temp3 || temp4 {
+                            Ordering::Less
+                        } else if a < b {
+                            Ordering::Less
+                        } else {
+                            Ordering::Greater
+                        }
+                    } else if !temp1 && temp2 {
+                        if temp3 || !temp4 {
+                            Ordering::Less
+                        } else if a < b {
+                            Ordering::Less
+                        } else {
+                            Ordering::Greater
+                        }
+                    } else {
+                        if a < b {
+                            Ordering::Less
+                        } else {
+                            Ordering::Greater
+                        }
+                    }
+                });
+
+                indices
+            }
+            4 => {
+                indices.sort_by(|a, b| {
+                    let a_i = a % image_width;
+                    let a_j = a / image_width;
+
+                    let b_i = b % image_width;
+                    let b_j = b / image_width;
+
+                    let values = [16, 8, 4, 2, 1];
+
+                    let mut output = Ordering::Less;
+
+                    for value in values.iter() {
+                        let temp1 = a_i % value == 0;
+                        let temp2 = a_j % value == 0;
+                        let temp3 = b_i % value == 0;
+                        let temp4 = b_j % value == 0;
+
+                        if temp1 && temp2 {
+                            if !temp3 || !temp4 {
+                                output = Ordering::Less;
+                                break;
+                            } else if a < b {
+                                output = Ordering::Less;
+                            } else {
+                                output = Ordering::Greater;
+                            }
+                        }
+                    }
+
+                    output
                 });
 
                 indices
