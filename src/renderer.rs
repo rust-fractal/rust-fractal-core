@@ -657,6 +657,8 @@ impl FractalRenderer {
     }
 
     pub fn generate_render_indices(image_width: usize, image_height: usize) -> Vec<usize> {
+        let time = Instant::now();
+
         let chooser = 4;
         let mut indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
 
@@ -734,6 +736,24 @@ impl FractalRenderer {
                 indices
             }
             4 => {
+                // let mut test = Vec::new();
+
+                // let values = [16, 8, 4, 2, 1];
+
+                // for value in values.iter() {
+                //     for row in (0..image_height).step_by(*value) {
+                //         for column in (0..image_width).step_by(*value) {
+
+                //         }
+                //     }
+
+                    
+                // }
+
+
+
+
+
                 indices.sort_by(|a, b| {
                     let a_i = a % image_width;
                     let a_j = a / image_width;
@@ -766,11 +786,119 @@ impl FractalRenderer {
                     output
                 });
 
+                println!("generate indices took {}ms", time.elapsed().as_millis());
+
                 indices
             }
             0 | _ => {
                 indices
             }
         }
+    }
+
+    pub fn regenerate_from_settings(&mut self, settings: Config) {
+        self.image_width = settings.get_int("image_width").unwrap_or(1000) as usize;
+        self.image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
+        self.rotate = settings.get_float("rotate").unwrap_or(0.0).to_radians();
+        self.maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
+        let initial_zoom = settings.get_str("zoom").unwrap_or(String::from("1E0")).to_ascii_uppercase();
+        let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
+        let center_imag = settings.get_str("imag").unwrap_or(String::from("0.0"));
+        let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
+        self.glitch_percentage = settings.get_float("glitch_percentage").unwrap_or(0.001);
+        self.remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
+        self.frame_offset = settings.get_int("frame_offset").unwrap_or(0) as usize;
+        self.zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
+        self.data_export.lock().display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
+        self.auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
+        self.experimental = settings.get_bool("experimental").unwrap_or(false);
+        let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
+        self.remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
+        self.data_export.lock().iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
+        self.data_export.lock().palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
+        let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
+        let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
+        let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
+        let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
+        self.analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
+        self.jitter = settings.get_bool("jitter").unwrap_or(false);
+        self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
+        self.show_output = settings.get_bool("show_output").unwrap_or(true);
+        
+        let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "NONE" => DataType::NONE,
+            "GUI" => DataType::GUI,
+            "RAW" | "EXR" => DataType::RAW,
+            "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
+            "KFB" => DataType::KFB,
+            "BOTH" => DataType::BOTH,
+            _ => DataType::COLOUR
+        };
+
+        self.data_export.lock().palette = match data_type {
+            DataType::RAW | DataType::NONE => {
+                Vec::new()
+            },
+            DataType::KFB | DataType::COLOUR | DataType::BOTH | DataType::GUI => {
+                if let Ok(colour_values) = settings.get_array("palette") {
+                    colour_values.chunks_exact(3).map(|value| {
+                        // We assume the palette is in BGR rather than RGB
+                        (value[2].clone().into_int().unwrap() as u8, 
+                            value[1].clone().into_int().unwrap() as u8, 
+                            value[0].clone().into_int().unwrap() as u8)
+                    }).collect::<Vec<(u8, u8, u8)>>()
+                } else {
+                    generate_default_palette()
+                }
+            }
+        };
+
+        let mut zoom = string_to_extended(&initial_zoom);
+        let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / zoom) / self.image_height as f64;
+        let radius = delta_pixel * self.image_width as f64;
+        let precision = max(64, -radius.exponent + 64);
+
+        let center_location = ComplexArbitrary::with_val(
+            precision as u32,
+            ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("provided location not valid"));
+        let auto_approximation = get_approximation_terms(approximation_order, self.image_width, self.image_height);
+
+        self.center_reference = Reference::new(center_location.clone(), 
+            center_location, 
+            1, 
+            self.maximum_iteration, 
+            data_storage_interval,
+            glitch_tolerance,
+            zoom);
+
+        self.series_approximation = SeriesApproximation::new_central(auto_approximation, 
+            self.maximum_iteration, 
+            FloatExtended::new(0.0, 0), 
+            probe_sampling,
+            self.experimental,
+            valid_iteration_frame_multiplier,
+            valid_iteration_probe_multiplier,
+            data_storage_interval);
+
+        if self.render_indices.len() != self.image_width * self.image_height {
+            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
+        }
+
+        // Change the zoom level to the correct one for the frame offset
+        for _ in 0..self.frame_offset {
+            zoom.mantissa /= self.zoom_scale_factor;
+            zoom.reduce();
+        }
+
+        self.zoom = zoom;
+
+        self.start_render_time = Instant::now();
+        self.progress = ProgressCounters::new(self.maximum_iteration);
+
+        self.data_export.lock().image_width = self.image_width;
+        self.data_export.lock().image_height = self.image_height;
+        self.data_export.lock().analytic_derivative = self.analytic_derivative;
+
+        self.data_export.lock().clear_buffers();
     }
 }

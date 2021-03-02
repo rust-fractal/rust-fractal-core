@@ -104,237 +104,15 @@ impl DataExport {
         }
     }
 
-    pub fn export_pixel(&mut self, pixel: &PixelData, reference: &Reference, delta_pixel: FloatExtended, scale: usize) {
+    pub fn export_pixels(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended, scale: usize) {
         let escape_radius_ln = 1e16f32.ln();
 
-        match self.data_type {
-            DataType::NONE => {},
-            DataType::COLOUR => {
-                let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
-
-                if pixel.glitched && self.display_glitches {
-                    self.rgb[k] = 255;
-                    self.rgb[k + 1] = 0;
-                    self.rgb[k + 2] = 0;
-                } else if pixel.iteration >= self.maximum_iteration {
-                    self.rgb[k] = 0;
-                    self.rgb[k + 1] = 0;
-                    self.rgb[k + 2] = 0;
-                } else {
-                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
-                    let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.scaled_offset;
-
-                    let temp2 = temp.floor() as usize % self.palette_length;
-                    let temp3 = (temp as usize + 1) % self.palette_length;
-                    let temp4 = temp.fract();
-
-                    let colour1 = self.palette[temp2];
-                    let colour2 = self.palette[temp3];
-
-                    self.rgb[k] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
-                    self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
-                    self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
-
-                    if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
-                        // let temp = pixel.delta_current.norm();
-                        let temp = (reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current).norm();
-
-                        let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
-
-                        let out = (255.0 * (de / delta_pixel).to_float().tanh()) as u8;
-
-                        self.rgb[k] = out; 
-                        self.rgb[k + 1] = out; 
-                        self.rgb[k + 2] = out;
-                    };
-                };
-            },
-            DataType::GUI => {
-                let k = pixel.image_y * self.image_width + pixel.image_x;
-
-                if pixel.glitched {
-                    self.glitched[k] = true;
-                } else {
-                    self.glitched[k] = false;
-                };
-
-                if pixel.glitched && self.display_glitches {
-                    // self.rgb[3 * k] = 255;
-                    // self.rgb[3 * k + 1] = 0;
-                    // self.rgb[3 * k + 2] = 0;
-
-                    self.set_rgb_with_scale(k, [255, 0, 0], scale, pixel.image_x, pixel.image_y);
-
-                } else {
-                    self.iterations[k] = pixel.iteration as u32;
-
-                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
-                    self.smooth[k] = smooth;
-
-                    if self.analytic_derivative {
-                        let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
-                        let temp2 = temp1.norm();
-
-                        let norm_z_x = FloatExtended::new(
-                            temp1.mantissa.re / temp2.mantissa,
-                            temp1.exponent - temp2.exponent
-                        ).to_float();
-
-                        let norm_z_y = FloatExtended::new(
-                            temp1.mantissa.im / temp2.mantissa,
-                            temp1.exponent - temp2.exponent
-                        ).to_float();
-
-                        let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
-                        let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
-
-                        let scaled_jxa = (jxa * delta_pixel).to_float();
-                        let scaled_jya = (jya * delta_pixel).to_float();
-
-                        let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
-
-                        let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
-                        let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
-
-                        let output = num / ComplexFixed::new(den_1, den_2);
-
-                        self.distance_x[k] = output.re as f32;
-                        self.distance_y[k] = output.im as f32;
-                    };
-
-                    self.colour_index(k, scale, pixel.image_x, pixel.image_y)
-                };
-            },
-            DataType::RAW => {
-                let k = pixel.image_y * self.image_width + pixel.image_x;
-
-                self.iterations[k] = if pixel.glitched {
-                    0x00000000
-                } else if pixel.iteration >= self.maximum_iteration {
-                    0xFFFFFFFF
-                } else {
-                    pixel.iteration as u32
-                };
-
-                let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
-                self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
-                if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
-                    let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
-                    let temp2 = temp1.norm();
-
-                    let norm_z_x = FloatExtended::new(
-                        temp1.mantissa.re / temp2.mantissa,
-                        temp1.exponent - temp2.exponent
-                    ).to_float();
-
-                    let norm_z_y = FloatExtended::new(
-                        temp1.mantissa.im / temp2.mantissa,
-                        temp1.exponent - temp2.exponent
-                    ).to_float();
-
-                    let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
-                    let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
-
-                    let scaled_jxa = (jxa * delta_pixel).to_float();
-                    let scaled_jya = (jya * delta_pixel).to_float();
-
-                    let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
-
-                    let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
-                    let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
-
-                    let output = num / ComplexFixed::new(den_1, den_2);
-
-                    self.distance_x[k] = output.re as f32;
-                    self.distance_y[k] = output.im as f32;
-                }
-            },
-            DataType::KFB => {
-                let k = pixel.image_x * self.image_height + pixel.image_y;
-
-                self.iterations[k] = if pixel.glitched {
-                    0x00000000
-                } else if pixel.iteration >= self.maximum_iteration {
-                    0xFFFFFFFF
-                } else {
-                    pixel.iteration as u32
-                };
-
-                let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
-                self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-            },
-            DataType::BOTH => {
-                let k = pixel.image_y * self.image_width + pixel.image_x;
-
-                if pixel.glitched && self.display_glitches {
-                    self.rgb[3 * k] = 255;
-                    self.rgb[3 * k + 1] = 0;
-                    self.rgb[3 * k + 2] = 0;
-                    self.iterations[k] = 0x00000000;
-                } else if pixel.iteration >= self.maximum_iteration {
-                    self.rgb[3 * k] = 0;
-                    self.rgb[3 * k + 1] = 0;
-                    self.rgb[3 * k + 2] = 0;
-                    self.iterations[k] = 0xFFFFFFFF;
-                } else {
-                    self.iterations[k] = pixel.iteration as u32;
-
-                    let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
-                    let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
-                    self.smooth[k] = smooth;
-
-                    if self.analytic_derivative {
-                        let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
-                        let temp2 = temp1.norm();
-
-                        let norm_z_x = FloatExtended::new(
-                            temp1.mantissa.re / temp2.mantissa,
-                            temp1.exponent - temp2.exponent
-                        ).to_float();
-
-                        let norm_z_y = FloatExtended::new(
-                            temp1.mantissa.im / temp2.mantissa,
-                            temp1.exponent - temp2.exponent
-                        ).to_float();
-
-                        let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
-                        let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
-
-                        let scaled_jxa = (jxa * delta_pixel).to_float();
-                        let scaled_jya = (jya * delta_pixel).to_float();
-
-                        let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
-
-                        let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
-                        let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
-
-                        let output = num / ComplexFixed::new(den_1, den_2);
-
-                        self.distance_x[k] = output.re as f32;
-                        self.distance_y[k] = output.im as f32;
-                    };
-
-                    self.colour_index(k, 1, 0, 0)
-                };
-            }
-        }
-    }
-
-    pub fn export_pixels(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended) {
-        let escape_radius_ln = 1e16f32.ln();
-
-        match self.data_type {
-            DataType::NONE => {},
-            DataType::COLOUR => {
-                for pixel in pixel_data {
+        for pixel in pixel_data {
+            match self.data_type {
+                DataType::NONE => {},
+                DataType::COLOUR => {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
-
+    
                     if pixel.glitched && self.display_glitches {
                         self.rgb[k] = 255;
                         self.rgb[k + 1] = 0;
@@ -346,96 +124,95 @@ impl DataExport {
                     } else {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
+    
                         let temp = ((pixel.iteration as f32 + smooth) / self.iteration_division) + self.scaled_offset;
-
+    
                         let temp2 = temp.floor() as usize % self.palette_length;
                         let temp3 = (temp as usize + 1) % self.palette_length;
                         let temp4 = temp.fract();
-
+    
                         let colour1 = self.palette[temp2];
                         let colour2 = self.palette[temp3];
-
+    
                         self.rgb[k] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
                         self.rgb[k + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
                         self.rgb[k + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
-
+    
                         if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
                             // let temp = pixel.delta_current.norm();
                             let temp = (reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current).norm();
-
+    
                             let de = 2.0 * temp * (temp.mantissa.ln() + temp.exponent as f64 * 2.0f64.ln()) / pixel.derivative_current.norm();
-
+    
                             let out = (255.0 * (de / delta_pixel).to_float().tanh()) as u8;
-
+    
                             self.rgb[k] = out; 
                             self.rgb[k + 1] = out; 
                             self.rgb[k + 2] = out;
                         };
                     };
-                };
-            },
-            DataType::GUI => {
-                for pixel in pixel_data {
+                },
+                DataType::GUI => {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
-
+    
                     if pixel.glitched {
                         self.glitched[k] = true;
                     } else {
                         self.glitched[k] = false;
                     };
-
+    
                     if pixel.glitched && self.display_glitches {
-                        self.rgb[3 * k] = 255;
-                        self.rgb[3 * k + 1] = 0;
-                        self.rgb[3 * k + 2] = 0;
+                        // self.rgb[3 * k] = 255;
+                        // self.rgb[3 * k + 1] = 0;
+                        // self.rgb[3 * k + 2] = 0;
+    
+                        self.set_rgb_with_scale(k, [255, 0, 0], scale, pixel.image_x, pixel.image_y);
+    
                     } else {
                         self.iterations[k] = pixel.iteration as u32;
-
+    
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
+    
                         self.smooth[k] = smooth;
-
+    
                         if self.analytic_derivative {
                             let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();
-
+    
                             let norm_z_x = FloatExtended::new(
                                 temp1.mantissa.re / temp2.mantissa,
                                 temp1.exponent - temp2.exponent
                             ).to_float();
-
+    
                             let norm_z_y = FloatExtended::new(
                                 temp1.mantissa.im / temp2.mantissa,
                                 temp1.exponent - temp2.exponent
                             ).to_float();
-
+    
                             let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
                             let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
-
+    
                             let scaled_jxa = (jxa * delta_pixel).to_float();
                             let scaled_jya = (jya * delta_pixel).to_float();
-
+    
                             let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
-
+    
                             let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
                             let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
-
+    
                             let output = num / ComplexFixed::new(den_1, den_2);
-
+    
                             self.distance_x[k] = output.re as f32;
                             self.distance_y[k] = output.im as f32;
                         };
-
-                        self.colour_index(k, 1, 0, 0)
+    
+                        self.colour_index(k, scale, pixel.image_x, pixel.image_y)
                     };
-                };
-            },
-            DataType::RAW => {
-                for pixel in pixel_data {
+                },
+                DataType::RAW => {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
-
+    
                     self.iterations[k] = if pixel.glitched {
                         0x00000000
                     } else if pixel.iteration >= self.maximum_iteration {
@@ -443,46 +220,44 @@ impl DataExport {
                     } else {
                         pixel.iteration as u32
                     };
-
+    
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
+    
                     if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
                         let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                         let temp2 = temp1.norm();
-
+    
                         let norm_z_x = FloatExtended::new(
                             temp1.mantissa.re / temp2.mantissa,
                             temp1.exponent - temp2.exponent
                         ).to_float();
-
+    
                         let norm_z_y = FloatExtended::new(
                             temp1.mantissa.im / temp2.mantissa,
                             temp1.exponent - temp2.exponent
                         ).to_float();
-
+    
                         let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
                         let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
-
+    
                         let scaled_jxa = (jxa * delta_pixel).to_float();
                         let scaled_jya = (jya * delta_pixel).to_float();
-
+    
                         let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
-
+    
                         let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
                         let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
-
+    
                         let output = num / ComplexFixed::new(den_1, den_2);
-
+    
                         self.distance_x[k] = output.re as f32;
                         self.distance_y[k] = output.im as f32;
                     }
-                }
-            },
-            DataType::KFB => {
-                for pixel in pixel_data {
+                },
+                DataType::KFB => {
                     let k = pixel.image_x * self.image_height + pixel.image_y;
-
+    
                     self.iterations[k] = if pixel.glitched {
                         0x00000000
                     } else if pixel.iteration >= self.maximum_iteration {
@@ -490,15 +265,13 @@ impl DataExport {
                     } else {
                         pixel.iteration as u32
                     };
-
+    
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-                }
-            },
-            DataType::BOTH => {
-                for pixel in pixel_data {
+                },
+                DataType::BOTH => {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
-
+    
                     if pixel.glitched && self.display_glitches {
                         self.rgb[3 * k] = 255;
                         self.rgb[3 * k + 1] = 0;
@@ -511,46 +284,46 @@ impl DataExport {
                         self.iterations[k] = 0xFFFFFFFF;
                     } else {
                         self.iterations[k] = pixel.iteration as u32;
-
+    
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-
+    
                         self.smooth[k] = smooth;
-
+    
                         if self.analytic_derivative {
                             let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();
-
+    
                             let norm_z_x = FloatExtended::new(
                                 temp1.mantissa.re / temp2.mantissa,
                                 temp1.exponent - temp2.exponent
                             ).to_float();
-
+    
                             let norm_z_y = FloatExtended::new(
                                 temp1.mantissa.im / temp2.mantissa,
                                 temp1.exponent - temp2.exponent
                             ).to_float();
-
+    
                             let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
                             let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
-
+    
                             let scaled_jxa = (jxa * delta_pixel).to_float();
                             let scaled_jya = (jya * delta_pixel).to_float();
-
+    
                             let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
-
+    
                             let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
                             let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
-
+    
                             let output = num / ComplexFixed::new(den_1, den_2);
-
+    
                             self.distance_x[k] = output.re as f32;
                             self.distance_y[k] = output.im as f32;
                         };
-
+    
                         self.colour_index(k, 1, 0, 0)
                     };
-                };
+                }
             }
         }
     }

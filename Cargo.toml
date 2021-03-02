@@ -28,6 +28,6 @@ features = ["float", "complex"]
 [profile.release]
 lto = "fat"
 codegen-units = 1
-#debug = true
+debug = true
 opt-level=3
 #incremental = true
