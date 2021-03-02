@@ -21,6 +21,7 @@ use atomic_counter::{AtomicCounter, RelaxedCounter};
 pub struct FractalRenderer {
     pub image_width: usize,
     pub image_height: usize,
+    pub total_pixels: usize,
     pub rotate: f64,
     pub zoom: FloatExtended,
     pub auto_adjust_iterations: bool,
@@ -140,6 +141,7 @@ impl FractalRenderer {
         FractalRenderer {
             image_width,
             image_height,
+            total_pixels: image_width * image_height,
             rotate,
             zoom,
             auto_adjust_iterations,
@@ -336,6 +338,7 @@ impl FractalRenderer {
 
                 // The centre has already been removed
                 self.data_export.lock().centre_removed = true;
+                self.total_pixels = self.render_indices.len();
             }
         }
 
@@ -435,14 +438,16 @@ impl FractalRenderer {
         let number_pixels = self.render_indices.len();
 
         for value in values.iter() {
-            println!("{}", value);
+            // println!("{}", value);
             let end_value = number_pixels / (value * value);
+            let chunk_size = max(number_pixels / 4096, 4);
+            // println!("chunk size init: {}", chunk_size);
 
             // This one has no offset because it is not a glitch resolving reference
             if self.analytic_derivative {
                 Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value);
+                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size);
             };
 
             previous_value = end_value;
@@ -450,6 +455,12 @@ impl FractalRenderer {
         
 
         tx.send(()).unwrap();
+
+        if stop_flag.get() >= 1 {
+            self.progress.reset();
+            self.render_time = frame_time.elapsed().as_millis();
+            return;
+        };
 
         // self.data_export.export_pixels(&pixel_data, &self.center_reference, delta_pixel_extended);
 
@@ -493,10 +504,11 @@ impl FractalRenderer {
             });
         };
 
-        while pixel_data.len() as f64 > 0.01 * self.glitch_percentage * (self.image_width * self.image_height) as f64 {
+        while pixel_data.len() as f64 > 0.01 * self.glitch_percentage * self.total_pixels as f64 {
             // delta_c is the difference from the next reference from the previous one
 
             let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+            // let glitch_reference_pixel = pixel_data[0].clone();
 
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
@@ -530,10 +542,13 @@ impl FractalRenderer {
                 });
             }
             
+            let chunk_size = max(pixel_data.len() / 4096, 4);
+            // println!("chunk size: {}", chunk_size);
+
             if self.analytic_derivative {
                 Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1);
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size);
             };
 
             // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
@@ -880,8 +895,23 @@ impl FractalRenderer {
             valid_iteration_probe_multiplier,
             data_storage_interval);
 
-        if self.render_indices.len() != self.image_width * self.image_height {
+        self.total_pixels = self.image_width * self.image_height;
+
+        if self.remove_centre {
+            let temp = 1.0 / self.zoom_scale_factor;
+
+            // Add one to avoid rescaling artifacts
+            let val1 = (self.image_width as f64 * temp).ceil() as usize - 1;
+            let val2 = (self.image_height as f64 * temp).ceil() as usize - 1;
+    
+            self.total_pixels -= val1 * val2;
+        }
+
+        let mut data_export = self.data_export.lock();
+
+        if self.image_width != data_export.image_width || self.image_height != data_export.image_height {
             self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
+            data_export.centre_removed = false;
         }
 
         // Change the zoom level to the correct one for the frame offset
@@ -895,10 +925,10 @@ impl FractalRenderer {
         self.start_render_time = Instant::now();
         self.progress = ProgressCounters::new(self.maximum_iteration);
 
-        self.data_export.lock().image_width = self.image_width;
-        self.data_export.lock().image_height = self.image_height;
-        self.data_export.lock().analytic_derivative = self.analytic_derivative;
+        data_export.image_width = self.image_width;
+        data_export.image_height = self.image_height;
+        data_export.analytic_derivative = self.analytic_derivative;
 
-        self.data_export.lock().clear_buffers();
+        data_export.clear_buffers();
     }
 }

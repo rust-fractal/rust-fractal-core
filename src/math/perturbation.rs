@@ -13,8 +13,8 @@ use parking_lot::Mutex;
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize) {
-        pixel_data.par_chunks_mut(32)
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize) {
+        pixel_data.par_chunks_mut(chunk_size)
             .for_each(|pixel_data| {
                 if stop_flag.get() >= 1 {
                     return;
