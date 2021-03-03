@@ -31,7 +31,7 @@ pub struct FractalRenderer {
     start_render_time: Instant,
     pub remaining_frames: usize,
     frame_offset: usize,
-    zoom_scale_factor: f64,
+    pub zoom_scale_factor: f64,
     pub center_reference: Reference,
     pub series_approximation: SeriesApproximation,
     render_indices: Vec<usize>,
