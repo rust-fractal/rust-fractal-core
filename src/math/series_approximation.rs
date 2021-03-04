@@ -186,10 +186,10 @@ impl SeriesApproximation {
                 let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
                 let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
 
-                for k in 2..=self.order {
-                    series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                    derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-                };
+                for (k, next_coefficient) in next_coefficients.iter().enumerate().take(self.order + 1).skip(2) {
+                    series_probe += *next_coefficient * self.approximation_probes[i][k - 1];
+                    derivative_probe += *next_coefficient * self.approximation_probes_derivative[i][k - 1];
+                }
 
                 let relative_error = (probe - series_probe).norm_square();
                 let mut derivative = derivative_probe.norm_square();
@@ -272,10 +272,10 @@ impl SeriesApproximation {
                                 let mut series_probe = next_coefficients[1] * self.approximation_probes[i][0];
                                 let mut derivative_probe = next_coefficients[1] * self.approximation_probes_derivative[i][0];
 
-                                for k in 2..=self.order {
-                                    series_probe += next_coefficients[k] * self.approximation_probes[i][k - 1];
-                                    derivative_probe += next_coefficients[k] * self.approximation_probes_derivative[i][k - 1];
-                                };
+                                for (k, next_coefficient) in next_coefficients.iter().enumerate().take(self.order + 1).skip(2) {
+                                    series_probe += *next_coefficient * self.approximation_probes[i][k - 1];
+                                    derivative_probe += *next_coefficient * self.approximation_probes_derivative[i][k - 1];
+                                }
 
                                 probe.reduce();
 

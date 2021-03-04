@@ -104,10 +104,8 @@ impl Reference {
         self.reference_data_extended.push(z_extended);
 
         while self.current_iteration < self.maximum_iteration {
-            if self.start_iteration == 1 {
-                if self.data_storage_interval == 1 || self.current_iteration % self.data_storage_interval == 1 {
-                    self.high_precision_data.push(self.z.clone());
-                }
+            if self.start_iteration == 1 && (self.data_storage_interval == 1 || self.current_iteration % self.data_storage_interval == 1 ) {
+                self.high_precision_data.push(self.z.clone());
             }
 
             if stop_flag.get() >= 1 {

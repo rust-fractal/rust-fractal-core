@@ -15,12 +15,12 @@ use color_space::{Rgb, Hsv};
 
 #[derive(PartialEq)]
 pub enum DataType {
-    NONE,
-    GUI,
-    COLOUR,
-    RAW,
-    KFB,
-    BOTH
+    None,
+    Gui,
+    Color,
+    Raw,
+    Kfb,
+    Both
 }
 
 pub struct DataExport {
@@ -53,26 +53,26 @@ impl DataExport {
         let mut glitched = Vec::new();
 
         match data_type {
-            DataType::NONE => {},
-            DataType::COLOUR => {
+            DataType::None => {},
+            DataType::Color => {
                 rgb = vec![0u8; image_width * image_height * 3];
             },
-            DataType::GUI => {
+            DataType::Gui => {
                 rgb = vec![0u8; image_width * image_height * 3];
                 smooth = vec![0.0f32; image_width * image_height];
                 distance_x = vec![0.0f32; image_width * image_height];
                 distance_y = vec![0.0f32; image_width * image_height];
                 glitched = vec![false; image_width * image_height];
             }
-            DataType::RAW => {
+            DataType::Raw => {
                 smooth = vec![0.0f32; image_width * image_height];
                 distance_x = vec![0.0f32; image_width * image_height];
                 distance_y = vec![0.0f32; image_width * image_height];
             },
-            DataType::KFB => {
+            DataType::Kfb => {
                 smooth = vec![0.0f32; image_width * image_height];
             },
-            DataType::BOTH => {
+            DataType::Both => {
                 rgb = vec![0u8; image_width * image_height * 3];
                 smooth = vec![0.0f32; image_width * image_height];
                 distance_x = vec![0.0f32; image_width * image_height];
@@ -109,8 +109,8 @@ impl DataExport {
 
         for pixel in pixel_data {
             match self.data_type {
-                DataType::NONE => {},
-                DataType::COLOUR => {
+                DataType::None => {},
+                DataType::Color => {
                     let k = (pixel.image_y * self.image_width + pixel.image_x) * 3;
     
                     if pixel.glitched && self.display_glitches {
@@ -152,7 +152,7 @@ impl DataExport {
                         };
                     };
                 },
-                DataType::GUI => {
+                DataType::Gui => {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
     
                     if pixel.glitched {
@@ -210,7 +210,7 @@ impl DataExport {
                         self.colour_index(k, scale, pixel.image_x, pixel.image_y)
                     };
                 },
-                DataType::RAW => {
+                DataType::Raw => {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
     
                     self.iterations[k] = if pixel.glitched {
@@ -255,7 +255,7 @@ impl DataExport {
                         self.distance_y[k] = output.im as f32;
                     }
                 },
-                DataType::KFB => {
+                DataType::Kfb => {
                     let k = pixel.image_x * self.image_height + pixel.image_y;
     
                     self.iterations[k] = if pixel.glitched {
@@ -269,7 +269,7 @@ impl DataExport {
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
                 },
-                DataType::BOTH => {
+                DataType::Both => {
                     let k = pixel.image_y * self.image_width + pixel.image_x;
     
                     if pixel.glitched && self.display_glitches {
@@ -330,17 +330,17 @@ impl DataExport {
 
     pub fn save(&mut self, filename: &str, approximation_order: usize, zoom: &str) {
         match self.data_type {
-            DataType::NONE | DataType::GUI => {},
-            DataType::COLOUR => {
+            DataType::None | DataType::Gui => {},
+            DataType::Color => {
                 self.save_colour(filename);
             },
-            DataType::RAW => {
+            DataType::Raw => {
                 self.save_raw(filename, approximation_order, zoom);
             },
-            DataType::KFB => {
+            DataType::Kfb => {
                 self.save_kfb(filename);
             }
-            DataType::BOTH => {
+            DataType::Both => {
                 self.save_colour(filename);
                 self.save_raw(filename, approximation_order, zoom);
             }
@@ -445,11 +445,11 @@ impl DataExport {
 
     pub fn clear_buffers(&mut self) {
         match self.data_type {
-            DataType::NONE => {},
-            DataType::COLOUR => {
+            DataType::None => {},
+            DataType::Color => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
             }
-            DataType::GUI => {
+            DataType::Gui => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
@@ -457,17 +457,17 @@ impl DataExport {
                 self.distance_y = vec![0.0f32; self.image_width * self.image_height];
                 self.glitched = vec![false; self.image_width * self.image_height];
             }
-            DataType::RAW => {
+            DataType::Raw => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
                 self.distance_x = vec![0.0f32; self.image_width * self.image_height];
                 self.distance_y = vec![0.0f32; self.image_width * self.image_height];
             },
-            DataType::KFB => {
+            DataType::Kfb => {
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
             },
-            DataType::BOTH => {
+            DataType::Both => {
                 self.rgb = vec![0u8; self.image_width * self.image_height * 3];
                 self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
                 self.smooth = vec![0.0f32; self.image_width * self.image_height];
@@ -478,7 +478,7 @@ impl DataExport {
     }
 
     pub fn regenerate(&mut self) {
-        if self.data_type == DataType::GUI {
+        if self.data_type == DataType::Gui {
             for i in 0..self.iterations.len() {
                 self.colour_index(i, 1, 0, 0);
             }
@@ -486,27 +486,25 @@ impl DataExport {
     }
 
     pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
-        if !self.display_glitches {
-            if self.data_type == DataType::GUI {
-                for pixel in pixel_data {
-                    let k = pixel.image_y * self.image_width + pixel.image_x;
+        if !self.display_glitches && self.data_type == DataType::Gui {
+            for pixel in pixel_data {
+                let k = pixel.image_y * self.image_width + pixel.image_x;
 
-                    let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
-                    let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
+                let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
+                let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
 
-                    let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
-                    let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
+                let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
+                let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
 
-                    self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
-                    self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
+                self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
+                self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
 
-                    if self.analytic_derivative {
-                        self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
-                        self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
-                    }
-
-                    self.colour_index(k, 1, 0, 0);
+                if self.analytic_derivative {
+                    self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
+                    self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
                 }
+
+                self.colour_index(k, 1, 0, 0);
             }
         }
     }

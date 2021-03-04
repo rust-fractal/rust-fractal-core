@@ -7,13 +7,13 @@ use std::time::Instant;
 
 use crate::util::generate_default_palette;
 
-pub struct RecolourEXR {
+pub struct RecolourExr {
     palette: Vec<(u8, u8, u8)>,
     files: Vec<String>,
     iteration_division: f32
 }
 
-impl RecolourEXR {
+impl RecolourExr {
     pub fn new(settings: Config) -> Self {
         let palette = if let Ok(values) = settings.get_array("palette") {
             let palette = values.chunks_exact(3).map(|value| {
@@ -45,7 +45,7 @@ impl RecolourEXR {
             }
         };
 
-        RecolourEXR {
+        RecolourExr {
             palette,
             files: exr_files,
             iteration_division

@@ -17,7 +17,6 @@ use parking_lot::Mutex;
 
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 
-
 pub struct FractalRenderer {
     pub image_width: usize,
     pub image_height: usize,
@@ -51,9 +50,9 @@ impl FractalRenderer {
         let image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
         let rotate = settings.get_float("rotate").unwrap_or(0.0).to_radians();
         let maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
-        let initial_zoom = settings.get_str("zoom").unwrap_or(String::from("1E0")).to_ascii_uppercase();
-        let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
-        let center_imag = settings.get_str("imag").unwrap_or(String::from("0.0"));
+        let initial_zoom = settings.get_str("zoom").unwrap_or_else(|_| String::from("1E0")).to_ascii_uppercase();
+        let center_real = settings.get_str("real").unwrap_or_else(|_| String::from("-0.75"));
+        let center_imag = settings.get_str("imag").unwrap_or_else(|_| String::from("0.0"));
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
         let glitch_percentage = settings.get_float("glitch_percentage").unwrap_or(0.001);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
@@ -75,21 +74,21 @@ impl FractalRenderer {
         let jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         let show_output = settings.get_bool("show_output").unwrap_or(true);
         
-        let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
-            "NONE" => DataType::NONE,
-            "GUI" => DataType::GUI,
-            "RAW" | "EXR" => DataType::RAW,
-            "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
-            "KFB" => DataType::KFB,
-            "BOTH" => DataType::BOTH,
-            _ => DataType::COLOUR
+        let data_type = match settings.get_str("export").unwrap_or_else(|_| String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "NONE" => DataType::None,
+            "GUI" => DataType::Gui,
+            "RAW" | "EXR" => DataType::Raw,
+            "COLOUR" | "COLOR" | "PNG" => DataType::Color,
+            "KFB" => DataType::Kfb,
+            "BOTH" => DataType::Both,
+            _ => DataType::Color
         };
 
         let palette = match data_type {
-            DataType::RAW | DataType::NONE => {
+            DataType::Raw | DataType::None => {
                 Vec::new()
             },
-            DataType::KFB | DataType::COLOUR | DataType::BOTH | DataType::GUI => {
+            DataType::Kfb | DataType::Color | DataType::Both | DataType::Gui => {
                 if let Ok(colour_values) = settings.get_array("palette") {
                     colour_values.chunks_exact(3).map(|value| {
                         // We assume the palette is in BGR rather than RGB
@@ -317,29 +316,27 @@ impl FractalRenderer {
         }
 
         // If the remove_centre flag is set, and either it is not the first frame or gui mode is enabled
-        if self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.lock().data_type == DataType::GUI) {
-            if !self.data_export.lock().centre_removed {
-                // This will remove the central pixels
-                let image_width = self.image_width;
-                let image_height = self.image_height;
-                let temp = 0.5 - 0.5 / self.zoom_scale_factor;
+        if (self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.lock().data_type == DataType::Gui)) && !self.data_export.lock().centre_removed {
+            // This will remove the central pixels
+            let image_width = self.image_width;
+            let image_height = self.image_height;
+            let temp = 0.5 - 0.5 / self.zoom_scale_factor;
 
-                // Add one to avoid rescaling artifacts
-                let val1 = (image_width as f64 * temp).ceil() as usize;
-                let val2 = (image_height as f64 * temp).ceil() as usize;
+            // Add one to avoid rescaling artifacts
+            let val1 = (image_width as f64 * temp).ceil() as usize;
+            let val2 = (image_height as f64 * temp).ceil() as usize;
 
-                // Set up new render indices
-                self.render_indices.retain(|index| {
-                    let i = index % image_width;
-                    let j = index / image_width;
+            // Set up new render indices
+            self.render_indices.retain(|index| {
+                let i = index % image_width;
+                let j = index / image_width;
 
-                    i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
-                });
+                i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
+            });
 
-                // The centre has already been removed
-                self.data_export.lock().centre_removed = true;
-                self.total_pixels = self.render_indices.len();
-            }
+            // The centre has already been removed
+            self.data_export.lock().centre_removed = true;
+            self.total_pixels = self.render_indices.len();
         }
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
@@ -440,12 +437,12 @@ impl FractalRenderer {
         for value in values.iter() {
             // println!("{}", value);
             let end_value = number_pixels / (value * value);
-            let chunk_size = max(number_pixels / 4096, 4);
+            let chunk_size = max((end_value - previous_value) / 2048, 4);
             // println!("chunk size init: {}", chunk_size);
 
             // This one has no offset because it is not a glitch resolving reference
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size);
             } else {
                 Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size);
             };
@@ -542,11 +539,11 @@ impl FractalRenderer {
                 });
             }
             
-            let chunk_size = max(pixel_data.len() / 4096, 4);
+            let chunk_size = max(pixel_data.len() / 2048, 4);
             // println!("chunk size: {}", chunk_size);
 
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size);
             } else {
                 Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size);
             };
@@ -656,14 +653,12 @@ impl FractalRenderer {
                     self.center_reference.maximum_iteration = new_iteration_value;
                     self.maximum_iteration = new_iteration_value;
                 }
-            } else {
-                if self.series_approximation.min_valid_iteration < 1000 && self.series_approximation.order > 16 {
+            } else if self.series_approximation.min_valid_iteration < 1000 && self.series_approximation.order > 16 {
                     self.series_approximation.order = 16;
                     self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(RelaxedCounter::new(0)));
-                } else if self.series_approximation.min_valid_iteration < 10000 && self.series_approximation.order > 32 {
-                    self.series_approximation.order = 32;
-                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(RelaxedCounter::new(0)));
-                }
+            } else if self.series_approximation.min_valid_iteration < 10000 && self.series_approximation.order > 32 {
+                self.series_approximation.order = 32;
+                self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(RelaxedCounter::new(0)));
             }
             
             self.remaining_frames -= 1;
@@ -672,17 +667,18 @@ impl FractalRenderer {
     }
 
     pub fn generate_render_indices(image_width: usize, image_height: usize) -> Vec<usize> {
-        let time = Instant::now();
+        // let time = Instant::now();
 
-        let chooser = 4;
-        let mut indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
+        let chooser = 3;
+        let mut indices = Vec::with_capacity(image_width * image_height);
 
         match chooser {
             1 => {
+                indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
                 indices.shuffle(&mut thread_rng());
-                indices
             }
             2 => {
+                indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
                 indices.sort_by(|a, b| {
                     let a_i = a % image_width;
                     let a_j = a / image_width;
@@ -699,116 +695,27 @@ impl FractalRenderer {
                         Ordering::Greater
                     }
                 });
-
-                indices
             }
             3 => {
-                indices.sort_by(|a, b| {
-                    let a_i = a % image_width;
-                    let a_j = a / image_width;
+                // Could order each subsection with circular ordering
+                let values = [16, 8, 4, 2, 1];
 
-                    let b_i = b % image_width;
-                    let b_j = b / image_width;
-
-                    let temp1 = a_i % 2 == 0;
-                    let temp2 = a_j % 2 == 0;
-                    let temp3 = b_i % 2 == 0;
-                    let temp4 = b_j % 2 == 0;
-
-                    if temp1 && temp2 {
-                        if !temp3 || !temp4 {
-                            Ordering::Less
-                        } else if a < b {
-                            Ordering::Less
-                        } else {
-                            Ordering::Greater
-                        }
-                    } else if temp1 && !temp2 {
-                        if !temp3 || temp4 {
-                            Ordering::Less
-                        } else if a < b {
-                            Ordering::Less
-                        } else {
-                            Ordering::Greater
-                        }
-                    } else if !temp1 && temp2 {
-                        if temp3 || !temp4 {
-                            Ordering::Less
-                        } else if a < b {
-                            Ordering::Less
-                        } else {
-                            Ordering::Greater
-                        }
-                    } else {
-                        if a < b {
-                            Ordering::Less
-                        } else {
-                            Ordering::Greater
-                        }
-                    }
-                });
-
-                indices
-            }
-            4 => {
-                // let mut test = Vec::new();
-
-                // let values = [16, 8, 4, 2, 1];
-
-                // for value in values.iter() {
-                //     for row in (0..image_height).step_by(*value) {
-                //         for column in (0..image_width).step_by(*value) {
-
-                //         }
-                //     }
-
-                    
-                // }
-
-
-
-
-
-                indices.sort_by(|a, b| {
-                    let a_i = a % image_width;
-                    let a_j = a / image_width;
-
-                    let b_i = b % image_width;
-                    let b_j = b / image_width;
-
-                    let values = [16, 8, 4, 2, 1];
-
-                    let mut output = Ordering::Less;
-
-                    for value in values.iter() {
-                        let temp1 = a_i % value == 0;
-                        let temp2 = a_j % value == 0;
-                        let temp3 = b_i % value == 0;
-                        let temp4 = b_j % value == 0;
-
-                        if temp1 && temp2 {
-                            if !temp3 || !temp4 {
-                                output = Ordering::Less;
-                                break;
-                            } else if a < b {
-                                output = Ordering::Less;
-                            } else {
-                                output = Ordering::Greater;
+                for (n, value) in values.iter().enumerate() {
+                    for i in (0..image_height).step_by(*value) {
+                        for j in (0..image_width).step_by(*value) {
+                            if n == 0 || i & (values[n - 1] - 1) != 0 || j & (values[n - 1] - 1) != 0 {
+                                indices.push(i * image_width + j);
                             }
                         }
                     }
-
-                    output
-                });
-
-                println!("generate indices took {}ms", time.elapsed().as_millis());
-
-                indices
+                }
             }
-            0 | _ => {
-                indices
-            }
+            _ => {}
         }
+
+        // println!("generate indices took {}ms", time.elapsed().as_millis());
+
+        indices
     }
 
     pub fn regenerate_from_settings(&mut self, settings: Config) {
@@ -816,9 +723,9 @@ impl FractalRenderer {
         self.image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
         self.rotate = settings.get_float("rotate").unwrap_or(0.0).to_radians();
         self.maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
-        let initial_zoom = settings.get_str("zoom").unwrap_or(String::from("1E0")).to_ascii_uppercase();
-        let center_real = settings.get_str("real").unwrap_or(String::from("-0.75"));
-        let center_imag = settings.get_str("imag").unwrap_or(String::from("0.0"));
+        let initial_zoom = settings.get_str("zoom").unwrap_or_else(|_| String::from("1E0")).to_ascii_uppercase();
+        let center_real = settings.get_str("real").unwrap_or_else(|_| String::from("-0.75"));
+        let center_imag = settings.get_str("imag").unwrap_or_else(|_| String::from("0.0"));
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
         self.glitch_percentage = settings.get_float("glitch_percentage").unwrap_or(0.001);
         self.remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
@@ -840,21 +747,21 @@ impl FractalRenderer {
         self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         self.show_output = settings.get_bool("show_output").unwrap_or(true);
         
-        let data_type = match settings.get_str("export").unwrap_or(String::from("COLOUR")).to_ascii_uppercase().as_ref() {
-            "NONE" => DataType::NONE,
-            "GUI" => DataType::GUI,
-            "RAW" | "EXR" => DataType::RAW,
-            "COLOUR" | "COLOR" | "PNG" => DataType::COLOUR,
-            "KFB" => DataType::KFB,
-            "BOTH" => DataType::BOTH,
-            _ => DataType::COLOUR
+        let data_type = match settings.get_str("export").unwrap_or_else(|_| String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "NONE" => DataType::None,
+            "GUI" => DataType::Gui,
+            "RAW" | "EXR" => DataType::Raw,
+            "COLOUR" | "COLOR" | "PNG" => DataType::Color,
+            "KFB" => DataType::Kfb,
+            "BOTH" => DataType::Both,
+            _ => DataType::Color
         };
 
         self.data_export.lock().palette = match data_type {
-            DataType::RAW | DataType::NONE => {
+            DataType::Raw | DataType::None => {
                 Vec::new()
             },
-            DataType::KFB | DataType::COLOUR | DataType::BOTH | DataType::GUI => {
+            DataType::Kfb | DataType::Color | DataType::Both | DataType::Gui => {
                 if let Ok(colour_values) = settings.get_array("palette") {
                     colour_values.chunks_exact(3).map(|value| {
                         // We assume the palette is in BGR rather than RGB

@@ -8,7 +8,7 @@ pub mod progress;
 
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
-pub use recolour_exr::RecolourEXR;
+pub use recolour_exr::RecolourExr;
 pub use progress::ProgressCounters;
 
 pub type ComplexFixed<T> = num_complex::Complex<T>;
