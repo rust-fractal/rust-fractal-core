@@ -1,11 +1,11 @@
 use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette, ProgressCounters};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
-use std::{cmp::Ordering, time::{Duration, Instant}};
+use std::{time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
-use rand::{seq::SliceRandom, thread_rng};
+use rand::{seq::SliceRandom};
 use rand::Rng;
 
 use rayon::prelude::*;
@@ -129,7 +129,7 @@ impl FractalRenderer {
             valid_iteration_probe_multiplier,
             data_storage_interval);
 
-        let render_indices = FractalRenderer::generate_render_indices(image_width, image_height);
+        let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
 
         // Change the zoom level to the correct one for the frame offset
         for _ in 0..frame_offset {
@@ -233,8 +233,9 @@ impl FractalRenderer {
 
             // If the image width/height changes intraframe (GUI) we need to regenerate some things
             if export.image_width != self.image_width || export.image_height != self.image_height {
-                self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
+                self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, export.data_type);
 
+                export.centre_removed = self.remove_centre;
                 export.image_width = self.image_width;
                 export.image_height = self.image_height;
             }
@@ -309,34 +310,9 @@ impl FractalRenderer {
 
         let packing_time = Instant::now();
 
-        if !self.remove_centre && self.data_export.lock().centre_removed {
-            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
-
-            self.data_export.lock().centre_removed = false;
-        }
-
-        // If the remove_centre flag is set, and either it is not the first frame or gui mode is enabled
-        if (self.remove_centre && ((frame_index + self.frame_offset) != 0 || self.data_export.lock().data_type == DataType::Gui)) && !self.data_export.lock().centre_removed {
-            // This will remove the central pixels
-            let image_width = self.image_width;
-            let image_height = self.image_height;
-            let temp = 0.5 - 0.5 / self.zoom_scale_factor;
-
-            // Add one to avoid rescaling artifacts
-            let val1 = (image_width as f64 * temp).ceil() as usize;
-            let val2 = (image_height as f64 * temp).ceil() as usize;
-
-            // Set up new render indices
-            self.render_indices.retain(|index| {
-                let i = index % image_width;
-                let j = index / image_width;
-
-                i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2
-            });
-
-            // The centre has already been removed
-            self.data_export.lock().centre_removed = true;
-            self.total_pixels = self.render_indices.len();
+        if self.remove_centre != self.data_export.lock().centre_removed {
+            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().data_type);
+            self.data_export.lock().centre_removed = self.remove_centre;
         }
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
@@ -666,51 +642,42 @@ impl FractalRenderer {
         }
     }
 
-    pub fn generate_render_indices(image_width: usize, image_height: usize) -> Vec<usize> {
+    pub fn generate_render_indices(image_width: usize, image_height: usize, remove_centre: bool, zoom_scale_factor: f64, data_type: DataType) -> Vec<usize> {
         // let time = Instant::now();
 
-        let chooser = 3;
         let mut indices = Vec::with_capacity(image_width * image_height);
 
-        match chooser {
-            1 => {
-                indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
-                indices.shuffle(&mut thread_rng());
-            }
-            2 => {
-                indices = (0..(image_width * image_height)).collect::<Vec<usize>>();
-                indices.sort_by(|a, b| {
-                    let a_i = a % image_width;
-                    let a_j = a / image_width;
+        let temp = 0.5 - 0.5 / zoom_scale_factor;
+        let val1 = (image_width as f64 * temp).ceil() as usize;
+        let val2 = (image_height as f64 * temp).ceil() as usize;
 
-                    let b_i = b % image_width;
-                    let b_j = b / image_width;
-
-                    let a_dist = (a_i - image_width / 2).pow(2) + (a_j - image_height / 2).pow(2);
-                    let b_dist = (b_i - image_width / 2).pow(2) + (b_j - image_height / 2).pow(2);
-
-                    if a_dist <= b_dist {
-                        Ordering::Less
-                    } else {
-                        Ordering::Greater
-                    }
-                });
-            }
-            3 => {
+        match data_type {
+            DataType::Gui => {
                 // Could order each subsection with circular ordering
                 let values = [16, 8, 4, 2, 1];
 
                 for (n, value) in values.iter().enumerate() {
-                    for i in (0..image_height).step_by(*value) {
-                        for j in (0..image_width).step_by(*value) {
+                    for j in (0..image_height).step_by(*value) {
+                        for i in (0..image_width).step_by(*value) {
                             if n == 0 || i & (values[n - 1] - 1) != 0 || j & (values[n - 1] - 1) != 0 {
-                                indices.push(i * image_width + j);
+                                if !remove_centre || (i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2) {
+                                    indices.push(j * image_width + i);
+                                }
+
                             }
                         }
                     }
                 }
             }
-            _ => {}
+            _ => {
+                for j in 0..image_height {
+                    for i in 0..image_width {
+                        if !remove_centre || (i <= val1 || i >= image_width - val1 || j <= val2 || j >= image_height - val2) {
+                            indices.push(j * image_width + i);
+                        }
+                    }
+                }
+            }
         }
 
         // println!("generate indices took {}ms", time.elapsed().as_millis());
@@ -817,8 +784,8 @@ impl FractalRenderer {
         let mut data_export = self.data_export.lock();
 
         if self.image_width != data_export.image_width || self.image_height != data_export.image_height {
-            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height);
-            data_export.centre_removed = false;
+            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().data_type);
+            data_export.centre_removed = self.remove_centre;
         }
 
         // Change the zoom level to the correct one for the frame offset

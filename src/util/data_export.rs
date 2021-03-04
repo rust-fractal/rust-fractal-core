@@ -13,7 +13,7 @@ use std::f32::consts::TAU;
 use exr::{prelude::simple_image};
 use color_space::{Rgb, Hsv};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum DataType {
     None,
     Gui,
