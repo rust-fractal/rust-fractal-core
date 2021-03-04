@@ -1,5 +1,5 @@
 use rust_fractal::renderer::FractalRenderer;
-use rust_fractal::util::RecolourEXR;
+use rust_fractal::util::RecolourExr;
 use clap::{crate_version, crate_name, crate_description, App, Arg};
 use config::{Config, File};
 
@@ -56,7 +56,7 @@ fn main() {
     };
 
     if matches.is_present("colour_exr") {
-        let colouring = RecolourEXR::new(settings);
+        let colouring = RecolourExr::new(settings);
         colouring.colour();
     } else {
         let mut renderer = FractalRenderer::new(settings);

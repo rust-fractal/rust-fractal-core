@@ -55,24 +55,40 @@ impl PartialOrd for FloatExtended {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         // This is horrible
-        if self.mantissa == 0.0 && other.mantissa < 0.0 {
-            Some(Ordering::Greater)
-        } else if self.mantissa == 0.0 && other.mantissa > 0.0 {
-            Some(Ordering::Less)
-        } else if other.mantissa == 0.0 && self.mantissa < 0.0 {
-            Some(Ordering::Less)
-        } else if other.mantissa == 0.0 && self.mantissa > 0.0 {
-            Some(Ordering::Greater)
-        } else if self.exponent < other.exponent {
-            Some(Ordering::Less)
-        } else if self.exponent > other.exponent {
-            Some(Ordering::Greater)
-        } else if self.mantissa == other.mantissa {
-            Some(Ordering::Equal)
-        } else if self.mantissa < other.mantissa {
-            Some(Ordering::Less)
-        } else {
-            Some(Ordering::Greater)
+        // if self.mantissa == 0.0 && other.mantissa < 0.0 {
+        //     Some(Ordering::Greater)
+        // } else if self.mantissa == 0.0 && other.mantissa > 0.0 {
+        //     Some(Ordering::Less)
+        // } else if other.mantissa == 0.0 && self.mantissa < 0.0 {
+        //     Some(Ordering::Less)
+        // } else if other.mantissa == 0.0 && self.mantissa > 0.0 {
+        //     Some(Ordering::Greater)
+        // } else if self.exponent < other.exponent {
+        //     Some(Ordering::Less)
+        // } else if self.exponent > other.exponent {
+        //     Some(Ordering::Greater)
+        // } else if self.mantissa == other.mantissa {
+        //     Some(Ordering::Equal)
+        // } else if self.mantissa < other.mantissa {
+        //     Some(Ordering::Less)
+        // } else {
+        //     Some(Ordering::Greater)
+        // }
+
+        if self.mantissa == 0.0 {
+            return self.mantissa.partial_cmp(&other.mantissa);
+        }
+
+        if other.mantissa == 0.0 {
+            return other.mantissa.partial_cmp(&self.mantissa);
+        }
+
+        match self.exponent.cmp(&other.exponent) {
+            Ordering::Equal => {
+                self.mantissa.partial_cmp(&other.mantissa)
+            },
+            Ordering::Greater => Some(Ordering::Greater),
+            Ordering::Less => Some(Ordering::Less),
         }
     }
 }
@@ -80,15 +96,16 @@ impl PartialOrd for FloatExtended {
 impl AddAssign for FloatExtended {
     #[inline]
     fn add_assign(&mut self, other: Self) {
-        if self.exponent == other.exponent {
-            self.mantissa += other.mantissa;
-        } else if self.exponent > other.exponent {
-            self.mantissa += other.mantissa / 2.0f64.powi(self.exponent - other.exponent);
-        } else {
-            self.mantissa /= 2.0f64.powi(other.exponent - self.exponent);
-            self.exponent = other.exponent;
-            self.mantissa += other.mantissa;
+        match self.exponent.cmp(&other.exponent) {
+            Ordering::Equal => self.mantissa += other.mantissa,
+            Ordering::Greater => self.mantissa += other.mantissa / 2.0f64.powi(self.exponent - other.exponent),
+            Ordering::Less => {
+                self.mantissa /= 2.0f64.powi(other.exponent - self.exponent);
+                self.exponent = other.exponent;
+                self.mantissa += other.mantissa;
+            }
         }
+
         self.reduce();
     }
 }
@@ -96,15 +113,16 @@ impl AddAssign for FloatExtended {
 impl SubAssign for FloatExtended {
     #[inline]
     fn sub_assign(&mut self, other: Self) {
-        if self.exponent == other.exponent {
-            self.mantissa -= other.mantissa;
-        } else if self.exponent > other.exponent {
-            self.mantissa -= other.mantissa / 2.0f64.powi(self.exponent - other.exponent);
-        } else {
-            self.mantissa /= 2.0f64.powi(other.exponent - self.exponent);
-            self.exponent = other.exponent;
-            self.mantissa -= other.mantissa;
+        match self.exponent.cmp(&other.exponent) {
+            Ordering::Equal => self.mantissa -= other.mantissa,
+            Ordering::Greater => self.mantissa -= other.mantissa / 2.0f64.powi(self.exponent - other.exponent),
+            Ordering::Less => {
+                self.mantissa /= 2.0f64.powi(other.exponent - self.exponent);
+                self.exponent = other.exponent;
+                self.mantissa -= other.mantissa;
+            }
         }
+
         self.reduce();
     }
 }
@@ -145,13 +163,12 @@ impl Add<FloatExtended> for FloatExtended {
         } else if other.mantissa == 0.0 {
             self
         } else {
-            let (new_mantissa, new_exponent) = if self.exponent == other.exponent {
-                (self.mantissa + other.mantissa, self.exponent)
-            } else if self.exponent > other.exponent {
-                (self.mantissa + other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent)
-            } else {
-                (other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
+            let (new_mantissa, new_exponent) = match self.exponent.cmp(&other.exponent) {
+                Ordering::Equal => (self.mantissa + other.mantissa, self.exponent),
+                Ordering::Greater => (self.mantissa + other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent),
+                Ordering::Less => (other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
             };
+
             FloatExtended::new(new_mantissa, new_exponent)
         }
     }
@@ -167,13 +184,12 @@ impl Sub<FloatExtended> for FloatExtended {
         } else if other.mantissa == 0.0 {
             self
         } else {
-            let (new_mantissa, new_exponent) = if self.exponent == other.exponent {
-                (self.mantissa - other.mantissa, self.exponent)
-            } else if self.exponent > other.exponent {
-                (self.mantissa - other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent)
-            } else {
-                (-1.0 * other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
+            let (new_mantissa, new_exponent) = match self.exponent.cmp(&other.exponent) {
+                Ordering::Equal => (self.mantissa - other.mantissa, self.exponent),
+                Ordering::Greater => (self.mantissa - other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent),
+                Ordering::Less => (-1.0 * other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
             };
+
             FloatExtended::new(new_mantissa, new_exponent)
         }
     }

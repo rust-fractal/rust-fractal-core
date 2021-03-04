@@ -22,8 +22,7 @@ impl Perturbation {
 
                 let mut new_pixels_complete = 0;
 
-                for i in 0..pixel_data.len() {
-                    let mut pixel = &mut pixel_data[i];
+                for pixel in pixel_data.iter_mut() {
                     // let mut scaled_iterations = 0;
                     let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                     let mut scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
@@ -189,8 +188,8 @@ impl Perturbation {
             });
     }
 
-    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize) {
-        pixel_data.par_chunks_mut(32)
+    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize) {
+        pixel_data.par_chunks_mut(chunk_size)
             .for_each(|pixel_data| {
                 if stop_flag.get() >= 1 {
                     return;
@@ -198,8 +197,7 @@ impl Perturbation {
 
                 let mut new_pixels_complete = 0;
 
-                for i in 0..pixel_data.len() {
-                    let mut pixel = &mut pixel_data[i];
+                for pixel in pixel_data.iter_mut() {
                     // let mut scaled_iterations = 0;
                     let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                     let mut scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.derivative_current.exponent);
