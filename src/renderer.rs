@@ -140,7 +140,7 @@ impl FractalRenderer {
         FractalRenderer {
             image_width,
             image_height,
-            total_pixels: image_width * image_height,
+            total_pixels: render_indices.len(),
             rotate,
             zoom,
             auto_adjust_iterations,
@@ -315,6 +315,8 @@ impl FractalRenderer {
             self.data_export.lock().centre_removed = self.remove_centre;
         }
 
+        let complex_default = ComplexExtended::new2(1.0, 0.0, 0);
+
         let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {
                 let image_x = index % self.image_width;
@@ -353,7 +355,7 @@ impl FractalRenderer {
                 let derivative = if self.analytic_derivative {
                     self.series_approximation.evaluate_derivative(point_delta, chosen_iteration)
                 } else {
-                    ComplexExtended::new2(1.0, 0.0, 0)
+                    complex_default
                 };
 
                 PixelData {
@@ -769,24 +771,14 @@ impl FractalRenderer {
             valid_iteration_probe_multiplier,
             data_storage_interval);
 
-        self.total_pixels = self.image_width * self.image_height;
-
-        if self.remove_centre {
-            let temp = 1.0 / self.zoom_scale_factor;
-
-            // Add one to avoid rescaling artifacts
-            let val1 = (self.image_width as f64 * temp).ceil() as usize - 1;
-            let val2 = (self.image_height as f64 * temp).ceil() as usize - 1;
-    
-            self.total_pixels -= val1 * val2;
-        }
-
         let mut data_export = self.data_export.lock();
 
         if self.image_width != data_export.image_width || self.image_height != data_export.image_height {
             self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().data_type);
             data_export.centre_removed = self.remove_centre;
         }
+
+        self.total_pixels = self.render_indices.len();
 
         // Change the zoom level to the correct one for the frame offset
         for _ in 0..self.frame_offset {
