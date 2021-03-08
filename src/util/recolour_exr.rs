@@ -2,32 +2,45 @@ use exr::prelude::simple_image::*;
 use rayon::prelude::*;
 use config::Config;
 
+use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
+
 use std::fs;
 use std::time::Instant;
 
 use crate::util::generate_default_palette;
 
 pub struct RecolourExr {
-    palette: Vec<(u8, u8, u8)>,
+    palette_buffer: Vec<Color>,
     files: Vec<String>,
-    iteration_division: f32
+    iteration_division: f32,
+    iteration_offset: f32
 }
 
 impl RecolourExr {
     pub fn new(settings: Config) -> Self {
-        let palette = if let Ok(values) = settings.get_array("palette") {
-            let palette = values.chunks_exact(3).map(|value| {
+        let (_, palette_buffer) = if let Ok(colour_values) = settings.get_array("palette") {
+            let color = colour_values.chunks_exact(3).map(|value| {
                 // We assume the palette is in BGR rather than RGB
-                (value[2].clone().into_int().unwrap() as u8, 
+                Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
                     value[1].clone().into_int().unwrap() as u8, 
-                    value[0].clone().into_int().unwrap() as u8)
-            }).collect::<Vec<(u8, u8, u8)>>();
+                    value[2].clone().into_int().unwrap() as u8)
+            }).collect::<Vec<Color>>();
 
-            palette
+            let palette_generator = CustomGradient::new()
+                .colors(&color)
+                .interpolation(Interpolation::CatmullRom)
+                .mode(BlendMode::Oklab)
+                .build().unwrap();
+
+            let palette_buffer = palette_generator.colors(color.len() * 64);
+
+            (palette_generator, palette_buffer)
         } else {
             generate_default_palette()
         };
-        let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
+
+        let iteration_division = settings.get_float("iteration_division").unwrap_or(10.0) as f32;
+        let iteration_offset = settings.get_float("iteration_offset").unwrap_or(0.0) as f32;
 
         let paths = fs::read_dir("./output/").unwrap();
         let mut exr_files = Vec::new();
@@ -46,9 +59,10 @@ impl RecolourExr {
         };
 
         RecolourExr {
-            palette,
+            palette_buffer,
             files: exr_files,
-            iteration_division
+            iteration_division,
+            iteration_offset
         }
     }
 
@@ -89,18 +103,22 @@ impl RecolourExr {
                     rgb_buffer[3 * i + 1] = 0u8;
                     rgb_buffer[3 * i + 2] = 0u8;
                 } else {
-                    let temp = (iterations[i] as f32 + smooth[i].to_f32()) / self.iteration_division;
+                    let temp = self.palette_buffer.len() as f32 * ((iterations[i] as f32 + smooth[i].to_f32()) / self.iteration_division + self.iteration_offset).fract();
 
-                    let temp2 = temp.floor() as usize % self.palette.len();
-                    let temp3 = (temp as usize + 1) % self.palette.len();
-                    let temp4 = temp.fract();
+                    let pos1 = temp.floor() as usize;
+                    let pos2 = if pos1 == (self.palette_buffer.len() - 1) {
+                        0
+                    } else {
+                        pos1 + 1
+                    };
 
-                    let colour1 = self.palette[temp2];
-                    let colour2 = self.palette[temp3];
+                    let frac = temp.fract() as f64;
 
-                    rgb_buffer[3 * i] = (colour1.0 as f32 + temp4 * (colour2.0 as f32 - colour1.0 as f32)) as u8; 
-                    rgb_buffer[3 * i + 1] = (colour1.1 as f32 + temp4 * (colour2.1 as f32 - colour1.1 as f32)) as u8; 
-                    rgb_buffer[3 * i + 2] = (colour1.2 as f32 + temp4 * (colour2.2 as f32 - colour1.2 as f32)) as u8;
+                    let (r, g, b, _) = self.palette_buffer[pos1].interpolate_rgb(&self.palette_buffer[pos2], frac).rgba_u8();
+
+                    rgb_buffer[3 * i] = r; 
+                    rgb_buffer[3 * i + 1] = g; 
+                    rgb_buffer[3 * i + 2] = b;
                 }
             }
 

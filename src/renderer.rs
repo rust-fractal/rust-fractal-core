@@ -8,6 +8,8 @@ use std::cmp::{min, max};
 use rand::{seq::SliceRandom};
 use rand::Rng;
 
+use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
+
 use rayon::prelude::*;
 use config::Config;
 
@@ -79,27 +81,28 @@ impl FractalRenderer {
             "GUI" => DataType::Gui,
             "RAW" | "EXR" => DataType::Raw,
             "COLOUR" | "COLOR" | "PNG" => DataType::Color,
-            "KFB" => DataType::Kfb,
             "BOTH" => DataType::Both,
             _ => DataType::Color
         };
 
-        let palette = match data_type {
-            DataType::Raw | DataType::None => {
-                Vec::new()
-            },
-            DataType::Kfb | DataType::Color | DataType::Both | DataType::Gui => {
-                if let Ok(colour_values) = settings.get_array("palette") {
-                    colour_values.chunks_exact(3).map(|value| {
-                        // We assume the palette is in BGR rather than RGB
-                        (value[2].clone().into_int().unwrap() as u8, 
-                            value[1].clone().into_int().unwrap() as u8, 
-                            value[0].clone().into_int().unwrap() as u8)
-                    }).collect::<Vec<(u8, u8, u8)>>()
-                } else {
-                    generate_default_palette()
-                }
-            }
+        let (palette_generator, palette_buffer) = if let Ok(colour_values) = settings.get_array("palette") {
+                let color = colour_values.chunks_exact(3).map(|value| {
+                    Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
+                        value[1].clone().into_int().unwrap() as u8, 
+                        value[2].clone().into_int().unwrap() as u8)
+                }).collect::<Vec<Color>>();
+
+                let palette_generator = CustomGradient::new()
+                    .colors(&color)
+                    .interpolation(Interpolation::CatmullRom)
+                    .mode(BlendMode::Oklab)
+                    .build().unwrap();
+
+                let palette_buffer = palette_generator.colors(color.len() * 64);
+
+                (palette_generator, palette_buffer)
+            } else {
+                generate_default_palette()
         };
 
         let mut zoom = string_to_extended(&initial_zoom);
@@ -146,7 +149,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, data_type, palette, iteration_division, palette_offset, analytic_derivative))),
+            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, data_type, palette_generator, palette_buffer, iteration_division, palette_offset, analytic_derivative))),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -716,33 +719,26 @@ impl FractalRenderer {
         self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         self.show_output = settings.get_bool("show_output").unwrap_or(true);
         
-        let data_type = match settings.get_str("export").unwrap_or_else(|_| String::from("COLOUR")).to_ascii_uppercase().as_ref() {
-            "NONE" => DataType::None,
-            "GUI" => DataType::Gui,
-            "RAW" | "EXR" => DataType::Raw,
-            "COLOUR" | "COLOR" | "PNG" => DataType::Color,
-            "KFB" => DataType::Kfb,
-            "BOTH" => DataType::Both,
-            _ => DataType::Color
-        };
+        
+        // let palette_generator = if let Ok(colour_values) = settings.get_array("palette") {
+        //     let color = colour_values.chunks_exact(3).map(|value| {
+        //         Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
+        //             value[1].clone().into_int().unwrap() as u8, 
+        //             value[2].clone().into_int().unwrap() as u8)
+        //     }).collect::<Vec<Color>>();
 
-        self.data_export.lock().palette = match data_type {
-            DataType::Raw | DataType::None => {
-                Vec::new()
-            },
-            DataType::Kfb | DataType::Color | DataType::Both | DataType::Gui => {
-                if let Ok(colour_values) = settings.get_array("palette") {
-                    colour_values.chunks_exact(3).map(|value| {
-                        // We assume the palette is in BGR rather than RGB
-                        (value[2].clone().into_int().unwrap() as u8, 
-                            value[1].clone().into_int().unwrap() as u8, 
-                            value[0].clone().into_int().unwrap() as u8)
-                    }).collect::<Vec<(u8, u8, u8)>>()
-                } else {
-                    generate_default_palette()
-                }
-            }
-        };
+        //     CustomGradient::new()
+        //         .colors(&color)
+        //         .interpolation(Interpolation::CatmullRom)
+        //         .mode(BlendMode::Oklab)
+        //         .build().unwrap()
+        //     } else {
+        //         generate_default_palette()
+        // };
+
+        // let palette_buffer = palette_generator.colors(8192);
+
+        // self.data_export.lock().palette_buffer = palette_buffer;
 
         let mut zoom = string_to_extended(&initial_zoom);
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / zoom) / self.image_height as f64;
