@@ -6,6 +6,7 @@ pub mod complex_extended;
 pub mod recolour_exr;
 pub mod progress;
 
+use colorgrad::{CustomGradient, Interpolation, Color, BlendMode, Gradient};
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
 pub use recolour_exr::RecolourExr;
@@ -111,52 +112,22 @@ pub fn get_approximation_terms(approximation_order: usize, image_width: usize, i
     }
 }
 
-pub fn generate_default_palette() -> Vec<(u8, u8, u8)> {
-    let mut colours = Vec::with_capacity(1024);
+pub fn generate_default_palette() -> (Gradient, Vec<Color>) {
+    let palette_generator = CustomGradient::new()
+        .colors(
+            &[Color::from_rgb_u8(0, 7, 100), 
+            Color::from_rgb_u8(32, 107, 203), 
+            Color::from_rgb_u8(237, 255, 255),
+            Color::from_rgb_u8(255, 170, 0),
+            Color::from_rgb_u8(0, 2, 0),
+            Color::from_rgb_u8(0, 7, 100)])
+            .domain(&[0.0, 0.16, 0.42, 0.6425, 0.8575, 1.0])
+            .interpolation(Interpolation::CatmullRom).mode(BlendMode::Oklab)
+            .build().unwrap();
 
-    for i in 0..1024 {
-        let value = i as f32 / 1024.0;
+    let palette_buffer = palette_generator.colors(6 * 64);
 
-        let red;
-        let green;
-        let blue;
-
-        if value < 0.16 {
-            let factor = (value - 0.0) / (0.16 - 0.0);
-
-            red = 0.0 + factor * (32.0 - 0.0);
-            green = 7.0 + factor * (107.0 - 7.0);
-            blue = 100.0 + factor * (203.0 - 100.0);
-        } else if value < 0.42 {
-            let factor = (value - 0.16) / (0.42 - 0.16);
-
-            red = 32.0 + factor * (237.0 - 32.0);
-            green = 107.0 + factor * (255.0 - 107.0);
-            blue = 203.0 + factor * (255.0 - 203.0);
-        } else if value < 0.6425 {
-            let factor = (value - 0.42) / (0.6425 - 0.42);
-
-            red = 237.0 + factor * (255.0 - 237.0);
-            green = 255.0 + factor * (170.0 - 255.0);
-            blue = 255.0 + factor * (0.0 - 255.0);
-        } else if value < 0.8575 {
-            let factor = (value - 0.6425) / (0.8575 - 0.6425);
-
-            red = 255.0 + factor * (0.0 - 255.0);
-            green = 170.0 + factor * (2.0 - 170.0);
-            blue = 0.0;
-        } else {
-            let factor = (value - 0.8575) / (1.0 - 0.8575);
-
-            red = 0.0;
-            green = 2.0 + factor * (7.0 - 2.0);
-            blue = 0.0 + factor * (100.0 - 0.0);
-        }
-
-        colours.push((red as u8, green as u8, blue as u8))
-    }
-
-    colours
+    (palette_generator, palette_buffer)
 }
 
 #[derive(Clone)]
