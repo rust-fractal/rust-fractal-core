@@ -65,7 +65,7 @@ impl FractalRenderer {
         let experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
-        let iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
+        let iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
@@ -708,7 +708,7 @@ impl FractalRenderer {
         self.experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         self.remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
-        self.data_export.lock().iteration_division = settings.get_float("iteration_division").unwrap_or(0.1) as f32;
+        self.data_export.lock().iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         self.data_export.lock().palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;

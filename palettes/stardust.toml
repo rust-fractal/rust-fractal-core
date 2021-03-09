@@ -1,2 +1,2 @@
 palette = [2, 0, 43, 9, 21, 99, 90, 230, 216, 179, 255, 241, 255, 203, 190, 2, 0, 43]
-iteration_division = 60.0
+iteration_division = 500.0
