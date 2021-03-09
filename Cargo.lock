@@ -123,6 +123,7 @@ checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 [[package]]
 name = "colorgrad"
 version = "0.3.0"
+source = "git+https://github.com/mazznoer/colorgrad-rs#8c4bc392d002c1c13fb6827b20d77d9feb4e70ad"
 dependencies = [
  "csscolorparser",
 ]

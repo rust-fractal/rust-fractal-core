@@ -17,7 +17,7 @@ config = "^0.9"
 half = "^1.6.0"
 atomic-counter = "^1.0.1"
 parking_lot = { version = "0.11", features = ["nightly"] }
-colorgrad = {path = "../colorgrad-rs"}
+colorgrad = { git = "https://github.com/mazznoer/colorgrad-rs" }
 
 [dependencies.rug]
 version = "1.10"
