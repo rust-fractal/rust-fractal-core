@@ -142,3 +142,9 @@ pub struct PixelData {
     pub glitched: bool,
     pub escaped: bool,
 }
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum FractalType {
+    Mandelbrot2,
+    Mandelbrot3
+}

@@ -8,6 +8,8 @@ use std::f32::consts::TAU;
 use exr::{prelude::simple_image};
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode, Gradient};
 
+use super::FractalType;
+
 #[derive(PartialEq, Clone, Copy)]
 pub enum DataType {
     None,
@@ -34,11 +36,12 @@ pub struct DataExport {
     pub centre_removed: bool,
     pub data_type: DataType,
     pub analytic_derivative: bool,
-    pub maximum_iteration: usize
+    pub maximum_iteration: usize,
+    pub fractal_type: FractalType
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette_generator: Gradient, palette_buffer: Vec<Color>, iteration_division: f32, palette_offset: f32, analytic_derivative: bool) -> Self {
+    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, data_type: DataType, palette_generator: Gradient, palette_buffer: Vec<Color>, iteration_division: f32, palette_offset: f32, analytic_derivative: bool, fractal_type: FractalType) -> Self {
         let mut buffer = Vec::new();
         let mut smooth = Vec::new();
         let mut distance_x = Vec::new();
@@ -87,7 +90,8 @@ impl DataExport {
             centre_removed: false,
             data_type,
             analytic_derivative,
-            maximum_iteration: 0
+            maximum_iteration: 0,
+            fractal_type
         }
     }
 
@@ -156,11 +160,17 @@ impl DataExport {
                     } else {
                         self.iterations[k] = pixel.iteration as u32;
     
-                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
-                        let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
-    
-                        self.smooth[k] = smooth;
-    
+                        let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr();
+
+                        self.smooth[k] = match self.fractal_type {
+                            FractalType::Mandelbrot2 => {
+                                1.0 - (z_norm.ln() as f32 / escape_radius_ln).log2()
+                            }
+                            FractalType::Mandelbrot3 => {
+                                1.0 - (z_norm.ln() as f32 / escape_radius_ln).log(3.0)
+                            }
+                        };
+
                         if self.analytic_derivative {
                             let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();

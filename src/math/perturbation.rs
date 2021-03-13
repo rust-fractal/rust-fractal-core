@@ -1,4 +1,4 @@
-use crate::util::{FloatExp, FloatExtended, PixelData, data_export::DataExport};
+use crate::util::{FloatExp, FloatExtended, FractalType, PixelData, data_export::DataExport};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
@@ -13,7 +13,7 @@ use parking_lot::Mutex;
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize) {
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, fractal_type: FractalType) {
         pixel_data.par_chunks_mut(chunk_size)
             .for_each(|pixel_data| {
                 if stop_flag.get() >= 1 {
@@ -87,6 +87,8 @@ impl Perturbation {
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
+                                    pixel.delta_current.mantissa = pixel.delta_current.to_float();
+                                    pixel.delta_current.exponent = 0;
 
                                     break;
                                 }
@@ -101,10 +103,20 @@ impl Perturbation {
                                     break;
                                 }
 
-                                // 4 multiplications and 2 additions
-                                pixel.delta_current.mantissa *= z + reference_data.z;
+                                match fractal_type {
+                                    FractalType::Mandelbrot2 => {
+                                        // 4 multiplications and 2 additions
+                                        pixel.delta_current.mantissa *= z + reference_data.z;
+                                    }
+                                    FractalType::Mandelbrot3 => {
+                                        let temp = scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                                        pixel.delta_current.mantissa *= 3.0 * reference_data.z * reference_data.z + 3.0 * reference_data.z * temp + temp * temp;
+                                    }
+                                }
+
                                 // 2 additions
                                 pixel.delta_current.mantissa += scaled_delta_reference;
+
 
                                 additional_iterations += 1;
                             }
@@ -117,11 +129,20 @@ impl Perturbation {
                             for _ in 0..next_iteration_batch {
                                 let reference_data = &reference_slice[additional_iterations];
 
-                                // 2 multiplications and 2 adds
-                                let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                                match fractal_type {
+                                    FractalType::Mandelbrot2 => {
+                                        // 2 multiplications and 2 adds
+                                        let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
 
-                                // 4 multiplications and 2 additions
-                                pixel.delta_current.mantissa *= z + reference_data.z;
+                                        // 4 multiplications and 2 additions
+                                        pixel.delta_current.mantissa *= z + reference_data.z;
+                                    }
+                                    FractalType::Mandelbrot3 => {
+                                        let temp = scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                                        pixel.delta_current.mantissa *= 3.0 * reference_data.z * reference_data.z + 3.0 * reference_data.z * temp + temp * temp;
+                                    }
+                                }
+
                                 // 2 additions
                                 pixel.delta_current.mantissa += scaled_delta_reference;
 
@@ -150,6 +171,8 @@ impl Perturbation {
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
                                     pixel.glitched = true;
+                                    pixel.delta_current.mantissa = pixel.delta_current.to_float();
+                                    pixel.delta_current.exponent = 0;
 
                                     break;
                                 }
@@ -165,7 +188,15 @@ impl Perturbation {
                                 }
                             }
 
-                            pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
+                            match fractal_type {
+                                FractalType::Mandelbrot2 => {
+                                    pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
+                                }
+                                FractalType::Mandelbrot3 => {
+                                    pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * reference.reference_data_extended[val1 + additional_iterations] * 3.0 + reference.reference_data_extended[val1 + additional_iterations] * pixel.delta_current * 3.0 + pixel.delta_current * pixel.delta_current;
+                                }
+                            }
+
                             pixel.delta_current += pixel.delta_reference;
 
                             additional_iterations += 1;

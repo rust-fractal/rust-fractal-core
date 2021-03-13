@@ -1,4 +1,4 @@
-use crate::util::{to_extended, ComplexFixed};
+use crate::util::{ComplexFixed, FractalType, to_extended};
 use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
 use crate::util::FloatArbitrary;
@@ -28,6 +28,7 @@ pub struct SeriesApproximation {
     pub valid_iteration_frame_multiplier: f32,
     pub valid_iteration_probe_multiplier: f32,
     pub data_storage_interval: usize,
+    pub fractal_type: FractalType
 }
 
 impl SeriesApproximation {
@@ -38,7 +39,8 @@ impl SeriesApproximation {
         experimental: bool, 
         valid_iteration_frame_multiplier: f32, 
         valid_iteration_probe_multiplier: f32,
-        data_storage_interval: usize) -> Self {
+        data_storage_interval: usize,
+        fractal_type: FractalType) -> Self {
 
         // The current iteration is set to 1 as we set z = c
         SeriesApproximation {
@@ -58,6 +60,7 @@ impl SeriesApproximation {
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
             data_storage_interval,
+            fractal_type
         }
     }
 
@@ -373,6 +376,11 @@ impl SeriesApproximation {
             self.min_valid_iteration
         };
 
+        // disable glitch series approximation for cubic mandelbrot
+        if self.fractal_type == FractalType::Mandelbrot3 {
+            self.min_valid_iteration = 1;
+        };
+        
         // println!("series approximation valid interpolation buffer:");
         // let temp_size = self.probe_sampling - 1;
         // for i in 0..temp_size {
