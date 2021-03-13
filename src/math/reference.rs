@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, to_fixed, to_extended};
+use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, FractalType, to_fixed, to_extended};
 
 use atomic_counter::{AtomicCounter, RelaxedCounter};
 
@@ -46,40 +46,7 @@ impl Reference {
         }
     }
 
-    pub fn step(&mut self) -> bool {
-        self.z.square_mut();
-        self.z += &self.c;
-        self.current_iteration += 1;
-
-        let z_fixed = to_fixed(&self.z);
-        let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
-
-        // This is if we need to use the extended precision for the reference
-        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-            // this is stored without the offset
-            self.extended_iterations.push(self.current_iteration);
-        }
-
-        // We pack these together as they are always accessed together
-        self.reference_data.push(
-            ReferenceIteration {
-                z: z_fixed,
-                tolerance,
-            }
-        );
-
-        let mut z_extended = to_extended(&self.z);
-        z_extended.reduce();
-
-        self.reference_data_extended.push(z_extended);
-
-        // If the value is not small we do the escape check, otherwise it has not escaped
-        // as we do the check for 65536 on the perturbation, we need this to be more than that squared
-        z_fixed.norm_sqr() <= 1e256
-    }
-
-
-    pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
+    pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, fractal_type: FractalType) {
         let z_fixed = to_fixed(&self.z);
         let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
@@ -114,12 +81,49 @@ impl Reference {
 
             reference_counter.inc();
 
-            if !self.step() {
-                reference_maximum_iteration_counter.add(usize::max_value() - self.maximum_iteration + reference_counter.get() + 1);
+            match fractal_type {
+                FractalType::Mandelbrot2 => {
+                    self.z.square_mut();
+                    self.z += &self.c;
+                }
+                FractalType::Mandelbrot3 => {
+                    self.z *= self.z.clone().square();
+                    self.z += &self.c;
+                }
+            }
 
+            self.current_iteration += 1;
+    
+            let z_fixed = to_fixed(&self.z);
+            let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+    
+            // This is if we need to use the extended precision for the reference
+            if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+                // this is stored without the offset
+                self.extended_iterations.push(self.current_iteration);
+            }
+    
+            // We pack these together as they are always accessed together
+            self.reference_data.push(
+                ReferenceIteration {
+                    z: z_fixed,
+                    tolerance,
+                }
+            );
+    
+            let mut z_extended = to_extended(&self.z);
+            z_extended.reduce();
+    
+            self.reference_data_extended.push(z_extended);
+    
+            // If the value is not small we do the escape check, otherwise it has not escaped
+            // as we do the check for 65536 on the perturbation, we need this to be more than that squared
+            if z_fixed.norm_sqr() >= 1e256 {
                 break;
-            };
+            }
         }
+
+        reference_maximum_iteration_counter.add(usize::max_value() - self.maximum_iteration + reference_counter.get() + 1);
 
         // println!("{:?}", self.extended_iterations);
     }

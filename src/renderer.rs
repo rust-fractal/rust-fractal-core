@@ -1,4 +1,4 @@
-use crate::util::{data_export::*, ComplexFixed, ComplexArbitrary, PixelData, complex_extended::ComplexExtended, float_extended::FloatExtended, string_to_extended, extended_to_string_short, extended_to_string_long, get_approximation_terms, get_delta_top_left, generate_default_palette, ProgressCounters};
+use crate::util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::{time::{Duration, Instant}};
@@ -43,7 +43,8 @@ pub struct FractalRenderer {
     pub experimental: bool,
     show_output: bool,
     pub progress: ProgressCounters,
-    pub render_time: u128
+    pub render_time: u128,
+    pub fractal_type: FractalType
 }
 
 impl FractalRenderer {
@@ -123,6 +124,8 @@ impl FractalRenderer {
             glitch_tolerance,
             zoom);
 
+        let fractal_type = FractalType::Mandelbrot3;
+
         let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
@@ -130,7 +133,8 @@ impl FractalRenderer {
             experimental,
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
-            data_storage_interval);
+            data_storage_interval,
+            fractal_type);
 
         let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
 
@@ -149,7 +153,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, data_type, palette_generator, palette_buffer, iteration_division, palette_offset, analytic_derivative))),
+            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, data_type, palette_generator, palette_buffer, iteration_division, palette_offset, analytic_derivative, fractal_type))),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -164,7 +168,8 @@ impl FractalRenderer {
             experimental,
             show_output,
             progress: ProgressCounters::new(maximum_iteration),
-            render_time: 0
+            render_time: 0,
+            fractal_type
         }
     }
 
@@ -221,7 +226,7 @@ impl FractalRenderer {
         if frame_index == 0 {
             self.data_export.lock().maximum_iteration = self.maximum_iteration;
 
-            self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag);
+            self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag, self.fractal_type);
 
             if stop_flag.get() >= 1 {
                 self.progress.reset();
@@ -328,15 +333,19 @@ impl FractalRenderer {
                 let mut i = image_x as f64;
                 let mut j = image_y as f64;
 
-                let chosen_iteration = if self.experimental {
-                    let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i / self.image_width as f64).floor() as usize;
-                    let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j / self.image_height as f64).floor() as usize;
+                let chosen_iteration = if self.fractal_type == FractalType::Mandelbrot2 {
+                    if self.experimental {
+                        let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i / self.image_width as f64).floor() as usize;
+                        let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j / self.image_height as f64).floor() as usize;
 
-                    let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
+                        let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
 
-                    self.series_approximation.valid_interpolation[index]
+                        self.series_approximation.valid_interpolation[index]
+                    } else {
+                        self.series_approximation.min_valid_iteration
+                    }
                 } else {
-                    self.series_approximation.min_valid_iteration
+                    1
                 };
 
                 if self.jitter {
@@ -425,7 +434,7 @@ impl FractalRenderer {
             if self.analytic_derivative {
                 Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size);
+                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size, self.fractal_type);
             };
 
             previous_value = end_value;
@@ -491,7 +500,7 @@ impl FractalRenderer {
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
             correction_references += 1;
-            glitch_reference.run(&Arc::new(RelaxedCounter::new(0)), &Arc::new(RelaxedCounter::new(0)), &stop_flag);
+            glitch_reference.run(&Arc::new(RelaxedCounter::new(0)), &Arc::new(RelaxedCounter::new(0)), &stop_flag, self.fractal_type);
 
             if stop_flag.get() >= 1 {
                 self.render_time = frame_time.elapsed().as_millis();
@@ -526,7 +535,7 @@ impl FractalRenderer {
             if self.analytic_derivative {
                 Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size);
+                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type);
             };
 
             // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
@@ -765,7 +774,8 @@ impl FractalRenderer {
             self.experimental,
             valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
-            data_storage_interval);
+            data_storage_interval,
+            self.fractal_type);
 
         let mut data_export = self.data_export.lock();
 
