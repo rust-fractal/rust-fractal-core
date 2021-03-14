@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended};
+use crate::{math::BoxPeriod, util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended}};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::{time::{Duration, Instant}};
@@ -35,6 +35,7 @@ pub struct FractalRenderer {
     pub zoom_scale_factor: f64,
     pub center_reference: Reference,
     pub series_approximation: SeriesApproximation,
+    pub box_period: BoxPeriod,
     render_indices: Vec<usize>,
     pub remove_centre: bool,
     pub analytic_derivative: bool,
@@ -136,6 +137,8 @@ impl FractalRenderer {
             data_storage_interval,
             fractal_type);
 
+        let box_period = BoxPeriod::new(ComplexExtended::new2(0.0, 0.0, 0));
+
         let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
 
         // Change the zoom level to the correct one for the frame offset
@@ -160,6 +163,7 @@ impl FractalRenderer {
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
+            box_period,
             render_indices,
             remove_centre,
             analytic_derivative,
@@ -273,6 +277,8 @@ impl FractalRenderer {
         let delta_pixel = 4.0 / ((self.image_height - 1) as f64 * self.zoom.mantissa);
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
+
+        self.box_period = BoxPeriod::new(ComplexExtended::new(delta_top_left, -self.zoom.exponent));
 
         let minimum_dimension = min(self.image_width, self.image_height);
 
@@ -571,6 +577,10 @@ impl FractalRenderer {
             println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
             std::io::stdout().flush().unwrap();
         }
+    }
+
+    pub fn find_period(&mut self) {
+        self.box_period.find_period(&self.center_reference);
     }
 
     // Returns true if the maximum iterations has been increased
