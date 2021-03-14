@@ -124,7 +124,7 @@ impl FractalRenderer {
             glitch_tolerance,
             zoom);
 
-        let fractal_type = FractalType::Mandelbrot3;
+        let fractal_type = FractalType::Mandelbrot2;
 
         let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
