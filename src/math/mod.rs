@@ -1,9 +1,9 @@
 mod reference;
 mod perturbation;
 mod series_approximation;
-mod newton_rhapson;
+mod root_finding;
 
 pub use reference::Reference;
 pub use perturbation::Perturbation;
 pub use series_approximation::SeriesApproximation;
-pub use newton_rhapson::BoxPeriod;
+pub use root_finding::{BoxPeriod, BallMethod1};

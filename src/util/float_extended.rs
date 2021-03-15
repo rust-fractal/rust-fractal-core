@@ -38,6 +38,11 @@ impl FloatExtended {
     }
 
     #[inline]
+    pub fn sqr(&self) -> FloatExtended {
+        FloatExtended::new(self.mantissa * self.mantissa, self.exponent * 2)
+    }
+
+    #[inline]
     pub fn to_float(&self) -> f64 {
         self.mantissa.ldexp(self.exponent)
     }

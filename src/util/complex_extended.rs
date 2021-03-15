@@ -29,7 +29,10 @@ impl ComplexExtended {
 
     #[inline]
     pub fn norm(&self) -> FloatExtended {
-        self.norm_square().sqrt()
+        FloatExtended {
+            mantissa: self.mantissa.norm(),
+            exponent: self.exponent
+        }
     }
 
     #[inline]
