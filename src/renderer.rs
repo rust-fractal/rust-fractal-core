@@ -283,7 +283,7 @@ impl FractalRenderer {
 
         self.box_period = BoxPeriod::new(ComplexExtended::new(delta_top_left, -self.zoom.exponent));
         self.ball_method = BallMethod1::new(
-            0.5 * ComplexExtended::new(delta_top_left, -self.zoom.exponent).norm(),
+            ComplexExtended::new(delta_top_left, -self.zoom.exponent).norm(),
             ComplexExtended::new2(0.0, 0.0, 0)
         );
 
@@ -589,7 +589,6 @@ impl FractalRenderer {
     pub fn find_period(&mut self) {
         self.box_period.find_period(&self.center_reference);
         self.ball_method.find_period(&self.center_reference);
-
     }
 
     // Returns true if the maximum iterations has been increased
