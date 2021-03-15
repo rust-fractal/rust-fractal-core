@@ -1,4 +1,4 @@
-use crate::util::{FloatExtended, ComplexExtended};
+use crate::util::{ComplexExtended, FloatExtended};
 use crate::math::Reference;
 
 pub struct BoxPeriod {
@@ -64,6 +64,7 @@ impl BoxPeriod {
     pub fn find_period(&mut self, reference: &Reference) {
         while self.period < reference.current_iteration {
             if self.points_surrond_origin(reference.reference_data_extended[self.period - 1]) {
+                println!("box method period is: {}", self.period);
                 break;
             };
 
@@ -121,81 +122,61 @@ impl BoxPeriod {
 }
 
 pub struct BallMethod1 {
-    pub initial_radius: FloatExtended,
     pub radius: FloatExtended,
+    pub radius_dz: FloatExtended,
+    pub radius_z: FloatExtended,
+    pub radius_radius: FloatExtended,
+    pub ei: FloatExtended,
     pub point_c: ComplexExtended,
     pub point_z: ComplexExtended,
-    pub abs_z: FloatExtended,
+    pub point_dz: ComplexExtended,
     pub period: usize,
 }
 
 impl BallMethod1 {
     pub fn new(radius: FloatExtended, point_c: ComplexExtended) -> Self {
         BallMethod1 {
-            initial_radius: radius,
             radius,
+            radius_dz: FloatExtended::new(0.0, 0),
+            radius_z: FloatExtended::new(0.0, 0),
+            radius_radius: FloatExtended::new(0.0, 0),
+            ei: FloatExtended::new(0.0, 0),
             point_c: point_c.clone(),
             point_z: point_c,
-            abs_z: FloatExtended::new(0.0, 0),
+            point_dz: ComplexExtended::new2(1.0, 0.0, 0),
             period: 1
         }
     }
 
     pub fn find_period(&mut self, reference: &Reference) {
-        println!("initial radius: {}", self.initial_radius);
-        println!("initial z: {}", self.point_c);
+        self.period = 1;
 
-        for k in 1..reference.current_iteration {
-            self.abs_z = (self.point_z + reference.reference_data_extended[k - 1]).norm();
-            self.abs_z.reduce();
+        for k in 0..reference.current_iteration {
+            self.radius_dz = self.point_dz.norm();
+            self.radius_dz.reduce();
 
-            println!("{}", reference.reference_data_extended[k - 1]);
+            self.radius_z = (self.point_z + reference.reference_data_extended[k]).norm();
+            self.radius_z.reduce();
 
-            self.radius *= 2.0 * self.abs_z + self.radius;
-            self.radius += self.initial_radius;
+            self.radius_radius = self.radius * (self.radius_dz + self.radius * self.ei);
+            self.radius_radius.reduce();
 
-            println!("{}: {:>20} {:>20}", k, self.radius, self.abs_z);
-
-            if self.radius > self.abs_z {
-                self.period = k;
+            if self.radius_radius > self.radius_z {
+                self.period = k + 1;
+                println!("ball method period is: {}", self.period);
                 break;
             }
 
-            self.point_z *= reference.reference_data_extended[k - 1] * 2.0 + self.point_z;
+            self.ei = self.radius_dz * self.radius_dz + (2.0 * self.radius_z + self.radius * (2.0 * self.radius_dz + self.radius * self.ei)) * self.ei;
+            self.ei.reduce();
+
+            self.point_dz *= (self.point_z + reference.reference_data_extended[k]) * 2.0;
+            self.point_dz += ComplexExtended::new2(1.0, 0.0, 0);
+            self.point_dz.reduce();
+
+            self.point_z *= reference.reference_data_extended[k] * 2.0 + self.point_z;
             self.point_z += self.point_c;
             self.point_z.reduce();
         }
     }
 }
-
-
-
-// function p  = findPeriodM3(c0,dx,dy,n,doCont,mpow)
-// % in ball centered on c0 find period (up to n) of nucleus
-// % use 1nd order Taylor ball
-// % M-power mpow set
-// % doCont = 0 normally
-
-// r0 = min(abs(dx),abs(dy));
-// z = c0*0;
-// r = (r0);
-// p = [];
-// maxR = 1e5;
-// az = abs(z);
-
-// for k=1:n
-//     r = (az+r).^mpow - az.^mpow + r0;
-//     z = z.^mpow + c0;
-//     az = abs(z);
-//     if(r>az)
-//         p = [p k];
-//         fprintf('findPeriodBallM3: N-period found: %d\n',k);
-//         if(~doCont)
-//             break;
-//         end
-//     end
-//     if(az>maxR | r>maxR)
-//         fprintf('Ball: escaping\n',k);
-//         break;
-//     end
-// end
