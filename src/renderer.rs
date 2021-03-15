@@ -1,4 +1,4 @@
-use crate::{math::BoxPeriod, util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended}};
+use crate::{math::{BallMethod1, BoxPeriod}, util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended}};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::{time::{Duration, Instant}};
@@ -36,6 +36,7 @@ pub struct FractalRenderer {
     pub center_reference: Reference,
     pub series_approximation: SeriesApproximation,
     pub box_period: BoxPeriod,
+    pub ball_method: BallMethod1,
     render_indices: Vec<usize>,
     pub remove_centre: bool,
     pub analytic_derivative: bool,
@@ -138,6 +139,7 @@ impl FractalRenderer {
             fractal_type);
 
         let box_period = BoxPeriod::new(ComplexExtended::new2(0.0, 0.0, 0));
+        let ball_method = BallMethod1::new(FloatExtended::new(0.0, 0), ComplexExtended::new2(0.0, 0.0, 0));
 
         let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
 
@@ -164,6 +166,7 @@ impl FractalRenderer {
             center_reference: reference,
             series_approximation,
             box_period,
+            ball_method,
             render_indices,
             remove_centre,
             analytic_derivative,
@@ -279,6 +282,10 @@ impl FractalRenderer {
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
         self.box_period = BoxPeriod::new(ComplexExtended::new(delta_top_left, -self.zoom.exponent));
+        self.ball_method = BallMethod1::new(
+            0.5 * ComplexExtended::new(delta_top_left, -self.zoom.exponent).norm(),
+            ComplexExtended::new2(0.0, 0.0, 0)
+        );
 
         let minimum_dimension = min(self.image_width, self.image_height);
 
@@ -581,6 +588,8 @@ impl FractalRenderer {
 
     pub fn find_period(&mut self) {
         self.box_period.find_period(&self.center_reference);
+        self.ball_method.find_period(&self.center_reference);
+
     }
 
     // Returns true if the maximum iterations has been increased
