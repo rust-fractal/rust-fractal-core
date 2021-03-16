@@ -745,27 +745,7 @@ impl FractalRenderer {
         self.jitter = settings.get_bool("jitter").unwrap_or(false);
         self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         self.show_output = settings.get_bool("show_output").unwrap_or(true);
-        
-        
-        // let palette_generator = if let Ok(colour_values) = settings.get_array("palette") {
-        //     let color = colour_values.chunks_exact(3).map(|value| {
-        //         Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
-        //             value[1].clone().into_int().unwrap() as u8, 
-        //             value[2].clone().into_int().unwrap() as u8)
-        //     }).collect::<Vec<Color>>();
-
-        //     CustomGradient::new()
-        //         .colors(&color)
-        //         .interpolation(Interpolation::CatmullRom)
-        //         .mode(BlendMode::Oklab)
-        //         .build().unwrap()
-        //     } else {
-        //         generate_default_palette()
-        // };
-
-        // let palette_buffer = palette_generator.colors(8192);
-
-        // self.data_export.lock().palette_buffer = palette_buffer;
+        let step_iteration = settings.get_bool("step_iteration").unwrap_or(false);
 
         let mut zoom = string_to_extended(&initial_zoom);
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / zoom) / self.image_height as f64;
@@ -817,7 +797,15 @@ impl FractalRenderer {
 
         data_export.image_width = self.image_width;
         data_export.image_height = self.image_height;
-        data_export.analytic_derivative = self.analytic_derivative;
+        data_export.coloring_type = if self.analytic_derivative {
+            ColoringType::Distance
+        } else {
+            if step_iteration {
+                ColoringType::StepIteration
+            } else {
+                ColoringType::SmoothIteration
+            }
+        };
 
         data_export.clear_buffers();
     }

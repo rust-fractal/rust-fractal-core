@@ -19,6 +19,13 @@ pub enum DataType {
     Both
 }
 
+#[derive(PartialEq, Clone, Copy)]
+pub enum ColoringType {
+    SmoothIteration,
+    StepIteration,
+    Distance
+}
+
 pub struct DataExport {
     pub image_width: usize,
     pub image_height: usize,
@@ -35,7 +42,7 @@ pub struct DataExport {
     pub palette_offset: f32,
     pub centre_removed: bool,
     pub data_type: DataType,
-    pub analytic_derivative: bool,
+    pub coloring_type: ColoringType,
     pub maximum_iteration: usize,
     pub fractal_type: FractalType
 }
@@ -73,6 +80,12 @@ impl DataExport {
             }
         }
 
+        let coloring_type = if analytic_derivative {
+            ColoringType::Distance
+        } else {
+            ColoringType::SmoothIteration
+        };
+
         DataExport {
             image_width,
             image_height,
@@ -89,7 +102,7 @@ impl DataExport {
             palette_offset,
             centre_removed: false,
             data_type,
-            analytic_derivative,
+            coloring_type,
             maximum_iteration: 0,
             fractal_type
         }
@@ -116,7 +129,7 @@ impl DataExport {
                         let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                         let smooth = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
     
-                        let (r, g, b) = if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
+                        let (r, g, b) = if self.coloring_type == ColoringType::Distance && pixel.iteration < self.maximum_iteration {
                             // let temp = pixel.delta_current.norm();
                             let temp = (reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current).norm();
     
@@ -171,7 +184,7 @@ impl DataExport {
                             }
                         };
 
-                        if self.analytic_derivative {
+                        if self.coloring_type == ColoringType::Distance {
                             let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();
     
@@ -219,7 +232,7 @@ impl DataExport {
                     let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr() as f32;
                     self.smooth[k] = 1.0 - (z_norm.ln() / escape_radius_ln).log2();
     
-                    if self.analytic_derivative && pixel.iteration < self.maximum_iteration {
+                    if self.coloring_type == ColoringType::Distance && pixel.iteration < self.maximum_iteration {
                         let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                         let temp2 = temp1.norm();
     
@@ -271,7 +284,7 @@ impl DataExport {
     
                         self.smooth[k] = smooth;
     
-                        if self.analytic_derivative {
+                        if self.coloring_type == ColoringType::Distance {
                             let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                             let temp2 = temp1.norm();
     
@@ -355,7 +368,7 @@ impl DataExport {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F32(self.smooth.clone()));
 
-        let channels = if self.analytic_derivative {
+        let channels = if self.coloring_type == ColoringType::Distance {
             let distance_x = simple_image::Channel::non_color_data(simple_image::Text::from("DEX").unwrap(), simple_image::Samples::F32(self.distance_x.clone()));
             let distance_y = simple_image::Channel::non_color_data(simple_image::Text::from("DEY").unwrap(), simple_image::Samples::F32(self.distance_y.clone()));
 
@@ -434,7 +447,7 @@ impl DataExport {
                 self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
                 self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
 
-                if self.analytic_derivative {
+                if self.coloring_type == ColoringType::Distance {
                     self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
                     self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
                 }
@@ -450,7 +463,7 @@ impl DataExport {
             self.set_rgb_with_scale(i, [255, 0, 0], scale, image_x, image_y)
         } else if self.iterations[i] >= self.maximum_iteration as u32 {
             self.set_rgb_with_scale(i, [0, 0, 0], scale, image_x, image_y)
-        } else if self.analytic_derivative {
+        } else if self.coloring_type == ColoringType::Distance {
             let length = (self.distance_x[i].powi(2) + self.distance_y[i].powi(2)).sqrt();
             
             // colouring algorithm based on 'rainbow_fringe' by claude
@@ -467,7 +480,13 @@ impl DataExport {
 
             self.set_rgb_with_scale(i, [r, g, b], scale, image_x, image_y)
         } else {
-            let temp = self.palette_buffer.len() as f32 * ((self.iterations[i] as f32 + self.smooth[i]) / self.iteration_division + self.palette_offset).fract();
+            let floating_iteration = if self.coloring_type == ColoringType::SmoothIteration {
+                self.iterations[i] as f32 + self.smooth[i]
+            } else {
+                self.iterations[i] as f32
+            };
+            
+            let temp = self.palette_buffer.len() as f32 * (floating_iteration / self.iteration_division + self.palette_offset).fract();
 
             let pos1 = temp.floor() as usize;
             let pos2 = if pos1 >= (self.palette_buffer.len() - 1) {
