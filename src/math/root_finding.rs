@@ -1,4 +1,7 @@
-use crate::util::{ComplexExtended, FloatExtended};
+use std::cmp::max;
+use std::time::Instant;
+
+use crate::util::{ComplexArbitrary, ComplexExtended, FloatArbitrary, FloatExtended, to_extended};
 use crate::math::Reference;
 
 pub struct BoxPeriod {
@@ -78,47 +81,6 @@ impl BoxPeriod {
             self.period += 1;
         }
     }
-
-    // pub fn get_nucleus(&mut self, reference: &Reference, mut guess_c: ComplexExtended) {
-    //     for _ in 0..16 {
-    //         let mut z = ComplexExtended::new2(0.0, 0.0, 0);
-    //         let mut dc = ComplexExtended::new2(0.0, 0.0, 0);
-
-    //         let mut perturbation_z = ComplexExtended::new2(0.0, 0.0, 0);
-    
-    //         let mut h = ComplexExtended::new2(1.0, 0.0, 0);
-    //         let mut dh = ComplexExtended::new2(0.0, 0.0, 0);
-    
-    //         // TODO step using perturbation
-    //         for i in 1..=self.period {
-    //             dc = z * dc * 2.0 + ComplexExtended::new2(1.0, 0.0, 0);
-    //             z = z * z + guess_c;
-    
-    //             if i < self.period && self.period % i == 0 {
-    //                 h = h * z;
-    //                 dh = dh + dc / z;
-    //             }
-    //         }
-    
-    //         dh = dh * h;
-            
-    //         let g = z;
-    //         let dg = dc;
-            
-    //         let f = g / h;
-    //         let df = (dg * h - g * dh) / (h * h);
-    
-    //         let new_c = guess_c - f / df;
-    
-    //         let d = new_c - guess_c;
-    
-    //         if d.to_float().norm_sqr() < 1e-30 {
-    //             break;
-    //         }
-
-    //         guess_c = new_c;
-    //     }
-    // }
 }
 
 pub struct BallMethod1 {
@@ -149,6 +111,8 @@ impl BallMethod1 {
     }
 
     pub fn find_period(&mut self, reference: &Reference) {
+        let time = Instant::now();
+
         self.period = 1;
 
         for k in 0..reference.current_iteration {
@@ -178,5 +142,102 @@ impl BallMethod1 {
             self.point_z += self.point_c;
             self.point_z.reduce();
         }
+
+        println!("period: {}ms", time.elapsed().as_millis());
     }
+}
+
+pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize) -> ComplexArbitrary {
+    let time = Instant::now();
+
+    let complex_precision = guess_c.prec();
+    let precision = 3 * max(complex_precision.0, complex_precision.1);
+
+    guess_c.set_prec(precision);
+
+    let temp = FloatArbitrary::with_val(precision, 2);
+    let mut epsilon = temp.clone();
+
+    epsilon.next_up();
+    epsilon -= &temp;
+
+    let epsilon_squared = epsilon.square();
+
+    for _ in 0..16 {
+        let mut z = ComplexArbitrary::new(precision);
+        let mut dc = ComplexArbitrary::new(precision);
+        let mut h = ComplexArbitrary::with_val(precision, (1.0, 0.0));
+        let mut dh = ComplexArbitrary::new(precision);
+    
+        for i in 1..=period {
+            dc *= 2.0;
+            dc *= &z;
+            dc += 1.0;
+    
+            z.square_mut();
+            z += &guess_c;
+    
+            if i < period && period % i == 0 {
+                h *= &z;
+                dh += dc.clone() / &z;
+            }
+        }
+    
+        dh *= &h;
+
+        let df = ((dc.clone() * &h - &z * &dh) / &h) / &h;
+
+        let new_c = (-z.clone() / &h) / &df + &guess_c;
+
+        // need to set epsilon squared to floating point difference
+        if (new_c.clone() - &guess_c).norm().real() < &epsilon_squared {
+            guess_c = new_c;
+            break;
+        } 
+        
+        guess_c = new_c;
+    }
+
+    println!("nucleus: {}ms", time.elapsed().as_millis());
+
+    return guess_c;
+}
+
+pub fn get_nucleus_position(nucleus: ComplexArbitrary, period: usize) -> (FloatExtended, f64) {
+    let time = Instant::now();
+
+    let mut z = nucleus.clone();
+    let mut l = ComplexExtended::new2(1.0, 0.0, 0);
+    let mut b = ComplexExtended::new2(1.0, 0.0, 0);
+
+    let temp = ComplexExtended::new2(1.0, 0.0, 0);
+    let temp2 = FloatExtended::new(2.0, 0);
+
+    l *= to_extended(&z) * 2.0;
+    l.reduce();
+
+    b += temp / l;
+    b.reduce();
+    
+
+    for _ in 2..period {
+        z.square_mut();
+        z += &nucleus;
+
+        l *= to_extended(&z) * 2.0;
+        l.reduce();
+
+        b += temp / l;
+        b.reduce();
+    }
+
+    let mut size = temp / (b * l * l);
+    size.reduce();
+
+    let mut zoom = temp2 / size.norm();
+    zoom.reduce();
+
+    println!("nucleus size: {}ms", time.elapsed().as_millis());
+
+    (zoom, size.mantissa.arg())
 }
