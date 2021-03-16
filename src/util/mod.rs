@@ -92,6 +92,12 @@ pub fn extended_to_string_long(value: FloatExtended) -> String {
     format!("{}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
 }
 
+pub fn linear_interpolation_between_zoom(zoom1: FloatExtended, zoom2: FloatExtended, factor: f64) -> FloatExtended {
+    let temp = (1.0 - factor) * (zoom1.mantissa.log2() + zoom1.exponent as f64) + factor * (zoom2.mantissa.log2() + zoom2.exponent as f64);
+
+    FloatExtended::new(2.0f64.powf(temp.fract()), temp.floor() as i32)
+}
+
 pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: usize, cos_rotate: f64, sin_rotate: f64) -> ComplexFixed<f64> {
     let aspect = image_width as f64 / image_height as f64;
 
