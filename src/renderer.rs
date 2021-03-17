@@ -229,9 +229,7 @@ impl FractalRenderer {
 
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag, self.fractal_type);
 
-            if stop_flag.load(Ordering::SeqCst) {
-                self.progress.reset();
-                self.render_time = frame_time.elapsed().as_millis();
+            if self.stop_rendering(&stop_flag, frame_time) {
                 return;
             };
 
@@ -579,6 +577,7 @@ impl FractalRenderer {
             self.render_time = frame_time.elapsed().as_millis();
             self.progress.reset();
             stop_flag.store(false, Ordering::SeqCst);
+
             true
         } else {
             false
