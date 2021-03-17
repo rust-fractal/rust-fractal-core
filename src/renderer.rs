@@ -66,7 +66,7 @@ impl FractalRenderer {
         let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
         let experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
-        let remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
+        let remove_centre = settings.get_bool("remove_centre").unwrap_or(false);
         let iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
@@ -332,6 +332,8 @@ impl FractalRenderer {
         }
 
         let complex_default = ComplexExtended::new2(1.0, 0.0, 0);
+        let sampling_resolution_width = (self.series_approximation.probe_sampling - 1) as f64 / self.image_width as f64;
+        let sampling_resolution_height = (self.series_approximation.probe_sampling - 1) as f64 / self.image_height as f64;
 
         let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {
@@ -343,8 +345,8 @@ impl FractalRenderer {
 
                 let chosen_iteration = if self.fractal_type == FractalType::Mandelbrot2 {
                     if self.experimental {
-                        let test1 = ((self.series_approximation.probe_sampling - 1) as f64 * i / self.image_width as f64).floor() as usize;
-                        let test2 = ((self.series_approximation.probe_sampling - 1) as f64 * j / self.image_height as f64).floor() as usize;
+                        let test1 = (i * sampling_resolution_width).floor() as usize;
+                        let test2 = (j * sampling_resolution_height).floor() as usize;
 
                         let index = test2 * (self.series_approximation.probe_sampling - 1) + test1;
 
@@ -378,6 +380,7 @@ impl FractalRenderer {
                     complex_default
                 };
 
+                // could remove one of the extra deltas
                 PixelData {
                     image_x,
                     image_y,

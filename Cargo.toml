@@ -19,14 +19,11 @@ parking_lot = { version = "0.11", features = ["nightly"] }
 colorgrad = { git = "https://github.com/mazznoer/colorgrad-rs" }
 
 [dependencies.rug]
-version = "1.10"
+version = "1.11"
 default-features = false
 features = ["float", "complex"]
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 [profile.release]
-lto = "fat"
-codegen-units = 1
-debug = true
-opt-level=3
+#debug = true
 #incremental = true

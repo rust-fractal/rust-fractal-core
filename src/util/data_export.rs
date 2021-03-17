@@ -154,9 +154,9 @@ impl DataExport {
                             (out.0, out.1, out.2)
                         };
 
-                        self.buffer[3 * k] = r;
-                        self.buffer[3 * k + 1] = g;
-                        self.buffer[3 * k + 2] = b;
+                        self.buffer[k] = r;
+                        self.buffer[k + 1] = g;
+                        self.buffer[k + 2] = b;
                     };
                 },
                 DataType::Gui => {
