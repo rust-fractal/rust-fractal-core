@@ -6,10 +6,8 @@ use crate::util::float_extended::FloatExtended;
 use rayon::prelude::*;
 
 use std::cmp::max;
-
-use atomic_counter::{AtomicCounter, RelaxedCounter};
-
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, AtomicBool, Ordering};
 
 pub struct SeriesApproximation {
     pub maximum_iteration: usize,
@@ -64,7 +62,9 @@ impl SeriesApproximation {
         }
     }
 
-    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>) {
+    pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>) {
+        series_approximation_counter.store(0, Ordering::SeqCst);
+
         // Reset the coefficients
         self.coefficients = vec![vec![ComplexExtended::new2(0.0, 0.0, 0); self.order as usize + 1]; 1];
 
@@ -80,7 +80,7 @@ impl SeriesApproximation {
         // Can be changed later into a better loop - this function could also return some more information
         // Go through all remaining iterations
         for i in 1..self.maximum_iteration {
-            if stop_flag.get() >= 1 {
+            if stop_flag.load(Ordering::SeqCst) {
                 return
             };
 
@@ -110,7 +110,7 @@ impl SeriesApproximation {
 
             previous_coefficients = next_coefficients.clone();
 
-            series_approximation_counter.inc();
+            series_approximation_counter.fetch_add(1, Ordering::Relaxed);
             
             // only every 100th iteration (101, 201 etc)
             // This is 0, 100, 200 -> 1, 101, 201
@@ -131,7 +131,9 @@ impl SeriesApproximation {
         image_width: usize,
         image_height: usize,
         center_reference: &Reference,
-        series_validation_counter: &Arc<RelaxedCounter>) {
+        series_validation_counter: &Arc<AtomicUsize>) {
+        series_validation_counter.store(0, Ordering::SeqCst);
+        
         // Delete the previous probes and calculate new ones
         self.probe_start = Vec::new();
         self.approximation_probes = Vec::new();
@@ -221,7 +223,7 @@ impl SeriesApproximation {
             first_valid_iterations += 1;
         }
 
-        series_validation_counter.inc();
+        series_validation_counter.fetch_add(1, Ordering::Relaxed);
 
         self.min_valid_iteration = self.data_storage_interval * ((first_valid_iterations - 1) / self.data_storage_interval) + 1;
 
@@ -348,7 +350,7 @@ impl SeriesApproximation {
             }
         }
 
-        series_validation_counter.inc();
+        series_validation_counter.fetch_add(1, Ordering::Relaxed);
 
         self.valid_iterations = valid_iterations;
 
@@ -452,6 +454,9 @@ impl SeriesApproximation {
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
         // This could be improved to use the iteration option better
         // this assumes that the requested iteration is a multiple of the data interval
+        if iteration == 1 {
+            return point_delta;
+        }
 
         // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
         let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];
@@ -471,6 +476,9 @@ impl SeriesApproximation {
     pub fn evaluate_derivative(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
         // This could be improved to use the iteration option better
         // this assumes that the requested iteration is a multiple of the data interval
+        if iteration == 1 {
+            return ComplexExtended::new2(1.0, 0.0, 0);
+        }
 
         // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
         let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];

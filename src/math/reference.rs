@@ -1,8 +1,5 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, FractalType, to_fixed, to_extended};
-
-use atomic_counter::{AtomicCounter, RelaxedCounter};
-
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicUsize, AtomicBool, Ordering}};
 
 #[derive(Clone)]
 pub struct Reference {
@@ -46,7 +43,7 @@ impl Reference {
         }
     }
 
-    pub fn run(&mut self, reference_counter: &Arc<RelaxedCounter>, reference_maximum_iteration_counter: &Arc<RelaxedCounter>, stop_flag: &Arc<RelaxedCounter>, fractal_type: FractalType) {
+    pub fn run(&mut self, reference_counter: &Arc<AtomicUsize>, reference_maximum_iteration_counter: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, fractal_type: FractalType) {
         let z_fixed = to_fixed(&self.z);
         let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
@@ -75,11 +72,11 @@ impl Reference {
                 self.high_precision_data.push(self.z.clone());
             }
 
-            if stop_flag.get() >= 1 {
-                return
+            if stop_flag.load(Ordering::SeqCst) {
+                return;
             };
 
-            reference_counter.inc();
+            reference_counter.fetch_add(1, Ordering::SeqCst);
 
             match fractal_type {
                 FractalType::Mandelbrot2 => {
@@ -123,7 +120,7 @@ impl Reference {
             }
         }
 
-        reference_maximum_iteration_counter.add(usize::max_value() - self.maximum_iteration + reference_counter.get() + 1);
+        reference_maximum_iteration_counter.store(self.current_iteration, Ordering::SeqCst);
 
         // println!("{:?}", self.extended_iterations);
     }
