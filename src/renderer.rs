@@ -230,6 +230,7 @@ impl FractalRenderer {
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag, self.fractal_type);
 
             if self.stop_rendering(&stop_flag, frame_time) {
+                tx.send(()).unwrap();
                 return;
             };
 
@@ -262,6 +263,7 @@ impl FractalRenderer {
         }
 
         if self.stop_rendering(&stop_flag, frame_time) {
+            tx.send(()).unwrap();
             return;
         };
         
@@ -308,11 +310,11 @@ impl FractalRenderer {
         self.progress.min_series_approximation.store(self.series_approximation.min_valid_iteration, Ordering::SeqCst);
         self.progress.max_series_approximation.store(self.series_approximation.max_valid_iteration, Ordering::SeqCst);
 
+        tx.send(()).unwrap();
+
         if self.stop_rendering(&stop_flag, frame_time) {
             return;
         };
-
-        tx.send(()).unwrap();
 
         if self.show_output {
             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", approximation_time.elapsed().as_millis());
@@ -504,6 +506,7 @@ impl FractalRenderer {
             glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
 
             if self.stop_rendering(&stop_flag, frame_time) {
+                tx.send(()).unwrap();
                 return;
             };
 
@@ -577,6 +580,8 @@ impl FractalRenderer {
             self.render_time = frame_time.elapsed().as_millis();
             self.progress.reset();
             stop_flag.store(false, Ordering::SeqCst);
+
+            println!("");
 
             true
         } else {
