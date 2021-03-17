@@ -1,7 +1,7 @@
 use crate::{math::{BallMethod1, BoxPeriod}, util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended}};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
-use std::{time::{Duration, Instant}};
+use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
@@ -15,9 +15,8 @@ use config::Config;
 
 use std::thread;
 use std::sync::{Arc, mpsc};
+use std::sync::atomic::{Ordering, AtomicUsize};
 use parking_lot::Mutex;
-
-use atomic_counter::{AtomicCounter, RelaxedCounter};
 
 pub struct FractalRenderer {
     pub image_width: usize,
@@ -180,7 +179,7 @@ impl FractalRenderer {
         }
     }
 
-    pub fn render_frame(&mut self, frame_index: usize, filename: String, stop_flag: Option<Arc<RelaxedCounter>>) {
+    pub fn render_frame(&mut self, frame_index: usize, filename: String, stop_flag: Arc<AtomicBool>) {
         if self.show_output {
             print!("{:<6}", frame_index + self.frame_offset);
             print!("| {:<15}", extended_to_string_short(self.zoom));
@@ -189,11 +188,6 @@ impl FractalRenderer {
 
         let frame_time = Instant::now();
         let approximation_time = Instant::now();
-
-        let stop_flag = match stop_flag {
-            Some(stop_flag) => stop_flag,
-            None => Arc::new(RelaxedCounter::new(0))
-        };
 
         let (tx, rx) = mpsc::channel();
 
@@ -216,9 +210,9 @@ impl FractalRenderer {
 
                             // println!("{} {} {}", thread_counter_1.get(), thread_counter_2.get(), thread_counter_3.get());
 
-                            percentage_complete += 45.0 * thread_counter_1.get() as f64 / thread_counter_3.get() as f64;
-                            percentage_complete += 45.0 * thread_counter_2.get() as f64 / thread_counter_3.get() as f64;
-                            percentage_complete += 10.0 * thread_counter_4.get() as f64 / 2.0;
+                            percentage_complete += 45.0 * thread_counter_1.load(Ordering::Relaxed) as f64 / thread_counter_3.load(Ordering::Relaxed) as f64;
+                            percentage_complete += 45.0 * thread_counter_2.load(Ordering::Relaxed) as f64 / thread_counter_3.load(Ordering::Relaxed) as f64;
+                            percentage_complete += 10.0 * thread_counter_4.load(Ordering::Relaxed) as f64 / 2.0;
 
                             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", percentage_complete));
                             std::io::stdout().flush().unwrap();
@@ -235,7 +229,7 @@ impl FractalRenderer {
 
             self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag, self.fractal_type);
 
-            if stop_flag.get() >= 1 {
+            if stop_flag.load(Ordering::SeqCst) {
                 self.progress.reset();
                 self.render_time = frame_time.elapsed().as_millis();
                 return;
@@ -269,15 +263,18 @@ impl FractalRenderer {
             }
         }
 
-        if stop_flag.get() >= 1 {
-            self.progress.reset();
-            self.render_time = frame_time.elapsed().as_millis();
+        if self.stop_rendering(&stop_flag, frame_time) {
             return;
         };
         
         let cos_rotate = self.rotate.cos();
         let sin_rotate = self.rotate.sin();
+
         let delta_pixel = 4.0 / ((self.image_height - 1) as f64 * self.zoom.mantissa);
+
+        let delta_pixel_cos = delta_pixel * cos_rotate;
+        let delta_pixel_sin = delta_pixel * sin_rotate;
+
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
 
@@ -310,12 +307,10 @@ impl FractalRenderer {
             &self.progress.series_validation);
 
         // -1 because we already know that 1 iteration can be skipped (take z = c)
-        self.progress.min_series_approximation.add(self.series_approximation.min_valid_iteration - 1);
-        self.progress.max_series_approximation.add(self.series_approximation.max_valid_iteration - 1);
+        self.progress.min_series_approximation.store(self.series_approximation.min_valid_iteration, Ordering::SeqCst);
+        self.progress.max_series_approximation.store(self.series_approximation.max_valid_iteration, Ordering::SeqCst);
 
-        if stop_flag.get() >= 1 {
-            self.progress.reset();
-            self.render_time = frame_time.elapsed().as_millis();
+        if self.stop_rendering(&stop_flag, frame_time) {
             return;
         };
 
@@ -370,8 +365,8 @@ impl FractalRenderer {
 
                 // This could be changed to account for jittering if needed
                 let element = ComplexFixed::new(
-                    i * delta_pixel * cos_rotate - j * delta_pixel * sin_rotate + delta_top_left.re, 
-                    i * delta_pixel * sin_rotate + j * delta_pixel * cos_rotate + delta_top_left.im
+                    i * delta_pixel_cos - j * delta_pixel_sin + delta_top_left.re, 
+                    i * delta_pixel_sin + j * delta_pixel_cos + delta_top_left.im
                 );
 
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
@@ -401,9 +396,7 @@ impl FractalRenderer {
             std::io::stdout().flush().unwrap();
         };
 
-        if stop_flag.get() >= 1 {
-            self.progress.reset();
-            self.render_time = frame_time.elapsed().as_millis();
+        if self.stop_rendering(&stop_flag, frame_time) {
             return;
         };
         
@@ -425,7 +418,7 @@ impl FractalRenderer {
                             break;
                         },
                         Err(_) => {
-                            print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", 100.0 * thread_counter.get() as f64 / total_pixels));
+                            print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", 100.0 * thread_counter.load(Ordering::SeqCst) as f64 / total_pixels));
                             std::io::stdout().flush().unwrap();
                         }
                     };
@@ -440,7 +433,7 @@ impl FractalRenderer {
         for value in values.iter() {
             // println!("{}", value);
             let end_value = number_pixels / (value * value);
-            let chunk_size = max((end_value - previous_value) / 2048, 4);
+            let chunk_size = max((end_value - previous_value) / 512, 4);
             // println!("chunk size init: {}", chunk_size);
 
             // This one has no offset because it is not a glitch resolving reference
@@ -452,13 +445,10 @@ impl FractalRenderer {
 
             previous_value = end_value;
         }
-        
 
         tx.send(()).unwrap();
 
-        if stop_flag.get() >= 1 {
-            self.progress.reset();
-            self.render_time = frame_time.elapsed().as_millis();
+        if self.stop_rendering(&stop_flag, frame_time) {
             return;
         };
 
@@ -478,7 +468,7 @@ impl FractalRenderer {
         });
 
         let glitched_pixels = pixel_data.len() as f64;
-        self.progress.glitched_maximum.add(pixel_data.len());
+        self.progress.glitched_maximum.fetch_add(pixel_data.len(), Ordering::SeqCst);
 
         let complete_pixels = total_pixels - glitched_pixels;
 
@@ -496,7 +486,7 @@ impl FractalRenderer {
                             break;
                         },
                         Err(_) => {
-                            print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", 100.0 * (thread_counter.get() as f64 - complete_pixels) / glitched_pixels));
+                            print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", 100.0 * (thread_counter.load(Ordering::Relaxed) as f64 - complete_pixels) / glitched_pixels));
                             std::io::stdout().flush().unwrap();
                         }
                     };
@@ -513,11 +503,9 @@ impl FractalRenderer {
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
             correction_references += 1;
-            glitch_reference.run(&Arc::new(RelaxedCounter::new(0)), &Arc::new(RelaxedCounter::new(0)), &stop_flag, self.fractal_type);
+            glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
 
-            if stop_flag.get() >= 1 {
-                self.render_time = frame_time.elapsed().as_millis();
-                self.progress.reset();
+            if self.stop_rendering(&stop_flag, frame_time) {
                 return;
             };
 
@@ -542,7 +530,7 @@ impl FractalRenderer {
                 });
             }
             
-            let chunk_size = max(pixel_data.len() / 2048, 4);
+            let chunk_size = max(pixel_data.len() / 512, 4);
             // println!("chunk size: {}", chunk_size);
 
             if self.analytic_derivative {
@@ -583,6 +571,17 @@ impl FractalRenderer {
             print!("| {:<15}", saving_time.elapsed().as_millis());
             println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
             std::io::stdout().flush().unwrap();
+        }
+    }
+
+    pub fn stop_rendering(&mut self, stop_flag: &Arc<AtomicBool>, frame_time: Instant) -> bool {
+        if stop_flag.load(Ordering::SeqCst) {
+            self.render_time = frame_time.elapsed().as_millis();
+            self.progress.reset();
+            stop_flag.store(false, Ordering::SeqCst);
+            true
+        } else {
+            false
         }
     }
 
@@ -631,7 +630,7 @@ impl FractalRenderer {
         while self.remaining_frames > 0 && self.zoom.to_float() > 0.5 {
             self.render_frame(count, 
                 format!("output/{:08}_{}", count + self.frame_offset, 
-                extended_to_string_short(self.zoom)), None);
+                extended_to_string_short(self.zoom)), Arc::new(AtomicBool::new(false)));
 
             self.zoom.mantissa /= self.zoom_scale_factor;
             self.zoom.reduce();
@@ -646,7 +645,7 @@ impl FractalRenderer {
                     // Overwrite the series approximation order
                     self.series_approximation.order = 8;
                     self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
-                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(RelaxedCounter::new(0)));
+                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(AtomicBool::new(false)));
                 }
 
                 // Logic in here to automatically adjust the maximum number of iterations
@@ -663,10 +662,10 @@ impl FractalRenderer {
                 }
             } else if self.series_approximation.min_valid_iteration < 1000 && self.series_approximation.order > 16 {
                     self.series_approximation.order = 16;
-                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(RelaxedCounter::new(0)));
+                    self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(AtomicBool::new(false)));
             } else if self.series_approximation.min_valid_iteration < 10000 && self.series_approximation.order > 32 {
                 self.series_approximation.order = 32;
-                self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(RelaxedCounter::new(0)));
+                self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &Arc::new(AtomicBool::new(false)));
             }
             
             self.remaining_frames -= 1;
@@ -793,7 +792,7 @@ impl FractalRenderer {
         self.zoom = zoom;
 
         self.start_render_time = Instant::now();
-        self.progress = ProgressCounters::new(self.maximum_iteration);
+        self.progress.reset_all(self.maximum_iteration);
 
         data_export.image_width = self.image_width;
         data_export.image_height = self.image_height;
