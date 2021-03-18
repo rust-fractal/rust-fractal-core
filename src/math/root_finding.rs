@@ -5,28 +5,16 @@ use crate::util::{ComplexArbitrary, ComplexExtended, FloatArbitrary, FloatExtend
 use crate::math::Reference;
 
 pub struct BoxPeriod {
-    pub points_z: Vec<ComplexExtended>,
-    pub points_c: Vec<ComplexExtended>,
+    pub points_z: [ComplexExtended; 4],
+    pub points_c: [ComplexExtended; 4],
     pub period: usize
 }
 
 impl BoxPeriod {
-    pub fn new(mut delta_top_left: ComplexExtended) -> Self {
-        delta_top_left.reduce();
-
-        let mut points = Vec::new();
-
-        points.push(delta_top_left);
-        delta_top_left.mantissa.re *= -1.0;
-        points.push(delta_top_left);
-        delta_top_left.mantissa.im *= -1.0;
-        points.push(delta_top_left);
-        delta_top_left.mantissa.re *= -1.0;
-        points.push(delta_top_left);
-
+    pub fn new(delta_box: [ComplexExtended; 4]) -> Self {
         BoxPeriod {
-            points_z: points.clone(),
-            points_c: points,
+            points_z: delta_box.clone(),
+            points_c: delta_box,
             period: 1
         }
     }
