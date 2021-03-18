@@ -34,7 +34,7 @@ pub struct FractalRenderer {
     pub zoom_scale_factor: f64,
     pub center_reference: Reference,
     pub series_approximation: SeriesApproximation,
-    pub box_period: BoxPeriod,
+    pub box_method: BoxPeriod,
     pub ball_method: BallMethod1,
     render_indices: Vec<usize>,
     pub remove_centre: bool,
@@ -137,7 +137,9 @@ impl FractalRenderer {
             data_storage_interval,
             fractal_type);
 
-        let box_period = BoxPeriod::new(ComplexExtended::new2(0.0, 0.0, 0));
+        let temporary_delta = ComplexExtended::new2(0.0, 0.0, 0);
+
+        let box_period = BoxPeriod::new([temporary_delta, temporary_delta, temporary_delta, temporary_delta]);
         let ball_method = BallMethod1::new(FloatExtended::new(0.0, 0), ComplexExtended::new2(0.0, 0.0, 0));
 
         let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
@@ -164,7 +166,7 @@ impl FractalRenderer {
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
-            box_period,
+            box_method: box_period,
             ball_method,
             render_indices,
             remove_centre,
@@ -277,12 +279,6 @@ impl FractalRenderer {
 
         let delta_top_left = get_delta_top_left(delta_pixel, self.image_width, self.image_height, cos_rotate, sin_rotate);
         let delta_pixel_extended = FloatExtended::new(delta_pixel, -self.zoom.exponent);
-
-        self.box_period = BoxPeriod::new(ComplexExtended::new(delta_top_left, -self.zoom.exponent));
-        self.ball_method = BallMethod1::new(
-            ComplexExtended::new(delta_top_left, -self.zoom.exponent).norm(),
-            ComplexExtended::new2(0.0, 0.0, 0)
-        );
 
         let minimum_dimension = min(self.image_width, self.image_height);
 
@@ -592,9 +588,10 @@ impl FractalRenderer {
         }
     }
 
-    pub fn find_period(&mut self) {
-        self.box_period.find_period(&self.center_reference);
-        self.ball_method.find_period(&self.center_reference);
+    // find the period given a box
+    pub fn find_period(&mut self, delta_box: [ComplexExtended; 4]) {
+        self.box_method = BoxPeriod::new(delta_box);
+        self.box_method.find_period(&self.center_reference);
     }
 
     // Returns true if the maximum iterations has been increased
