@@ -55,6 +55,9 @@ impl BoxPeriod {
     pub fn find_period(&mut self, reference: &Reference) {
         while self.period < reference.current_iteration {
             if self.points_surrond_origin(reference.reference_data_extended[self.period - 1]) {
+                // do some calculation here to work out a good estimate for the starting point
+                println!("{} {} {} {}", self.points_z[0], self.points_z[1], self.points_z[2], self.points_z[3]);
+
                 println!("box method period is: {}", self.period);
                 break;
             };
@@ -151,7 +154,8 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize) -> ComplexArbit
 
     let epsilon_squared = epsilon.square();
 
-    for _ in 0..16 {
+    for i in 0..64 {
+        println!("nr iteration {}", i);
         let mut z = ComplexArbitrary::new(precision);
         let mut dc = ComplexArbitrary::new(precision);
         let mut h = ComplexArbitrary::with_val(precision, (1.0, 0.0));
