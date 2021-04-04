@@ -7,7 +7,8 @@ edition = "2018"
 
 [dependencies]
 image = "^0.23.6"
-rand = "^0.7.3"
+rand = "^0.8.3"
+rand_distr = "^0.4.0"
 num-complex = "^0.2.4"
 rayon = "^1.3.1"
 exr = "^0.8.0"

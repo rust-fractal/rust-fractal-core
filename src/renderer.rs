@@ -5,8 +5,8 @@ use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
-use rand::{seq::SliceRandom};
-use rand::Rng;
+use rand::seq::SliceRandom;
+use rand_distr::Distribution;
 
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
 
@@ -331,6 +331,8 @@ impl FractalRenderer {
         let sampling_resolution_width = (self.series_approximation.probe_sampling - 1) as f64 / self.image_width as f64;
         let sampling_resolution_height = (self.series_approximation.probe_sampling - 1) as f64 / self.image_height as f64;
 
+        let normal = rand_distr::Normal::new(0.0, self.jitter_factor).unwrap();
+
         let mut pixel_data = (&self.render_indices).into_par_iter()
             .map(|index| {
                 let image_x = index % self.image_width;
@@ -354,11 +356,12 @@ impl FractalRenderer {
                     1
                 };
 
+                // TODO need to change to gaussian distribution
                 if self.jitter {
                     let mut rng = rand::thread_rng();
 
-                    i += rng.gen_range(-self.jitter_factor, self.jitter_factor);
-                    j += rng.gen_range(-self.jitter_factor, self.jitter_factor);
+                    i += normal.sample(&mut rng);
+                    j += normal.sample(&mut rng);
                 }
 
                 // This could be changed to account for jittering if needed
