@@ -156,7 +156,9 @@ impl SeriesApproximation {
         // check using the top left probe
         let i = 0;
 
-        let test_val = max(((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.data_storage_interval) * self.data_storage_interval, 1000);
+        let test_val = max(
+            ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.data_storage_interval) * self.data_storage_interval, 
+            (10000 / self.data_storage_interval) * self.data_storage_interval);
 
         let mut current_probe_check_value = if self.min_valid_iteration > test_val {
             self.min_valid_iteration - test_val
@@ -172,6 +174,7 @@ impl SeriesApproximation {
 
         let mut first_valid_iterations = current_probe_check_value;
         
+        // TODO this can be refactored to be a little more efficient
         loop {
             let mut probe = self.evaluate(self.probe_start[i], first_valid_iterations);
 
@@ -212,7 +215,9 @@ impl SeriesApproximation {
                     // Check that the error over the derivative is less than the pixel spacing
                     if relative_error / derivative > self.delta_pixel_square {
                         // println!("rel: {}, deri: {}, delta: {}", relative_error, derivative, self.delta_pixel_square);
-                        if first_valid_iterations <= (current_probe_check_value + self.data_storage_interval + 1) {
+                        // needs to get more than 2 in a row
+                        println!("break at: {}", first_valid_iterations);
+                        if first_valid_iterations <= (current_probe_check_value + 2 * test_val + 1) {
                             first_valid_iterations = next_probe_check_value;
                             break;
                         };
