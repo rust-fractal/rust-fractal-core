@@ -216,7 +216,7 @@ impl SeriesApproximation {
                     if relative_error / derivative > self.delta_pixel_square {
                         // println!("rel: {}, deri: {}, delta: {}", relative_error, derivative, self.delta_pixel_square);
                         // needs to get more than 2 in a row
-                        println!("break at: {}", first_valid_iterations);
+                        // println!("break at: {}", first_valid_iterations);
                         if first_valid_iterations <= (current_probe_check_value + 2 * test_val + 1) {
                             first_valid_iterations = next_probe_check_value;
                             break;
