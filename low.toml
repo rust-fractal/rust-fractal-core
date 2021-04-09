@@ -17,7 +17,6 @@ probe_sampling = 3
 
 data_storage_interval = 10
 
-valid_iteration_frame_multiplier = 0.25
 valid_iteration_probe_multiplier = 0.02
 
 experimental = false 

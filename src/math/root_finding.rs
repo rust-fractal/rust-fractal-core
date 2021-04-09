@@ -1,6 +1,9 @@
 use std::cmp::max;
 use std::time::Instant;
 
+use std::sync::Arc;
+use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
+
 use crate::util::{ComplexArbitrary, ComplexExtended, FloatArbitrary, FloatExtended, to_extended};
 use crate::math::Reference;
 
@@ -58,9 +61,9 @@ impl BoxPeriod {
         while self.period < reference.current_iteration {
             if self.points_surrond_origin(reference.reference_data_extended[self.period - 1]) {
                 // do some calculation here to work out a good estimate for the starting point
-                println!("{} {} {} {}", self.points_z[0], self.points_z[1], self.points_z[2], self.points_z[3]);
+                // println!("{} {} {} {}", self.points_z[0], self.points_z[1], self.points_z[2], self.points_z[3]);
 
-                println!("box method period is: {}", self.period);
+                // println!("box method period is: {}", self.period);
                 break;
             };
 
@@ -140,9 +143,7 @@ impl BallMethod {
     }
 }
 
-pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize) -> ComplexArbitrary {
-    let time = Instant::now();
-
+pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag: Arc<AtomicUsize>, progress_flag: Arc<AtomicUsize>, stop_flag: Arc<AtomicBool>) -> Option<ComplexArbitrary> {
     let complex_precision = guess_c.prec();
     let precision = 3 * max(complex_precision.0, complex_precision.1);
 
@@ -156,8 +157,7 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize) -> ComplexArbit
 
     let epsilon_squared = epsilon.square();
 
-    for i in 0..64 {
-        println!("nr iteration {}", i);
+    for _i in 0..256 {
         let mut z = ComplexArbitrary::new(precision);
         let mut dc = ComplexArbitrary::new(precision);
         let mut h = ComplexArbitrary::with_val(precision, (1.0, 0.0));
@@ -175,6 +175,13 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize) -> ComplexArbit
                 h *= &z;
                 dh += dc.clone() / &z;
             }
+
+            progress_flag.fetch_add(1, Ordering::SeqCst);
+
+            if stop_flag.load(Ordering::SeqCst) {
+                stop_flag.store(false, Ordering::SeqCst);
+                return None
+            };
         }
     
         dh *= &h;
@@ -183,18 +190,21 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize) -> ComplexArbit
 
         let new_c = (-z.clone() / &h) / &df + &guess_c;
 
+        let difference_norm = (new_c.clone() - &guess_c).norm();
+
         // need to set epsilon squared to floating point difference
-        if (new_c.clone() - &guess_c).norm().real() < &epsilon_squared {
-            guess_c = new_c;
-            break;
-        } 
+        if difference_norm.real() <= &epsilon_squared {
+            return Some(new_c);
+        } else if difference_norm.real().is_infinite() || difference_norm.real().is_nan() {
+            return None;
+        }
         
         guess_c = new_c;
+        iteration_flag.fetch_add(1, Ordering::SeqCst);
+        progress_flag.store(0, Ordering::SeqCst);
     }
 
-    println!("nucleus: {}ms", time.elapsed().as_millis());
-
-    return guess_c;
+    None
 }
 
 pub fn get_nucleus_position(nucleus: ComplexArbitrary, period: usize) -> (FloatExtended, f64) {
