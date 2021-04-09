@@ -5,14 +5,16 @@ use crate::util::{ComplexArbitrary, ComplexExtended, FloatArbitrary, FloatExtend
 use crate::math::Reference;
 
 pub struct BoxPeriod {
+    pub box_center: ComplexExtended,
     pub points_z: [ComplexExtended; 4],
     pub points_c: [ComplexExtended; 4],
     pub period: usize
 }
 
 impl BoxPeriod {
-    pub fn new(delta_box: [ComplexExtended; 4]) -> Self {
+    pub fn new(box_center: ComplexExtended, delta_box: [ComplexExtended; 4]) -> Self {
         BoxPeriod {
+            box_center,
             points_z: delta_box.clone(),
             points_c: delta_box,
             period: 1
@@ -74,7 +76,7 @@ impl BoxPeriod {
     }
 }
 
-pub struct BallMethod1 {
+pub struct BallMethod {
     pub radius: FloatExtended,
     pub radius_dz: FloatExtended,
     pub radius_z: FloatExtended,
@@ -86,9 +88,9 @@ pub struct BallMethod1 {
     pub period: usize,
 }
 
-impl BallMethod1 {
+impl BallMethod {
     pub fn new(radius: FloatExtended, point_c: ComplexExtended) -> Self {
-        BallMethod1 {
+        BallMethod {
             radius,
             radius_dz: FloatExtended::new(0.0, 0),
             radius_z: FloatExtended::new(0.0, 0),

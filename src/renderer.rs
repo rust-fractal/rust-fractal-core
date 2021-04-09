@@ -1,4 +1,4 @@
-use crate::{math::{BallMethod1, BoxPeriod}, util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended}};
+use crate::{math::BoxPeriod, util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, complex_extended::ComplexExtended, data_export::*, extended_to_string_long, extended_to_string_short, float_extended::FloatExtended, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended}};
 use crate::math::{SeriesApproximation, Perturbation, Reference};
 
 use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
@@ -34,8 +34,7 @@ pub struct FractalRenderer {
     pub zoom_scale_factor: f64,
     pub center_reference: Reference,
     pub series_approximation: SeriesApproximation,
-    pub box_method: BoxPeriod,
-    pub ball_method: BallMethod1,
+    pub period_finding: BoxPeriod,
     render_indices: Vec<usize>,
     pub remove_centre: bool,
     pub analytic_derivative: bool,
@@ -45,7 +44,8 @@ pub struct FractalRenderer {
     show_output: bool,
     pub progress: ProgressCounters,
     pub render_time: u128,
-    pub fractal_type: FractalType
+    pub fractal_type: FractalType,
+    pub root_zoom_factor: f64,
 }
 
 impl FractalRenderer {
@@ -139,8 +139,7 @@ impl FractalRenderer {
 
         let temporary_delta = ComplexExtended::new2(0.0, 0.0, 0);
 
-        let box_period = BoxPeriod::new([temporary_delta, temporary_delta, temporary_delta, temporary_delta]);
-        let ball_method = BallMethod1::new(FloatExtended::new(0.0, 0), ComplexExtended::new2(0.0, 0.0, 0));
+        let period_finding = BoxPeriod::new(temporary_delta, [temporary_delta, temporary_delta, temporary_delta, temporary_delta]);
 
         let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
 
@@ -166,8 +165,7 @@ impl FractalRenderer {
             zoom_scale_factor,
             center_reference: reference,
             series_approximation,
-            box_method: box_period,
-            ball_method,
+            period_finding,
             render_indices,
             remove_centre,
             analytic_derivative,
@@ -177,7 +175,8 @@ impl FractalRenderer {
             show_output,
             progress: ProgressCounters::new(maximum_iteration),
             render_time: 0,
-            fractal_type
+            fractal_type,
+            root_zoom_factor: 0.0,
         }
     }
 
@@ -592,9 +591,8 @@ impl FractalRenderer {
     }
 
     // find the period given a box
-    pub fn find_period(&mut self, delta_box: [ComplexExtended; 4]) {
-        self.box_method = BoxPeriod::new(delta_box);
-        self.box_method.find_period(&self.center_reference);
+    pub fn find_period(&mut self) {
+        self.period_finding.find_period(&self.center_reference);
     }
 
     // Returns true if the maximum iterations has been increased
