@@ -69,7 +69,6 @@ impl FractalRenderer {
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(false);
         let iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
-        let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
@@ -132,7 +131,6 @@ impl FractalRenderer {
             FloatExtended::new(0.0, 0), 
             probe_sampling,
             experimental,
-            valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
             data_storage_interval,
             fractal_type);
@@ -642,7 +640,6 @@ impl FractalRenderer {
 
             if self.zoom.to_float() < 1e10 {
                 // Set these to start from the beginning
-                self.series_approximation.valid_iteration_frame_multiplier = 1.0;
                 self.series_approximation.valid_iteration_probe_multiplier = 1.0;
 
                 // SA has some problems with precision with lots of terms at lot zoom levels
@@ -741,7 +738,6 @@ impl FractalRenderer {
         self.remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
         self.data_export.lock().iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         self.data_export.lock().palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
-        let valid_iteration_frame_multiplier = settings.get_float("valid_iteration_frame_multiplier").unwrap_or(0.25) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
@@ -774,7 +770,6 @@ impl FractalRenderer {
             FloatExtended::new(0.0, 0), 
             probe_sampling,
             self.experimental,
-            valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
             data_storage_interval,
             self.fractal_type);

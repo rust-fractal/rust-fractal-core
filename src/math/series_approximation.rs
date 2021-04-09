@@ -23,7 +23,6 @@ pub struct SeriesApproximation {
     pub valid_interpolation: Vec<usize>,
     pub probe_sampling: usize,
     pub experimental: bool,
-    pub valid_iteration_frame_multiplier: f32,
     pub valid_iteration_probe_multiplier: f32,
     pub data_storage_interval: usize,
     pub fractal_type: FractalType
@@ -35,7 +34,6 @@ impl SeriesApproximation {
         delta_pixel_square: FloatExtended, 
         probe_sampling: usize, 
         experimental: bool, 
-        valid_iteration_frame_multiplier: f32, 
         valid_iteration_probe_multiplier: f32,
         data_storage_interval: usize,
         fractal_type: FractalType) -> Self {
@@ -55,7 +53,6 @@ impl SeriesApproximation {
             valid_interpolation: Vec::new(),
             probe_sampling,
             experimental,
-            valid_iteration_frame_multiplier,
             valid_iteration_probe_multiplier,
             data_storage_interval,
             fractal_type
