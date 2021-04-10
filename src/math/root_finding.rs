@@ -157,7 +157,7 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
 
     let epsilon_squared = epsilon.square();
 
-    for _i in 0..256 {
+    for _i in 0..64 {
         let mut z = ComplexArbitrary::new(precision);
         let mut dc = ComplexArbitrary::new(precision);
         let mut h = ComplexArbitrary::with_val(precision, (1.0, 0.0));
