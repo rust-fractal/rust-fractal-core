@@ -1,8 +1,10 @@
-use std::cmp::max;
+use std::{cmp::max};
 use std::time::Instant;
 
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
+
+use parking_lot::Mutex;
 
 use crate::util::{ComplexArbitrary, ComplexExtended, FloatArbitrary, FloatExtended, to_extended};
 use crate::math::Reference;
@@ -143,9 +145,11 @@ impl BallMethod {
     }
 }
 
-pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag: Arc<AtomicUsize>, progress_flag: Arc<AtomicUsize>, stop_flag: Arc<AtomicBool>) -> Option<ComplexArbitrary> {
+pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag: Arc<AtomicUsize>, progress_flag: Arc<AtomicUsize>, stop_flag: Arc<AtomicBool>, current_estimate: Arc<Mutex<ComplexExtended>>) -> Option<ComplexArbitrary> {
     let complex_precision = guess_c.prec();
     let precision = 3 * max(complex_precision.0, complex_precision.1);
+
+    let start_c = guess_c.clone();
 
     guess_c.set_prec(precision);
 
@@ -189,6 +193,16 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
         let df = ((dc.clone() * &h - &z * &dh) / &h) / &h;
 
         let new_c = (-z.clone() / &h) / &df + &guess_c;
+
+        let difference_from_start = new_c.clone() - &start_c;
+        let difference_from_start_extended = to_extended(&difference_from_start);
+
+        let mut current = current_estimate.lock();
+
+        current.mantissa = difference_from_start_extended.mantissa;
+        current.exponent = difference_from_start_extended.exponent;
+
+        drop(current);
 
         let difference_norm = (new_c.clone() - &guess_c).norm();
 
