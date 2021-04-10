@@ -68,7 +68,7 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
 
     let first = temp[0].parse::<f64>().unwrap();
 
-    let second = if temp.len() < 2 {
+    let second = if temp[1].len() == 0 {
         0.0
     } else {
         temp[1].parse::<f64>().unwrap() * LOG2_10
