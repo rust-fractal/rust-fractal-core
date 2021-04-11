@@ -23,7 +23,6 @@ pub enum ColoringType {
     SmoothIteration,
     StepIteration,
     DistanceEstimate,
-    BinaryDecomposition,
     AtomDomain
 }
 
@@ -95,7 +94,8 @@ impl DataExport {
                 return;
             }
 
-            let z_norm = (reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa).norm_sqr();
+            let z = reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa;
+            let z_norm = z.norm_sqr();
 
             self.smooth[k] = match self.fractal_type {
                 FractalType::Mandelbrot2 => {
@@ -254,49 +254,59 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn colour_index(&mut self, i: usize, scale: usize, image_x: usize, image_y: usize) {
-        if self.glitched[i] && self.display_glitches {
-            self.set_rgb_with_scale(i, [255, 0, 0], scale, image_x, image_y)
-        } else if self.iterations[i] >= self.maximum_iteration as u32 {
-            self.set_rgb_with_scale(i, [0, 0, 0], scale, image_x, image_y)
-        } else if self.coloring_type == ColoringType::DistanceEstimate {
-            let length = (self.distance_x[i].powi(2) + self.distance_y[i].powi(2)).sqrt();
-            
-            // colouring algorithm based on 'rainbow_fringe' by claude
-            let angle = self.distance_y[i].atan2(self.distance_x[i]);
-
-            let mut hue = angle / TAU;
-            hue -= hue.floor();
-
-            let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
-            let value = length.clamp(0.0, 1.0);
-
-            let color = Color::from_hsv(hue as f64 * 360.0, saturation as f64, value as f64);
-            let (r, g, b, _) = color.rgba_u8();
-
-            self.set_rgb_with_scale(i, [r, g, b], scale, image_x, image_y)
+    pub fn colour_index(&mut self, k: usize, scale: usize, image_x: usize, image_y: usize) {
+        let [r, g, b] = if self.glitched[k] && self.display_glitches {
+            [255, 0, 0]
+        } else if self.iterations[k] >= self.maximum_iteration as u32 {
+            [0, 0, 0]
         } else {
-            let floating_iteration = if self.coloring_type == ColoringType::SmoothIteration {
-                self.iterations[i] as f32 + self.smooth[i]
-            } else {
-                self.iterations[i] as f32
-            };
+            match self.coloring_type {
+                ColoringType::DistanceEstimate => {
+                    let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
             
-            let temp = self.palette_buffer.len() as f32 * (floating_iteration / self.iteration_division + self.palette_offset).fract();
+                    // colouring algorithm based on 'rainbow_fringe' by claude
+                    let angle = self.distance_y[k].atan2(self.distance_x[k]);
+        
+                    let mut hue = angle / TAU;
+                    hue -= hue.floor();
+        
+                    let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
+                    let value = length.clamp(0.0, 1.0);
+        
+                    let color = Color::from_hsv(hue as f64 * 360.0, saturation as f64, value as f64);
+                    let (r, g, b, _) = color.rgba_u8();
+        
+                    [r, g, b]
+                },
+                ColoringType::SmoothIteration | ColoringType::StepIteration => {
+                    let floating_iteration = if self.coloring_type == ColoringType::SmoothIteration {
+                        self.iterations[k] as f32 + self.smooth[k]
+                    } else {
+                        self.iterations[k] as f32
+                    };
+                    
+                    let temp = self.palette_buffer.len() as f32 * (floating_iteration / self.iteration_division + self.palette_offset).fract();
+        
+                    let pos1 = temp.floor() as usize;
+                    let pos2 = if pos1 >= (self.palette_buffer.len() - 1) {
+                        0
+                    } else {
+                        pos1 + 1
+                    };
+        
+                    let frac = temp.fract() as f64;
+        
+                    let (r, g, b, _) = self.palette_buffer[pos1].interpolate_rgb(&self.palette_buffer[pos2], frac).rgba_u8();
+        
+                    [r, g, b]
+                },
+                _ => {
+                    [0, 0, 0]
+                }
+            }
+        };
 
-            let pos1 = temp.floor() as usize;
-            let pos2 = if pos1 >= (self.palette_buffer.len() - 1) {
-                0
-            } else {
-                pos1 + 1
-            };
-
-            let frac = temp.fract() as f64;
-
-            let (r, g, b, _) = self.palette_buffer[pos1].interpolate_rgb(&self.palette_buffer[pos2], frac).rgba_u8();
-
-            self.set_rgb_with_scale(i, [r, g, b], scale, image_x, image_y)
-        }
+        self.set_rgb_with_scale(k, [r, g, b], scale, image_x, image_y)
     }
 
     #[inline]
