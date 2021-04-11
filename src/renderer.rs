@@ -77,13 +77,11 @@ impl FractalRenderer {
         let jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         let show_output = settings.get_bool("show_output").unwrap_or(true);
         
-        let data_type = match settings.get_str("export").unwrap_or_else(|_| String::from("COLOUR")).to_ascii_uppercase().as_ref() {
-            "NONE" => DataType::None,
-            "GUI" => DataType::Gui,
-            "RAW" | "EXR" => DataType::Raw,
-            "COLOUR" | "COLOR" | "PNG" => DataType::Color,
-            "BOTH" => DataType::Both,
-            _ => DataType::Color
+        let export_type = match settings.get_str("export").unwrap_or_else(|_| String::from("COLOUR")).to_ascii_uppercase().as_ref() {
+            "GUI" => ExportType::Gui,
+            "RAW" | "EXR" => ExportType::Raw,
+            "BOTH" => ExportType::Both,
+            _ => ExportType::Color
         };
 
         let (palette_generator, palette_buffer) = if let Ok(colour_values) = settings.get_array("palette") {
@@ -139,7 +137,7 @@ impl FractalRenderer {
 
         let period_finding = BoxPeriod::new(temporary_delta, [temporary_delta, temporary_delta, temporary_delta, temporary_delta]);
 
-        let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, data_type);
+        let render_indices = FractalRenderer::generate_render_indices(image_width, image_height, remove_centre, zoom_scale_factor, export_type);
 
         // Change the zoom level to the correct one for the frame offset
         for _ in 0..frame_offset {
@@ -156,7 +154,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, data_type, palette_generator, palette_buffer, iteration_division, palette_offset, analytic_derivative, fractal_type))),
+            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, palette_generator, palette_buffer, iteration_division, palette_offset, analytic_derivative, fractal_type, export_type))),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -240,7 +238,7 @@ impl FractalRenderer {
 
             // If the image width/height changes intraframe (GUI) we need to regenerate some things
             if export.image_width != self.image_width || export.image_height != self.image_height {
-                self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, export.data_type);
+                self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, export.export_type);
 
                 export.centre_removed = self.remove_centre;
                 export.image_width = self.image_width;
@@ -319,7 +317,7 @@ impl FractalRenderer {
         let packing_time = Instant::now();
 
         if self.remove_centre != self.data_export.lock().centre_removed {
-            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().data_type);
+            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().export_type);
             self.data_export.lock().centre_removed = self.remove_centre;
         }
 
@@ -428,7 +426,7 @@ impl FractalRenderer {
         let mut previous_value = 0;
         let number_pixels = self.render_indices.len();
 
-        for value in values.iter() {
+        for &value in values.iter() {
             // println!("{}", value);
             let end_value = number_pixels / (value * value);
             let chunk_size = max((end_value - previous_value) / 512, 4);
@@ -436,9 +434,9 @@ impl FractalRenderer {
 
             // This one has no offset because it is not a glitch resolving reference
             if self.analytic_derivative {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size);
+                Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size);
             } else {
-                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, *value, chunk_size, self.fractal_type);
+                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type);
             };
 
             previous_value = end_value;
@@ -675,7 +673,7 @@ impl FractalRenderer {
         }
     }
 
-    pub fn generate_render_indices(image_width: usize, image_height: usize, remove_centre: bool, zoom_scale_factor: f64, data_type: DataType) -> Vec<usize> {
+    pub fn generate_render_indices(image_width: usize, image_height: usize, remove_centre: bool, zoom_scale_factor: f64, export_type: ExportType) -> Vec<usize> {
         // let time = Instant::now();
 
         let mut indices = Vec::with_capacity(image_width * image_height);
@@ -684,8 +682,8 @@ impl FractalRenderer {
         let val1 = (image_width as f64 * temp).ceil() as usize;
         let val2 = (image_height as f64 * temp).ceil() as usize;
 
-        match data_type {
-            DataType::Gui => {
+        match export_type {
+            ExportType::Gui => {
                 // Could order each subsection with circular ordering
                 let values = [16, 8, 4, 2, 1];
 
@@ -777,7 +775,7 @@ impl FractalRenderer {
         let mut data_export = self.data_export.lock();
 
         if self.image_width != data_export.image_width || self.image_height != data_export.image_height {
-            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().data_type);
+            self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().export_type);
             data_export.centre_removed = self.remove_centre;
         }
 
@@ -797,7 +795,7 @@ impl FractalRenderer {
         data_export.image_width = self.image_width;
         data_export.image_height = self.image_height;
         data_export.coloring_type = if self.analytic_derivative {
-            ColoringType::Distance
+            ColoringType::DistanceEstimate
         } else {
             if step_iteration {
                 ColoringType::StepIteration
