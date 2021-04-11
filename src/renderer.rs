@@ -590,6 +590,7 @@ impl FractalRenderer {
     // find the period given a box
     pub fn find_period(&mut self) {
         self.period_finding.find_period(&self.center_reference);
+        // self.period_finding.find_atom_domain_period(&self.center_reference);
     }
 
     // Returns true if the maximum iterations has been increased

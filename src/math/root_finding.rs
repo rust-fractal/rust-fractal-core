@@ -4,6 +4,9 @@ use std::time::Instant;
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
 
+use std::thread;
+use std::time::Duration;
+
 use parking_lot::Mutex;
 
 use crate::util::{ComplexArbitrary, ComplexExtended, FloatArbitrary, FloatExtended, to_extended};
@@ -78,6 +81,33 @@ impl BoxPeriod {
 
             self.period += 1;
         }
+    }
+
+    pub fn find_atom_domain_period(&mut self, reference: &Reference) {
+        let mut z = self.box_center;
+
+        let mut min_value = (reference.reference_data_extended[0] + z).norm();
+        let mut min_value_at = 0;
+
+        for i in 2..reference.current_iteration {
+            z *= reference.reference_data_extended[i - 1] * 2.0 + self.box_center;
+            z += self.box_center;
+            z.reduce();
+
+            let distance_from_origin = (reference.reference_data_extended[i] + z).norm();
+
+            // point has escaped
+            if distance_from_origin.to_float() > 1e16 {
+                break;
+            }
+
+            if distance_from_origin < min_value {
+                min_value = distance_from_origin;
+                min_value_at = i;
+            }
+        }
+
+        println!("atom domain period is: {}", min_value_at);
     }
 }
 
@@ -161,23 +191,23 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
 
     let epsilon_squared = epsilon.square();
 
-    for _i in 0..64 {
-        let mut z = ComplexArbitrary::new(precision);
-        let mut dc = ComplexArbitrary::new(precision);
+    for _ in 0..64 {
+        let mut z_current = ComplexArbitrary::new(precision);
+        let mut derivative_current = ComplexArbitrary::new(precision);
         let mut h = ComplexArbitrary::with_val(precision, (1.0, 0.0));
         let mut dh = ComplexArbitrary::new(precision);
     
         for i in 1..=period {
-            dc *= 2.0;
-            dc *= &z;
-            dc += 1.0;
+            derivative_current *= 2.0;
+            derivative_current *= &z_current;
+            derivative_current += 1.0;
     
-            z.square_mut();
-            z += &guess_c;
+            z_current.square_mut();
+            z_current += &guess_c;
     
             if i < period && period % i == 0 {
-                h *= &z;
-                dh += dc.clone() / &z;
+                h *= &z_current;
+                dh += derivative_current.clone() / &z_current;
             }
 
             progress_flag.fetch_add(1, Ordering::SeqCst);
@@ -190,9 +220,9 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
     
         dh *= &h;
 
-        let df = ((dc.clone() * &h - &z * &dh) / &h) / &h;
+        let df = ((derivative_current.clone() * &h - &z_current * &dh) / &h) / &h;
 
-        let new_c = (-z.clone() / &h) / &df + &guess_c;
+        let new_c = (-z_current.clone() / &h) / &df + &guess_c;
 
         let difference_from_start = new_c.clone() - &start_c;
         let difference_from_start_extended = to_extended(&difference_from_start);
@@ -203,6 +233,8 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
         current.exponent = difference_from_start_extended.exponent;
 
         drop(current);
+
+        thread::sleep(Duration::from_millis(500));
 
         let difference_norm = (new_c.clone() - &guess_c).norm();
 
