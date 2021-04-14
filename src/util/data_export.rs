@@ -1,7 +1,7 @@
 use crate::util::{PixelData, FloatExtended, ComplexFixed};
 use crate::math::Reference;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, f64::consts::LN_2};
 use std::cmp::{min, max};
 use std::f32::consts::TAU;
 
@@ -9,6 +9,10 @@ use exr::{prelude::simple_image};
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode, Gradient};
 
 use super::FractalType;
+
+// This is 1e16f32.ln().log2() + 1.0
+const ESCAPE_RADIUS_LN_LOG2_P1: f32 = 5.203254472696 + 1.0;
+const ESCAPE_RADIUS_LN_LOG3_P1: f32 = 3.282888062227 + 1.0;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ExportType {
@@ -78,10 +82,8 @@ impl DataExport {
         }
     }
 
+    #[inline]
     pub fn export_pixels(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended, scale: usize) {
-        // This is 1e16f32.ln()
-        let escape_radius_ln = 36.8413614879;
-
         for pixel in pixel_data {
             let k = pixel.image_y * self.image_width + pixel.image_x;
 
@@ -99,10 +101,10 @@ impl DataExport {
 
             self.smooth[k] = match self.fractal_type {
                 FractalType::Mandelbrot2 => {
-                    1.0 - (z_norm.ln() as f32 / escape_radius_ln).log2()
+                    ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2()
                 }
                 FractalType::Mandelbrot3 => {
-                    1.0 - (z_norm.ln() as f32 / escape_radius_ln).log(3.0)
+                    ESCAPE_RADIUS_LN_LOG3_P1 - (z_norm.ln() as f32).log(3.0)
                 }
             };
 
@@ -121,7 +123,7 @@ impl DataExport {
                 let scaled_jxa = (jxa * delta_pixel).to_float();
                 let scaled_jya = (jya * delta_pixel).to_float();
 
-                let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * 2.0f64.ln())).to_float();
+                let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * LN_2)).to_float();
 
                 let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
                 let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
@@ -331,6 +333,7 @@ impl DataExport {
         self.palette_offset = palette_offset;
     }
 
+    #[inline]
     pub fn set_rgb_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize, image_x: usize, image_y: usize) {
         if scale > 1 {
             let horizontal = if image_x + scale < self.image_width {
