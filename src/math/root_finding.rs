@@ -4,8 +4,8 @@ use std::time::Instant;
 use std::sync::Arc;
 use std::sync::atomic::{Ordering, AtomicUsize, AtomicBool};
 
-use std::thread;
-use std::time::Duration;
+// use std::thread;
+// use std::time::Duration;
 
 use parking_lot::Mutex;
 
@@ -234,7 +234,7 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
 
         drop(current);
 
-        thread::sleep(Duration::from_millis(500));
+        // thread::sleep(Duration::from_millis(500));
 
         let difference_norm = (new_c.clone() - &guess_c).norm();
 
@@ -254,7 +254,7 @@ pub fn get_nucleus(mut guess_c: ComplexArbitrary, period: usize, iteration_flag:
 }
 
 pub fn get_nucleus_position(nucleus: ComplexArbitrary, period: usize) -> (FloatExtended, f64) {
-    let time = Instant::now();
+    // let time = Instant::now();
 
     let mut z = nucleus.clone();
     let mut l = ComplexExtended::new2(1.0, 0.0, 0);
@@ -287,7 +287,7 @@ pub fn get_nucleus_position(nucleus: ComplexArbitrary, period: usize) -> (FloatE
     let mut zoom = temp2 / size.norm();
     zoom.reduce();
 
-    println!("nucleus size: {}ms", time.elapsed().as_millis());
+    // println!("nucleus size: {}ms", time.elapsed().as_millis());
 
     (zoom, size.mantissa.arg())
 }
