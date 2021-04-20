@@ -366,7 +366,6 @@ impl FractalRenderer {
                     1
                 };
 
-                // TODO need to change to gaussian distribution
                 if self.jitter {
                     let mut rng = rand::thread_rng();
 

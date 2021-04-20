@@ -100,14 +100,24 @@ impl DataExport {
         for pixel in pixel_data {
             let k = pixel.image_y * self.image_width + pixel.image_x;
 
-            self.iterations[k] = pixel.iteration as u32;
+            let new_scale = if self.export_type == ExportType::Gui {
+                scale
+            } else {
+                1
+            };
 
+            self.iterations[k] = pixel.iteration as u32;
             self.glitched[k] = pixel.glitched;
 
             if pixel.glitched && self.display_glitches {
-                self.set_rgb_with_scale(k, [255, 0, 0], scale, pixel.image_x, pixel.image_y);
-                return;
+                self.set_rgb_with_scale(k, [255, 0, 0], new_scale, pixel.image_x, pixel.image_y);
+                continue;
             }
+
+            if pixel.iteration >= self.maximum_iteration {
+                self.set_rgb_with_scale(k, [0, 0, 0], new_scale, pixel.image_x, pixel.image_y);
+                continue;
+            }    
 
             let z = reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa;
             let z_norm = z.norm_sqr();
@@ -147,11 +157,7 @@ impl DataExport {
                 self.distance_y[k] = output.im as f32;
             };
 
-            if self.export_type == ExportType::Gui {
-                self.colour_index(k, scale, pixel.image_x, pixel.image_y)
-            } else {
-                self.colour_index(k, 1, pixel.image_x, pixel.image_y)
-            }
+            self.colour_index(k, new_scale, pixel.image_x, pixel.image_y)
         }
     }
 
@@ -270,62 +276,60 @@ impl DataExport {
 
     #[inline]
     pub fn colour_index(&mut self, k: usize, scale: usize, image_x: usize, image_y: usize) {
-        let [r, g, b] = if self.glitched[k] && self.display_glitches {
-            [255, 0, 0]
-        } else if self.iterations[k] >= self.maximum_iteration as u32 {
-            [0, 0, 0]
-        } else {
-            match self.coloring_type {
-                ColoringType::DistanceEstimate => {
-                    let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
-            
-                    // colouring algorithm based on 'rainbow_fringe' by claude
-                    let angle = self.distance_y[k].atan2(self.distance_x[k]);
+        let rgb: [u8; 3] = match self.coloring_type {
+            ColoringType::DistanceEstimate => {
+                // TODO have some alternative algorithms
+                let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
         
-                    let mut hue = angle / TAU;
-                    hue -= hue.floor();
-        
-                    let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
-                    let value = length.clamp(0.0, 1.0);
-        
-                    let color = Color::from_hsv(hue as f64 * 360.0, saturation as f64, value as f64);
-                    let (r, g, b, _) = color.rgba_u8();
-        
-                    [r, g, b]
-                },
-                ColoringType::SmoothIteration | ColoringType::StepIteration => {
-                    let floating_iteration = if self.coloring_type == ColoringType::SmoothIteration {
-                        self.iterations[k] as f32 + self.smooth[k]
-                    } else {
-                        self.iterations[k] as f32
-                    };
-                    
-                    let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration / self.palette_iteration_span + self.palette_offset).fract();
-        
-                    let pos1 = temp.floor() as usize;
-                    let pos2 = if pos1 >= (self.palette_interpolated_buffer.len() - 1) {
-                        0
-                    } else {
-                        pos1 + 1
-                    };
-        
-                    let frac = temp.fract() as f64;
-        
-                    let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba_u8();
-        
-                    [r, g, b]
-                },
-                _ => {
-                    [0, 0, 0]
-                }
+                // colouring algorithm based on 'rainbow_fringe' by claude
+                let angle = self.distance_y[k].atan2(self.distance_x[k]);
+    
+                let mut hue = angle / TAU;
+                hue -= hue.floor();
+    
+                let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
+                let value = length.clamp(0.0, 1.0);
+    
+                let color = Color::from_hsv(hue as f64 * 360.0, saturation as f64, value as f64);
+                let (r, g, b, _) = color.rgba_u8();
+    
+                [r, g, b]
+            },
+            ColoringType::SmoothIteration | ColoringType::StepIteration => {
+                // TODO this will lose precision so refactor
+                let floating_iteration = if self.coloring_type == ColoringType::SmoothIteration {
+                    self.iterations[k] as f32 + self.smooth[k]
+                } else {
+                    self.iterations[k] as f32
+                };
+                
+                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration / self.palette_iteration_span + self.palette_offset).fract();
+    
+                let pos1 = temp.floor() as usize;
+                let pos2 = if pos1 >= (self.palette_interpolated_buffer.len() - 1) {
+                    0
+                } else {
+                    pos1 + 1
+                };
+    
+                let frac = temp.fract() as f64;
+    
+                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba_u8();
+    
+                [r, g, b]
+            },
+            _ => {
+                [0, 0, 0]
             }
         };
 
-        self.set_rgb_with_scale(k, [r, g, b], scale, image_x, image_y)
+        self.set_rgb_with_scale(k, rgb, scale, image_x, image_y)
     }
 
     #[inline]
     pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, cyclic: bool) {
+        let mut new_palette = false;
+        
         if let Some(palette) = palette {
             self.palette_buffer = palette.iter().map(|value| {
                 Color::from_rgb_u8(value.0, value.1, value.2)
@@ -335,26 +339,16 @@ impl DataExport {
                 self.palette_buffer.push(self.palette_buffer[0].clone());
             };
 
+            new_palette = true;
+        };
+
+        if new_palette || (cyclic != self.palette_cyclic) {
             let mut number_colors = self.palette_buffer.len();
 
             if !cyclic {
                 number_colors -= 1;
             }
 
-            let palette_generator = CustomGradient::new()
-                .colors(&self.palette_buffer[0..number_colors])
-                .interpolation(Interpolation::CatmullRom)
-                .mode(BlendMode::Oklab)
-                .build().unwrap();
-
-            self.palette_interpolated_buffer = palette_generator.colors(number_colors * 64);
-        } else if cyclic != self.palette_cyclic {
-            let mut number_colors = self.palette_buffer.len();
-
-            if !cyclic {
-                number_colors -= 1;
-            }
-            
             let palette_generator = CustomGradient::new()
                 .colors(&self.palette_buffer[0..number_colors])
                 .interpolation(Interpolation::CatmullRom)
