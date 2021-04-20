@@ -52,11 +52,14 @@ impl FractalRenderer {
     pub fn new(settings: Config) -> Self {
         let image_width = settings.get_int("image_width").unwrap_or(1000) as usize;
         let image_height = settings.get_int("image_height").unwrap_or(1000) as usize;
+
         let rotate = settings.get_float("rotate").unwrap_or(0.0).to_radians();
         let maximum_iteration = settings.get_int("iterations").unwrap_or(1000) as usize;
+
         let initial_zoom = settings.get_str("zoom").unwrap_or_else(|_| String::from("1E0")).to_ascii_uppercase();
         let center_real = settings.get_str("real").unwrap_or_else(|_| String::from("-0.75"));
         let center_imag = settings.get_str("imag").unwrap_or_else(|_| String::from("0.0"));
+
         let approximation_order = settings.get_int("approximation_order").unwrap_or(0) as usize;
         let glitch_percentage = settings.get_float("glitch_percentage").unwrap_or(0.001);
         let remaining_frames = settings.get_int("frames").unwrap_or(1) as usize;
@@ -67,8 +70,11 @@ impl FractalRenderer {
         let experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(false);
-        let iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
+
+        let palette_iteration_span = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
+        let palette_cyclic = settings.get_bool("palette_cyclic").unwrap_or(true);
+
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
@@ -84,24 +90,32 @@ impl FractalRenderer {
             _ => ExportType::Color
         };
 
-        let (palette_generator, palette_buffer) = if let Ok(colour_values) = settings.get_array("palette") {
-                let color = colour_values.chunks_exact(3).map(|value| {
-                    Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
-                        value[1].clone().into_int().unwrap() as u8, 
-                        value[2].clone().into_int().unwrap() as u8)
-                }).collect::<Vec<Color>>();
+        let (palette_buffer, palette_interpolated_buffer) = if let Ok(colour_values) = settings.get_array("palette") {
+            let mut colors = colour_values.chunks_exact(3).map(|value| {
+                Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
+                    value[1].clone().into_int().unwrap() as u8, 
+                    value[2].clone().into_int().unwrap() as u8)
+            }).collect::<Vec<Color>>();
 
-                let palette_generator = CustomGradient::new()
-                    .colors(&color)
-                    .interpolation(Interpolation::CatmullRom)
-                    .mode(BlendMode::Oklab)
-                    .build().unwrap();
+            if colors[0] != *colors.last().unwrap() {
+                colors.push(colors[0].clone());
+            };
 
-                let palette_buffer = palette_generator.colors(color.len() * 64);
+            let mut number_colors = colors.len();
 
-                (palette_generator, palette_buffer)
-            } else {
-                generate_default_palette()
+            if palette_cyclic {
+                number_colors -= 1;
+            }
+
+            let palette_generator = CustomGradient::new()
+                .colors(&colors[0..number_colors])
+                .interpolation(Interpolation::CatmullRom)
+                .mode(BlendMode::Oklab)
+                .build().unwrap();
+
+            (colors, palette_generator.colors(number_colors * 64))
+        } else {
+            generate_default_palette()
         };
 
         let mut zoom = string_to_extended(&initial_zoom);
@@ -154,7 +168,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, palette_generator, palette_buffer, iteration_division, palette_offset, analytic_derivative, fractal_type, export_type))),
+            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, palette_buffer, palette_interpolated_buffer, palette_cyclic, palette_iteration_span, palette_offset, analytic_derivative, fractal_type, export_type))),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -734,7 +748,7 @@ impl FractalRenderer {
         self.experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         self.remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
-        self.data_export.lock().iteration_division = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
+        self.data_export.lock().palette_iteration_span = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
         self.data_export.lock().palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;

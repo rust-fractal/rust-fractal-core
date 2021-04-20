@@ -1,2 +1,3 @@
-palette = [0, 0, 255, 0, 255, 0, 0, 0, 255]
+palette = [0,0,255,0,255,0]
+
 iteration_division = 100.0

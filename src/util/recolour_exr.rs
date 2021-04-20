@@ -19,22 +19,29 @@ pub struct RecolourExr {
 impl RecolourExr {
     pub fn new(settings: Config) -> Self {
         let (_, palette_buffer) = if let Ok(colour_values) = settings.get_array("palette") {
-            let color = colour_values.chunks_exact(3).map(|value| {
-                // We assume the palette is in BGR rather than RGB
+            let mut colors = colour_values.chunks_exact(3).map(|value| {
                 Color::from_rgb_u8(value[0].clone().into_int().unwrap() as u8, 
                     value[1].clone().into_int().unwrap() as u8, 
                     value[2].clone().into_int().unwrap() as u8)
             }).collect::<Vec<Color>>();
 
+            if colors[0] != *colors.last().unwrap() {
+                colors.push(colors[0].clone());
+            };
+
+            let mut number_colors = colors.len();
+
+            if settings.get_bool("palette_cyclic").unwrap_or(true) {
+                number_colors -= 1;
+            }
+
             let palette_generator = CustomGradient::new()
-                .colors(&color)
+                .colors(&colors[0..number_colors])
                 .interpolation(Interpolation::CatmullRom)
                 .mode(BlendMode::Oklab)
                 .build().unwrap();
 
-            let palette_buffer = palette_generator.colors(color.len() * 64);
-
-            (palette_generator, palette_buffer)
+            (colors, palette_generator.colors(number_colors * 64))
         } else {
             generate_default_palette()
         };
