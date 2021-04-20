@@ -191,6 +191,8 @@ impl FractalRenderer {
     }
 
     pub fn render_frame(&mut self, frame_index: usize, filename: String, stop_flag: Arc<AtomicBool>) {
+        self.progress.reset();
+        
         if self.show_output {
             print!("{:<6}", frame_index + self.frame_offset);
             print!("| {:<15}", extended_to_string_short(self.zoom));
@@ -470,7 +472,6 @@ impl FractalRenderer {
         };
         
         let correction_time = Instant::now();
-        let mut correction_references = 1;
 
         // Remove all non-glitched points from the remaining points
         pixel_data.retain(|packet| {
@@ -512,8 +513,9 @@ impl FractalRenderer {
 
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
-            correction_references += 1;
             glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+
+            self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
 
             if self.stop_rendering(&stop_flag, frame_time) {
                 tx.send(()).unwrap();
@@ -567,7 +569,7 @@ impl FractalRenderer {
 
         if self.show_output {
             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", correction_time.elapsed().as_millis());
-            print!("| {:<6}", correction_references);
+            print!("| {:<6}", self.progress.reference_count.load(Ordering::SeqCst));
             std::io::stdout().flush().unwrap();
         };
         
@@ -575,8 +577,6 @@ impl FractalRenderer {
         self.data_export.lock().save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
 
         self.render_time = frame_time.elapsed().as_millis();
-
-        self.progress.reset();
 
         if self.show_output {
             print!("| {:<15}", saving_time.elapsed().as_millis());
