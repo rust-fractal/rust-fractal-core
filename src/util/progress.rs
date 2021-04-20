@@ -1,8 +1,9 @@
-use std::sync::{Arc, atomic::{Ordering, AtomicUsize}};
+use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 
 pub struct ProgressCounters {
     pub reference: Arc<AtomicUsize>,
     pub reference_maximum: Arc<AtomicUsize>,
+    pub reference_count: Arc<AtomicUsize>,
     pub series_approximation: Arc<AtomicUsize>,
     pub min_series_approximation: Arc<AtomicUsize>,
     pub max_series_approximation: Arc<AtomicUsize>,
@@ -16,6 +17,7 @@ impl ProgressCounters {
         ProgressCounters {
             reference: Arc::new(AtomicUsize::new(1)),
             reference_maximum: Arc::new(AtomicUsize::new(maximum_iteration - 1)),
+            reference_count: Arc::new(AtomicUsize::new(1)),
             series_approximation: Arc::new(AtomicUsize::new(0)),
             min_series_approximation: Arc::new(AtomicUsize::new(1)),
             max_series_approximation: Arc::new(AtomicUsize::new(1)),
@@ -33,6 +35,7 @@ impl ProgressCounters {
         self.series_validation.store(0, Ordering::SeqCst);
         self.iteration.store(0, Ordering::SeqCst);
         self.glitched_maximum.store(0, Ordering::SeqCst);
+        self.reference_count.store(1, Ordering::SeqCst);
     }
 
     // TODO just set these to zero rather than reset
@@ -50,5 +53,6 @@ impl ProgressCounters {
         self.series_approximation.store(0, Ordering::SeqCst);
         self.reference.store(1, Ordering::SeqCst);
         self.reference_maximum.store(maximum_iteration - 1, Ordering::SeqCst);
+        self.reference_count.store(1, Ordering::SeqCst);
     }
 }
