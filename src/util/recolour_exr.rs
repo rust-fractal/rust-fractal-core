@@ -12,8 +12,8 @@ use crate::util::generate_default_palette;
 pub struct RecolourExr {
     palette_buffer: Vec<Color>,
     files: Vec<String>,
-    iteration_division: f32,
-    iteration_offset: f32
+    palette_iteration_span: f32,
+    palette_offset: f32
 }
 
 impl RecolourExr {
@@ -46,8 +46,8 @@ impl RecolourExr {
             generate_default_palette()
         };
 
-        let iteration_division = settings.get_float("iteration_division").unwrap_or(10.0) as f32;
-        let iteration_offset = settings.get_float("iteration_offset").unwrap_or(0.0) as f32;
+        let palette_iteration_span = settings.get_float("palette_iteration_span").unwrap_or(10.0) as f32;
+        let palette_offset = settings.get_float("iteration_offset").unwrap_or(0.0) as f32;
 
         let paths = fs::read_dir("./output/").unwrap();
         let mut exr_files = Vec::new();
@@ -68,8 +68,8 @@ impl RecolourExr {
         RecolourExr {
             palette_buffer,
             files: exr_files,
-            iteration_division,
-            iteration_offset
+            palette_iteration_span,
+            palette_offset
         }
     }
 
@@ -110,7 +110,7 @@ impl RecolourExr {
                     rgb_buffer[3 * i + 1] = 0u8;
                     rgb_buffer[3 * i + 2] = 0u8;
                 } else {
-                    let temp = self.palette_buffer.len() as f32 * ((iterations[i] as f32 + smooth[i].to_f32()) / self.iteration_division + self.iteration_offset).fract();
+                    let temp = self.palette_buffer.len() as f32 * ((iterations[i] as f32 + smooth[i].to_f32()) / self.palette_iteration_span + self.palette_offset).fract();
 
                     let pos1 = temp.floor() as usize;
                     let pos2 = if pos1 == (self.palette_buffer.len() - 1) {

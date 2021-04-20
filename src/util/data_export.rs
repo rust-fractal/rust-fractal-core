@@ -325,7 +325,7 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32, cyclic: bool) {
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, cyclic: bool) {
         if let Some(palette) = palette {
             self.palette_buffer = palette.iter().map(|value| {
                 Color::from_rgb_u8(value.0, value.1, value.2)
@@ -364,7 +364,7 @@ impl DataExport {
             self.palette_interpolated_buffer = palette_generator.colors(number_colors * 64);
         };
 
-        self.palette_iteration_span = iteration_division;
+        self.palette_iteration_span = palette_iteration_span;
         self.palette_offset = palette_offset;
         self.palette_cyclic = cyclic;
     }
