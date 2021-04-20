@@ -71,7 +71,7 @@ impl FractalRenderer {
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(false);
 
-        let palette_iteration_span = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
+        let palette_iteration_span = settings.get_float("palette_iteration_span").unwrap_or(100.0) as f32;
         let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let palette_cyclic = settings.get_bool("palette_cyclic").unwrap_or(true);
 
@@ -748,7 +748,7 @@ impl FractalRenderer {
         self.experimental = settings.get_bool("experimental").unwrap_or(false);
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         self.remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
-        self.data_export.lock().palette_iteration_span = settings.get_float("iteration_division").unwrap_or(100.0) as f32;
+        self.data_export.lock().palette_iteration_span = settings.get_float("palette_iteration_span").unwrap_or(100.0) as f32;
         self.data_export.lock().palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
