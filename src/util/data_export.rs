@@ -6,7 +6,7 @@ use std::cmp::{min, max};
 use std::f32::consts::TAU;
 
 use exr::{prelude::simple_image};
-use colorgrad::{Color, CustomGradient, Interpolation, BlendMode, Gradient};
+use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
 
 use super::FractalType;
 
@@ -39,10 +39,11 @@ pub struct DataExport {
     pub distance_x: Vec<f32>,
     pub distance_y: Vec<f32>,
     pub glitched: Vec<bool>,
-    pub palette_generator: Gradient,
     pub palette_buffer: Vec<Color>,
+    pub palette_interpolated_buffer: Vec<Color>,
+    pub palette_cyclic: bool,
     pub display_glitches: bool,
-    pub iteration_division: f32,
+    pub palette_iteration_span: f32,
     pub palette_offset: f32,
     pub centre_removed: bool,
     pub coloring_type: ColoringType,
@@ -52,7 +53,18 @@ pub struct DataExport {
 }
 
 impl DataExport {
-    pub fn new(image_width: usize, image_height: usize, display_glitches: bool, palette_generator: Gradient, palette_buffer: Vec<Color>, iteration_division: f32, palette_offset: f32, analytic_derivative: bool, fractal_type: FractalType, export_type: ExportType) -> Self {
+    pub fn new(image_width: usize, 
+        image_height: usize, 
+        display_glitches: bool, 
+        palette_buffer: Vec<Color>, 
+        palette_interpolated_buffer: Vec<Color>, 
+        palette_cyclic: bool,
+        palette_iteration_span: f32, 
+        palette_offset: f32, 
+        analytic_derivative: bool, 
+        fractal_type: FractalType, 
+        export_type: ExportType) -> Self {
+
         let coloring_type = if analytic_derivative {
             ColoringType::DistanceEstimate
         } else {
@@ -69,10 +81,11 @@ impl DataExport {
             distance_x: vec![0.0f32; image_width * image_height],
             distance_y: vec![0.0f32; image_width * image_height],
             glitched: vec![false; image_width * image_height],
-            palette_generator,
             palette_buffer,
+            palette_interpolated_buffer,
+            palette_cyclic,
             display_glitches,
-            iteration_division,
+            palette_iteration_span,
             palette_offset,
             centre_removed: false,
             coloring_type,
@@ -287,10 +300,10 @@ impl DataExport {
                         self.iterations[k] as f32
                     };
                     
-                    let temp = self.palette_buffer.len() as f32 * (floating_iteration / self.iteration_division + self.palette_offset).fract();
+                    let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration / self.palette_iteration_span + self.palette_offset).fract();
         
                     let pos1 = temp.floor() as usize;
-                    let pos2 = if pos1 >= (self.palette_buffer.len() - 1) {
+                    let pos2 = if pos1 >= (self.palette_interpolated_buffer.len() - 1) {
                         0
                     } else {
                         pos1 + 1
@@ -298,7 +311,7 @@ impl DataExport {
         
                     let frac = temp.fract() as f64;
         
-                    let (r, g, b, _) = self.palette_buffer[pos1].interpolate_rgb(&self.palette_buffer[pos2], frac).rgba_u8();
+                    let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba_u8();
         
                     [r, g, b]
                 },
@@ -312,25 +325,48 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32) {
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, iteration_division: f32, palette_offset: f32, cyclic: bool) {
         if let Some(palette) = palette {
-            let color = palette.iter().map(|value| {
-                // We assume the palette is in BGR rather than RGB
+            self.palette_buffer = palette.iter().map(|value| {
                 Color::from_rgb_u8(value.0, value.1, value.2)
             }).collect::<Vec<Color>>();
 
+            if self.palette_buffer[0] != *self.palette_buffer.last().unwrap() {
+                self.palette_buffer.push(self.palette_buffer[0].clone());
+            };
+
+            let mut number_colors = self.palette_buffer.len();
+
+            if !cyclic {
+                number_colors -= 1;
+            }
+
             let palette_generator = CustomGradient::new()
-                .colors(&color)
+                .colors(&self.palette_buffer[0..number_colors])
                 .interpolation(Interpolation::CatmullRom)
                 .mode(BlendMode::Oklab)
                 .build().unwrap();
 
-            self.palette_buffer = palette_generator.colors(color.len() * 64);
-            self.palette_generator = palette_generator;
+            self.palette_interpolated_buffer = palette_generator.colors(number_colors * 64);
+        } else if cyclic != self.palette_cyclic {
+            let mut number_colors = self.palette_buffer.len();
+
+            if !cyclic {
+                number_colors -= 1;
+            }
+            
+            let palette_generator = CustomGradient::new()
+                .colors(&self.palette_buffer[0..number_colors])
+                .interpolation(Interpolation::CatmullRom)
+                .mode(BlendMode::Oklab)
+                .build().unwrap();
+
+            self.palette_interpolated_buffer = palette_generator.colors(number_colors * 64);
         };
 
-        self.iteration_division = iteration_division;
+        self.palette_iteration_span = iteration_division;
         self.palette_offset = palette_offset;
+        self.palette_cyclic = cyclic;
     }
 
     #[inline]

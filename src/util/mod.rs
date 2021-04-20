@@ -6,7 +6,7 @@ pub mod complex_extended;
 pub mod recolour_exr;
 pub mod progress;
 
-use colorgrad::{CustomGradient, Interpolation, Color, BlendMode, Gradient};
+use colorgrad::{CustomGradient, Interpolation, Color, BlendMode};
 pub use complex_extended::ComplexExtended;
 pub use float_extended::FloatExtended;
 pub use recolour_exr::RecolourExr;
@@ -117,7 +117,7 @@ pub fn get_approximation_terms(approximation_order: usize, image_width: usize, i
     }
 }
 
-pub fn generate_default_palette() -> (Gradient, Vec<Color>) {
+pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
     let palette_generator = CustomGradient::new()
         .colors(
             &[Color::from_rgb_u8(0, 7, 100), 
@@ -130,9 +130,7 @@ pub fn generate_default_palette() -> (Gradient, Vec<Color>) {
             .interpolation(Interpolation::CatmullRom).mode(BlendMode::Oklab)
             .build().unwrap();
 
-    let palette_buffer = palette_generator.colors(6 * 64);
-
-    (palette_generator, palette_buffer)
+    (palette_generator.colors(6), palette_generator.colors(6 * 64))
 }
 
 #[derive(Clone)]
