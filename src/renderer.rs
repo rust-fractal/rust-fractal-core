@@ -807,14 +807,18 @@ impl FractalRenderer {
 
         data_export.image_width = self.image_width;
         data_export.image_height = self.image_height;
-        data_export.coloring_type = if self.analytic_derivative {
-            ColoringType::DistanceEstimate
+        data_export.data_type = if self.analytic_derivative {
+            DataType::Distance
         } else {
-            if step_iteration {
-                ColoringType::StepIteration
-            } else {
-                ColoringType::SmoothIteration
-            }
+            DataType::Iteration
+        };
+
+        data_export.coloring_type = if self.analytic_derivative {
+            ColoringType::Distance
+        } else if step_iteration {
+            ColoringType::StepIteration
+        } else {
+            ColoringType::SmoothIteration
         };
 
         data_export.clear_buffers();

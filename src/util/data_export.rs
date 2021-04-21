@@ -26,7 +26,15 @@ pub enum ExportType {
 pub enum ColoringType {
     SmoothIteration,
     StepIteration,
-    DistanceEstimate,
+    Distance,
+    DistanceNormal,
+    DistanceCombined
+}
+
+#[derive(PartialEq, Clone, Copy)]
+pub enum DataType { 
+    Iteration,
+    Distance,
     AtomDomain
 }
 
@@ -46,6 +54,7 @@ pub struct DataExport {
     pub palette_iteration_span: f32,
     pub palette_offset: f32,
     pub centre_removed: bool,
+    pub data_type: DataType,
     pub coloring_type: ColoringType,
     pub maximum_iteration: usize,
     pub fractal_type: FractalType,
@@ -65,10 +74,10 @@ impl DataExport {
         fractal_type: FractalType, 
         export_type: ExportType) -> Self {
 
-        let coloring_type = if analytic_derivative {
-            ColoringType::DistanceEstimate
+        let (coloring_type, data_type) = if analytic_derivative {
+            (ColoringType::Distance, DataType::Distance)
         } else {
-            ColoringType::SmoothIteration
+            (ColoringType::SmoothIteration, DataType::Iteration)
         };
 
         // TODO maybe make the distance estimate arrays empty until required
@@ -88,6 +97,7 @@ impl DataExport {
             palette_iteration_span,
             palette_offset,
             centre_removed: false,
+            data_type,
             coloring_type,
             maximum_iteration: 0,
             fractal_type,
@@ -131,7 +141,7 @@ impl DataExport {
                 }
             };
 
-            if self.coloring_type == ColoringType::DistanceEstimate {
+            if self.data_type == DataType::Distance {
                 let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                 let temp2 = temp1.norm();
 
@@ -208,7 +218,7 @@ impl DataExport {
         let iterations = simple_image::Channel::non_color_data(simple_image::Text::from("N").unwrap(), simple_image::Samples::U32(self.iterations.clone()));
         let smooth = simple_image::Channel::non_color_data(simple_image::Text::from("NF").unwrap(), simple_image::Samples::F32(self.smooth.clone()));
 
-        let channels = if self.coloring_type == ColoringType::DistanceEstimate {
+        let channels = if self.data_type == DataType::Distance {
             let distance_x = simple_image::Channel::non_color_data(simple_image::Text::from("DEX").unwrap(), simple_image::Samples::F32(self.distance_x.clone()));
             let distance_y = simple_image::Channel::non_color_data(simple_image::Text::from("DEY").unwrap(), simple_image::Samples::F32(self.distance_y.clone()));
 
@@ -264,7 +274,7 @@ impl DataExport {
                 self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
                 self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
 
-                if self.coloring_type == ColoringType::DistanceEstimate {
+                if self.data_type == DataType::Distance {
                     self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
                     self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
                 }
@@ -277,7 +287,7 @@ impl DataExport {
     #[inline]
     pub fn colour_index(&mut self, k: usize, scale: usize, image_x: usize, image_y: usize) {
         let rgb: [u8; 3] = match self.coloring_type {
-            ColoringType::DistanceEstimate => {
+            ColoringType::Distance => {
                 // TODO have some alternative algorithms
                 let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
         
