@@ -267,8 +267,6 @@ impl FractalRenderer {
 
             // Check to see if the series approximation order has changed intraframe
             if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
-                // TODO make it so that the value is set back to zero, rather than remade
-                // self.progress.reset_series_approximation();
                 self.series_approximation.min_valid_iteration = 1;
                 self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &stop_flag);
             }
@@ -551,20 +549,13 @@ impl FractalRenderer {
                 Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type);
             };
 
-            // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
-
             // Remove all non-glitched points from the remaining points
-            // TODO maybe there is a function to split into two vectors, we only need to export the non glitched pixels
             pixel_data.retain(|packet| {
                 packet.glitched
             });
         };
 
         tx.send(()).unwrap();
-
-        // Possibly here correct the small glitches
-        // self.data_export.interpolate_glitches(&pixel_data);
-        // self.data_export.export_pixels(&pixel_data, &glitch_reference, delta_pixel_extended);
 
         if self.show_output {
             print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", correction_time.elapsed().as_millis());
