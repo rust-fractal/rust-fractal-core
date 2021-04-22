@@ -184,7 +184,6 @@ impl DataExport {
                 self.save_raw(filename, approximation_order, zoom);
             }
             _ => {},
-
         }
     }
 
@@ -256,6 +255,16 @@ impl DataExport {
 
     pub fn regenerate(&mut self) {
         for i in 0..self.iterations.len() {
+            if self.glitched[i] && self.display_glitches {
+                self.set_rgb_with_scale(i, [255, 0, 0], 1, 0, 0);
+                continue;
+            }
+
+            if self.iterations[i] >= self.maximum_iteration as u32 {
+                self.set_rgb_with_scale(i, [0, 0, 0], 1, 0, 0);
+                continue;
+            }
+
             self.colour_index(i, 1, 0, 0);
         }
     }
