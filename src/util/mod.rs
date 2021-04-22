@@ -133,6 +133,7 @@ pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
     (palette_generator.colors(6), palette_generator.colors(6 * 64))
 }
 
+// TODO maybe try and reduce the size of this to improve the threading
 #[derive(Clone)]
 pub struct PixelData {
     pub image_x: usize,
