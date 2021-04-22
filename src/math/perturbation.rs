@@ -12,7 +12,7 @@ use parking_lot::Mutex;
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, fractal_type: FractalType) {
+    pub fn iterate_normal(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType) {
         pixel_data.par_chunks_mut(chunk_size)
             .for_each(|pixel_data| {
                 // Record the number of new pixels that have been completed
@@ -92,32 +92,34 @@ impl Perturbation {
                                     break 'outer;
                                 }
 
-                                match fractal_type {
-                                    FractalType::Mandelbrot2 => {
-                                        pixel.delta_current.mantissa *= z + reference_data.z;
-                                    }
-                                    FractalType::Mandelbrot3 => {
-                                        let temp = scaled_scale_factor_1 * pixel.delta_current.mantissa;
-                                        pixel.delta_current.mantissa *= 3.0 * reference_data.z * reference_data.z + 3.0 * reference_data.z * temp + temp * temp;
-                                    }
-                                }
+                                // match fractal_type {
+                                //     FractalType::Mandelbrot2 => {
+                                //         pixel.delta_current.mantissa *= z + reference_data.z;
+                                //     }
+                                //     FractalType::Mandelbrot3 => {
+                                //         let temp = scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                                //         pixel.delta_current.mantissa *= 3.0 * reference_data.z * reference_data.z + 3.0 * reference_data.z * temp + temp * temp;
+                                //     }
+                                // }
 
+                                pixel.delta_current.mantissa *= z + reference_data.z;
                                 pixel.delta_current.mantissa += scaled_delta_reference;
                             }
                         } else {
                             for i in 0..next_iteration_batch {
                                 let reference_data = &reference_batch[i];
 
-                                match fractal_type {
-                                    FractalType::Mandelbrot2 => {
-                                        pixel.delta_current.mantissa *= scaled_scale_factor_1 * pixel.delta_current.mantissa + 2.0 * reference_data.z;
-                                    }
-                                    FractalType::Mandelbrot3 => {
-                                        let temp = scaled_scale_factor_1 * pixel.delta_current.mantissa;
-                                        pixel.delta_current.mantissa *= 3.0 * reference_data.z * reference_data.z + 3.0 * reference_data.z * temp + temp * temp;
-                                    }
-                                }
+                                // match fractal_type {
+                                //     FractalType::Mandelbrot2 => {
+                                //         pixel.delta_current.mantissa *= scaled_scale_factor_1 * pixel.delta_current.mantissa + 2.0 * reference_data.z;
+                                //     }
+                                //     FractalType::Mandelbrot3 => {
+                                //         let temp = scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                                //         pixel.delta_current.mantissa *= 3.0 * reference_data.z * reference_data.z + 3.0 * reference_data.z * temp + temp * temp;
+                                //     }
+                                // }
 
+                                pixel.delta_current.mantissa *= scaled_scale_factor_1 * pixel.delta_current.mantissa + 2.0 * reference_data.z;
                                 pixel.delta_current.mantissa += scaled_delta_reference;
                             }
                         }
@@ -160,15 +162,16 @@ impl Perturbation {
                                 }
                             }
 
-                            match fractal_type {
-                                FractalType::Mandelbrot2 => {
-                                    pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
-                                }
-                                FractalType::Mandelbrot3 => {
-                                    pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * reference.reference_data_extended[val1 + additional_iterations] * 3.0 + reference.reference_data_extended[val1 + additional_iterations] * pixel.delta_current * 3.0 + pixel.delta_current * pixel.delta_current;
-                                }
-                            }
+                            // match fractal_type {
+                            //     FractalType::Mandelbrot2 => {
+                            //         pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
+                            //     }
+                            //     FractalType::Mandelbrot3 => {
+                            //         pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * reference.reference_data_extended[val1 + additional_iterations] * 3.0 + reference.reference_data_extended[val1 + additional_iterations] * pixel.delta_current * 3.0 + pixel.delta_current * pixel.delta_current;
+                            //     }
+                            // }
 
+                            pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
                             pixel.delta_current += pixel.delta_reference;
                             
                             additional_iterations += 1;
@@ -192,7 +195,7 @@ impl Perturbation {
             });
     }
 
-    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, fractal_type: FractalType) {
+    pub fn iterate_normal_plus_derivative(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType) {
         pixel_data.par_chunks_mut(chunk_size)
             .for_each(|pixel_data| {
                 // Record the number of new pixels that have been completed
