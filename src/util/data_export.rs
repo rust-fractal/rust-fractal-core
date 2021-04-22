@@ -307,20 +307,16 @@ impl DataExport {
             },
             ColoringType::SmoothIteration | ColoringType::StepIteration => {
                 // TODO this will lose precision so refactor
-                let floating_iteration = if self.coloring_type == ColoringType::SmoothIteration {
-                    self.iterations[k] as f32 + self.smooth[k]
-                } else {
-                    self.iterations[k] as f32
+                let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
+                
+                if self.coloring_type == ColoringType::SmoothIteration {
+                    floating_iteration += self.smooth[k] / self.palette_iteration_span
                 };
                 
-                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration / self.palette_iteration_span + self.palette_offset).fract();
+                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
     
                 let pos1 = temp.floor() as usize;
-                let pos2 = if pos1 >= (self.palette_interpolated_buffer.len() - 1) {
-                    0
-                } else {
-                    pos1 + 1
-                };
+                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
     
                 let frac = temp.fract() as f64;
     

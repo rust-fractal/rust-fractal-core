@@ -56,30 +56,8 @@ impl PartialEq for FloatExtended {
 }
 
 impl PartialOrd for FloatExtended {
-    // TODO sort out NaN values
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        // This is horrible
-        // if self.mantissa == 0.0 && other.mantissa < 0.0 {
-        //     Some(Ordering::Greater)
-        // } else if self.mantissa == 0.0 && other.mantissa > 0.0 {
-        //     Some(Ordering::Less)
-        // } else if other.mantissa == 0.0 && self.mantissa < 0.0 {
-        //     Some(Ordering::Less)
-        // } else if other.mantissa == 0.0 && self.mantissa > 0.0 {
-        //     Some(Ordering::Greater)
-        // } else if self.exponent < other.exponent {
-        //     Some(Ordering::Less)
-        // } else if self.exponent > other.exponent {
-        //     Some(Ordering::Greater)
-        // } else if self.mantissa == other.mantissa {
-        //     Some(Ordering::Equal)
-        // } else if self.mantissa < other.mantissa {
-        //     Some(Ordering::Less)
-        // } else {
-        //     Some(Ordering::Greater)
-        // }
-
         if self.mantissa == 0.0 {
             return self.mantissa.partial_cmp(&other.mantissa);
         }
