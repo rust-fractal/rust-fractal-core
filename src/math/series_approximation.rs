@@ -485,7 +485,7 @@ impl SeriesApproximation {
 
         // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
         let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];
-        
+
         // Horner's rule
         let mut approximation = new_coefficients[self.order];
 
@@ -511,9 +511,9 @@ impl SeriesApproximation {
         let mut approximation = new_coefficients[self.order];
         approximation *= self.order as f64;
 
-        for (i, coefficient) in new_coefficients[1..self.order].iter().enumerate().rev() {
+        for k in (1..self.order).rev() {
             approximation *= point_delta;
-            approximation += *coefficient * i as f64;
+            approximation += new_coefficients[k] * k as f64;
         }
 
         approximation.reduce();
