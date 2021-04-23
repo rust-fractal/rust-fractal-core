@@ -1,18 +1,16 @@
-use crate::util::{PixelData, FloatExtended, ComplexFixed};
+use crate::util::{PixelData, FloatExtended, ComplexFixed, FractalType};
 use crate::math::Reference;
 
 use std::{collections::HashMap, f64::consts::LN_2};
-use std::cmp::{min, max};
+// use std::cmp::{min, max};
 use std::f32::consts::TAU;
 
 use exr::{prelude::simple_image};
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
 
-use super::FractalType;
-
 // This is 1e16f32.ln().log2() + 1.0
 const ESCAPE_RADIUS_LN_LOG2_P1: f32 = 5.203254472696 + 1.0;
-const ESCAPE_RADIUS_LN_LOG3_P1: f32 = 3.282888062227 + 1.0;
+// const ESCAPE_RADIUS_LN_LOG3_P1: f32 = 3.282888062227 + 1.0;
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ExportType {
@@ -108,38 +106,39 @@ impl DataExport {
     #[inline]
     pub fn export_pixels(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended, scale: usize) {
         for pixel in pixel_data {
-            let k = pixel.image_y * self.image_width + pixel.image_x;
-
             let new_scale = if self.export_type == ExportType::Gui {
                 scale
             } else {
                 1
             };
 
-            self.iterations[k] = pixel.iteration as u32;
-            self.glitched[k] = pixel.glitched;
+            self.glitched[pixel.index] = pixel.glitched;
 
             if pixel.glitched && self.display_glitches {
-                self.set_rgb_with_scale(k, [255, 0, 0], new_scale, pixel.image_x, pixel.image_y);
+                self.set_rgb_with_scale(pixel.index, [255, 0, 0], new_scale);
                 continue;
             }
 
+            self.iterations[pixel.index] = pixel.iteration as u32;
+
             if pixel.iteration >= self.maximum_iteration {
-                self.set_rgb_with_scale(k, [0, 0, 0], new_scale, pixel.image_x, pixel.image_y);
+                self.set_rgb_with_scale(pixel.index, [0, 0, 0], new_scale);
                 continue;
-            }    
+            }
 
             let z = reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa;
             let z_norm = z.norm_sqr();
 
-            self.smooth[k] = match self.fractal_type {
-                FractalType::Mandelbrot2 => {
-                    ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2()
-                }
-                FractalType::Mandelbrot3 => {
-                    ESCAPE_RADIUS_LN_LOG3_P1 - (z_norm.ln() as f32).log(3.0)
-                }
-            };
+            // self.smooth[pixel.index] = match self.fractal_type {
+            //     FractalType::Mandelbrot2 => {
+            //         ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2()
+            //     }
+            //     FractalType::Mandelbrot3 => {
+            //         ESCAPE_RADIUS_LN_LOG3_P1 - (z_norm.ln() as f32).log(3.0)
+            //     }
+            // };
+
+            self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2();
 
             if self.data_type == DataType::Distance {
                 let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
@@ -163,11 +162,11 @@ impl DataExport {
 
                 let output = num / ComplexFixed::new(den_1, den_2);
 
-                self.distance_x[k] = output.re as f32;
-                self.distance_y[k] = output.im as f32;
+                self.distance_x[pixel.index] = output.re as f32;
+                self.distance_y[pixel.index] = output.im as f32;
             };
 
-            self.colour_index(k, new_scale, pixel.image_x, pixel.image_y)
+            self.colour_index(pixel.index, new_scale)
         }
     }
 
@@ -256,45 +255,45 @@ impl DataExport {
     pub fn regenerate(&mut self) {
         for i in 0..self.iterations.len() {
             if self.glitched[i] && self.display_glitches {
-                self.set_rgb_with_scale(i, [255, 0, 0], 1, 0, 0);
+                self.set_rgb_with_scale(i, [255, 0, 0], 1);
                 continue;
             }
 
             if self.iterations[i] >= self.maximum_iteration as u32 {
-                self.set_rgb_with_scale(i, [0, 0, 0], 1, 0, 0);
+                self.set_rgb_with_scale(i, [0, 0, 0], 1);
                 continue;
             }
 
-            self.colour_index(i, 1, 0, 0);
+            self.colour_index(i, 1);
         }
     }
 
-    pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
-        if !self.display_glitches {
-            for pixel in pixel_data {
-                let k = pixel.image_y * self.image_width + pixel.image_x;
+    // pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
+    //     if !self.display_glitches {
+    //         for pixel in pixel_data {
+    //             let k = pixel.image_y * self.image_width + pixel.image_x;
 
-                let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
-                let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
+    //             let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
+    //             let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
 
-                let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
-                let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
+    //             let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
+    //             let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
 
-                self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
-                self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
+    //             self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
+    //             self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
 
-                if self.data_type == DataType::Distance {
-                    self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
-                    self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
-                }
+    //             if self.data_type == DataType::Distance {
+    //                 self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
+    //                 self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
+    //             }
 
-                self.colour_index(k, 1, 0, 0);
-            }
-        }
-    }
+    //             self.colour_index(k, 1);
+    //         }
+    //     }
+    // }
 
     #[inline]
-    pub fn colour_index(&mut self, k: usize, scale: usize, image_x: usize, image_y: usize) {
+    pub fn colour_index(&mut self, k: usize, scale: usize) {
         let rgb: [u8; 3] = match self.coloring_type {
             ColoringType::Distance => {
                 // TODO have some alternative algorithms
@@ -338,7 +337,7 @@ impl DataExport {
             }
         };
 
-        self.set_rgb_with_scale(k, rgb, scale, image_x, image_y)
+        self.set_rgb_with_scale(k, rgb, scale)
     }
 
     #[inline]
@@ -379,8 +378,11 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn set_rgb_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize, image_x: usize, image_y: usize) {
+    pub fn set_rgb_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize) {
         if scale > 1 {
+            let image_x = index % self.image_width;
+            let image_y = index / self.image_width;
+
             let horizontal = if image_x + scale < self.image_width {
                 scale
             } else {

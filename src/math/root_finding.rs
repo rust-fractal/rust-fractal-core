@@ -23,7 +23,7 @@ impl BoxPeriod {
     pub fn new(box_center: ComplexExtended, delta_box: [ComplexExtended; 4]) -> Self {
         BoxPeriod {
             box_center,
-            points_z: delta_box.clone(),
+            points_z: delta_box,
             points_c: delta_box,
             period: 1
         }
@@ -131,7 +131,7 @@ impl BallMethod {
             radius_z: FloatExtended::new(0.0, 0),
             radius_radius: FloatExtended::new(0.0, 0),
             ei: FloatExtended::new(0.0, 0),
-            point_c: point_c.clone(),
+            point_c,
             point_z: point_c,
             point_dz: ComplexExtended::new2(1.0, 0.0, 0),
             period: 1
