@@ -479,20 +479,19 @@ impl SeriesApproximation {
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
-        // This could be improved to use the iteration option better
-        // this assumes that the requested iteration is a multiple of the data interval
         if iteration == 1 {
             return point_delta;
         }
 
         // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
         let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];
+        
         // Horner's rule
         let mut approximation = new_coefficients[self.order];
 
-        for k in (1..=(self.order - 1)).rev() {
+        for coefficient in new_coefficients[1..self.order].iter().rev() {
             approximation *= point_delta;
-            approximation += new_coefficients[k];
+            approximation += *coefficient;
         }
 
         approximation *= point_delta;
@@ -501,26 +500,22 @@ impl SeriesApproximation {
     }
 
     pub fn evaluate_derivative(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
-        // This could be improved to use the iteration option better
-        // this assumes that the requested iteration is a multiple of the data interval
         if iteration == 1 {
             return ComplexExtended::new2(1.0, 0.0, 0);
         }
 
         // 101 -> 100 / 100 = 1, 1 -> 0 / 100 = 0, 201 -> 200 / 100 = 2
         let new_coefficients = &self.coefficients[(iteration - 1) / self.data_storage_interval];
+
         // Horner's rule
         let mut approximation = new_coefficients[self.order];
         approximation *= self.order as f64;
 
-        for k in (1..=(self.order - 1)).rev() {
+        for (i, coefficient) in new_coefficients[1..self.order].iter().enumerate().rev() {
             approximation *= point_delta;
-            approximation += new_coefficients[k] * k as f64;
+            approximation += *coefficient * i as f64;
         }
 
-        // println!("{:?}", approximation);
-
-        // approximation *= point_delta;
         approximation.reduce();
         approximation
     }

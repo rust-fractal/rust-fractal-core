@@ -26,5 +26,5 @@ features = ["float", "complex"]
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 [profile.release]
-#debug = true
+debug = true
 #incremental = true

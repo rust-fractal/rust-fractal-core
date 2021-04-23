@@ -68,7 +68,7 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
 
     let first = temp[0].parse::<f64>().unwrap();
 
-    let second = if temp[1].len() == 0 {
+    let second = if temp[1].is_empty() {
         0.0
     } else {
         temp[1].parse::<f64>().unwrap() * LOG2_10
@@ -133,22 +133,15 @@ pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
     (palette_generator.colors(6), palette_generator.colors(6 * 64))
 }
 
-// TODO maybe try and reduce the size of this to improve the threading
-// TODO remove the delta centre
-// TODO put image_x and image_y into one variable
-// TODO maybe put an option on the derivative
-// TODO change the glitched and escaped to an enum pixelstate
 #[derive(Clone)]
 pub struct PixelData {
-    pub image_x: usize,
-    pub image_y: usize,
+    pub index: usize,
     pub iteration: usize,
     pub delta_centre: ComplexExtended,
     pub delta_reference: ComplexExtended,
     pub delta_current: ComplexExtended,
     pub derivative_current: ComplexExtended,
     pub glitched: bool,
-    pub escaped: bool,
 }
 
 #[derive(Copy, Clone, PartialEq)]
