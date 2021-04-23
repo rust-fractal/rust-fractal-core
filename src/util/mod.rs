@@ -134,6 +134,10 @@ pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
 }
 
 // TODO maybe try and reduce the size of this to improve the threading
+// TODO remove the delta centre
+// TODO put image_x and image_y into one variable
+// TODO maybe put an option on the derivative
+// TODO change the glitched and escaped to an enum pixelstate
 #[derive(Clone)]
 pub struct PixelData {
     pub image_x: usize,
