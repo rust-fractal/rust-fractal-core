@@ -17,6 +17,7 @@ impl Perturbation {
             .for_each(|pixel_data| {
                 // Record the number of new pixels that have been completed
                 let mut new_pixels_complete = 0;
+                let mut pixel_index = 0;
 
                 // Go through each pixel in the packet
                 for pixel in pixel_data.iter_mut() {
@@ -24,6 +25,8 @@ impl Perturbation {
                     if stop_flag.load(Ordering::SeqCst) {
                         break;
                     };
+
+                    pixel_index += 1;
 
                     // Variable to record the number of additional iterations
                     let mut additional_iterations = 0;
@@ -187,7 +190,7 @@ impl Perturbation {
                     }
                 }
 
-                data_export.lock().export_pixels(pixel_data, reference, delta_pixel, scale);
+                data_export.lock().export_pixels(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
                 pixels_complete.fetch_add(new_pixels_complete, Ordering::Relaxed);
             });
     }
@@ -197,6 +200,7 @@ impl Perturbation {
             .for_each(|pixel_data| {
                 // Record the number of new pixels that have been completed
                 let mut new_pixels_complete = 0;
+                let mut pixel_index = 0;
 
                 // Go through each pixel in the packet
                 for pixel in pixel_data.iter_mut() {
@@ -204,6 +208,8 @@ impl Perturbation {
                     if stop_flag.load(Ordering::SeqCst) {
                         break;
                     };
+
+                    pixel_index += 1;
 
                     // Variable to record the number of additional iterations
                     let mut additional_iterations = 0;
@@ -383,7 +389,7 @@ impl Perturbation {
                     pixel.derivative_current.reduce();
                 }
 
-                data_export.lock().export_pixels(pixel_data, reference, delta_pixel, scale);
+                data_export.lock().export_pixels(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
                 pixels_complete.fetch_add(new_pixels_complete, Ordering::Relaxed);
             });
     }

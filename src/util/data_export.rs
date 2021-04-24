@@ -115,14 +115,14 @@ impl DataExport {
             self.glitched[pixel.index] = pixel.glitched;
 
             if pixel.glitched && self.display_glitches {
-                self.set_rgb_with_scale(pixel.index, [255, 0, 0], new_scale);
+                self.set_with_scale(pixel.index, [255, 0, 0], new_scale);
                 continue;
             }
 
             self.iterations[pixel.index] = pixel.iteration as u32;
 
             if pixel.iteration >= self.maximum_iteration {
-                self.set_rgb_with_scale(pixel.index, [0, 0, 0], new_scale);
+                self.set_with_scale(pixel.index, [0, 0, 0], new_scale);
                 continue;
             }
 
@@ -255,12 +255,12 @@ impl DataExport {
     pub fn regenerate(&mut self) {
         for i in 0..self.iterations.len() {
             if self.glitched[i] && self.display_glitches {
-                self.set_rgb_with_scale(i, [255, 0, 0], 1);
+                self.set_with_scale(i, [255, 0, 0], 1);
                 continue;
             }
 
             if self.iterations[i] >= self.maximum_iteration as u32 {
-                self.set_rgb_with_scale(i, [0, 0, 0], 1);
+                self.set_with_scale(i, [0, 0, 0], 1);
                 continue;
             }
 
@@ -337,7 +337,7 @@ impl DataExport {
             }
         };
 
-        self.set_rgb_with_scale(k, rgb, scale)
+        self.set_with_scale(k, rgb, scale)
     }
 
     #[inline]
@@ -378,7 +378,7 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn set_rgb_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize) {
+    pub fn set_with_scale(&mut self, index: usize, value: [u8; 3], scale: usize) {
         if scale > 1 {
             let image_x = index % self.image_width;
             let image_y = index / self.image_width;
@@ -397,6 +397,10 @@ impl DataExport {
 
             for i in image_x..(image_x + horizontal) {
                 for j in image_y..(image_y + vertical) {
+                    // TODO add the distance ones
+                    self.iterations[j * self.image_width + i] = self.iterations[index];
+                    self.glitched[j * self.image_width + i] = self.glitched[index];
+
                     self.buffer[3 * (j * self.image_width + i)] = value[0];
                     self.buffer[3 * (j * self.image_width + i) + 1] = value[1];
                     self.buffer[3 * (j * self.image_width + i) + 2] = value[2];
