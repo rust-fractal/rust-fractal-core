@@ -395,15 +395,34 @@ impl DataExport {
                 self.image_height - image_y
             };
 
-            for i in image_x..(image_x + horizontal) {
-                for j in image_y..(image_y + vertical) {
-                    // TODO add the distance ones
-                    self.iterations[j * self.image_width + i] = self.iterations[index];
-                    self.glitched[j * self.image_width + i] = self.glitched[index];
+            if self.data_type == DataType::Distance {
+                for i in image_x..(image_x + horizontal) {
+                    for j in image_y..(image_y + vertical) {
+                        // TODO add the distance ones
+                        let scale_index = j * self.image_width + i;
 
-                    self.buffer[3 * (j * self.image_width + i)] = value[0];
-                    self.buffer[3 * (j * self.image_width + i) + 1] = value[1];
-                    self.buffer[3 * (j * self.image_width + i) + 2] = value[2];
+                        self.iterations[scale_index] = self.iterations[index];
+                        self.glitched[scale_index] = self.glitched[index];
+                        self.distance_x[scale_index] = self.distance_x[index];
+                        self.distance_y[scale_index] = self.distance_y[index];
+    
+                        self.buffer[3 * (scale_index)] = value[0];
+                        self.buffer[3 * (scale_index) + 1] = value[1];
+                        self.buffer[3 * (scale_index) + 2] = value[2];
+                    }
+                }
+            } else {
+                for i in image_x..(image_x + horizontal) {
+                    for j in image_y..(image_y + vertical) {
+                        let scale_index = j * self.image_width + i;
+
+                        self.iterations[scale_index] = self.iterations[index];
+                        self.glitched[scale_index] = self.glitched[index];
+    
+                        self.buffer[3 * (scale_index)] = value[0];
+                        self.buffer[3 * (scale_index) + 1] = value[1];
+                        self.buffer[3 * (scale_index) + 2] = value[2];
+                    }
                 }
             }
         } else {
