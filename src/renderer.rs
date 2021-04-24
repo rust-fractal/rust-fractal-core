@@ -37,7 +37,7 @@ pub struct FractalRenderer {
     pub period_finding: BoxPeriod,
     render_indices: Vec<usize>,
     pub remove_centre: bool,
-    pub analytic_derivative: bool,
+    pub pixel_data_type: DataType,
     pub jitter: bool,
     pub jitter_factor: f64,
     pub experimental: bool,
@@ -78,7 +78,20 @@ impl FractalRenderer {
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
-        let analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
+
+        let coloring_type = match settings.get("coloring_type").unwrap_or_else(|_| String::from("smooth_iteration")).to_ascii_uppercase().as_ref() {
+            "SMOOTH_ITERATION" | "SMOOTH" => ColoringType::SmoothIteration,
+            "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,
+            "DISTANCE" => ColoringType::Distance,
+            "STRIPE" => ColoringType::Stripe,
+            _ => ColoringType::SmoothIteration
+        };
+
+        let pixel_data_type = match coloring_type {
+            ColoringType::SmoothIteration | ColoringType::StepIteration | ColoringType::Stripe => DataType::Iteration,
+            _ => DataType::Distance
+        };
+
         let jitter = settings.get_bool("jitter").unwrap_or(false);
         let jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         let show_output = settings.get_bool("show_output").unwrap_or(true);
@@ -168,7 +181,7 @@ impl FractalRenderer {
             auto_adjust_iterations,
             maximum_iteration,
             glitch_percentage,
-            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, palette_buffer, palette_interpolated_buffer, palette_cyclic, palette_iteration_span, palette_offset, analytic_derivative, fractal_type, export_type))),
+            data_export: Arc::new(Mutex::new(DataExport::new(image_width, image_height, display_glitches, palette_buffer, palette_interpolated_buffer, palette_cyclic, palette_iteration_span, palette_offset, coloring_type, pixel_data_type, fractal_type, export_type))),
             start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
@@ -178,7 +191,7 @@ impl FractalRenderer {
             period_finding,
             render_indices,
             remove_centre,
-            analytic_derivative,
+            pixel_data_type,
             jitter,
             jitter_factor,
             experimental,
@@ -376,7 +389,7 @@ impl FractalRenderer {
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
 
-                let derivative = if self.analytic_derivative {
+                let derivative = if self.pixel_data_type == DataType::Distance {
                     self.series_approximation.evaluate_derivative(point_delta, chosen_iteration)
                 } else {
                     complex_default
@@ -390,6 +403,7 @@ impl FractalRenderer {
                     delta_current: new_delta,
                     derivative_current: derivative,
                     glitched: false,
+                    stripe: (0.0, 0.0, 0.0, 0.0)
                 }
             }).collect::<Vec<PixelData>>();
 
@@ -437,7 +451,7 @@ impl FractalRenderer {
             let chunk_size = max((end_value - previous_value) / 512, 4);
 
             // This one has no offset because it is not a glitch resolving reference
-            if self.analytic_derivative {
+            if self.pixel_data_type == DataType::Distance {
                 Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type);
             } else {
                 Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type);
@@ -509,7 +523,7 @@ impl FractalRenderer {
 
             let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
-            if self.analytic_derivative {
+            if self.pixel_data_type == DataType::Distance {
                 pixel_data.par_iter_mut()
                     .for_each(|pixel| {
                         pixel.glitched = false;
@@ -525,13 +539,14 @@ impl FractalRenderer {
                         pixel.iteration = glitch_reference.start_iteration;
                         pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
                         pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                        pixel.stripe = (0.0, 0.0, 0.0, 0.0)
                 });
             }
             
             let chunk_size = max(pixel_data.len() / 512, 4);
             // println!("chunk size: {}", chunk_size);
 
-            if self.analytic_derivative {
+            if self.pixel_data_type == DataType::Distance {
                 Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type);
             } else {
                 Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type);
@@ -731,11 +746,23 @@ impl FractalRenderer {
         let valid_iteration_probe_multiplier = settings.get_float("valid_iteration_probe_multiplier").unwrap_or(0.02) as f32;
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
-        self.analytic_derivative = settings.get_bool("analytic_derivative").unwrap_or(false);
+        
+        let coloring_type = match settings.get("coloring_type").unwrap_or_else(|_| String::from("smooth_iteration")).to_ascii_uppercase().as_ref() {
+            "SMOOTH_ITERATION" | "SMOOTH" => ColoringType::SmoothIteration,
+            "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,
+            "DISTANCE" => ColoringType::Distance,
+            "STRIPE" => ColoringType::Stripe,
+            _ => ColoringType::SmoothIteration
+        };
+
+        let pixel_data_type = match coloring_type {
+            ColoringType::SmoothIteration | ColoringType::StepIteration | ColoringType::Stripe => DataType::Iteration,
+            _ => DataType::Distance
+        };
+
         self.jitter = settings.get_bool("jitter").unwrap_or(false);
         self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
         self.show_output = settings.get_bool("show_output").unwrap_or(true);
-        let step_iteration = settings.get_bool("step_iteration").unwrap_or(false);
 
         let mut zoom = string_to_extended(&initial_zoom);
         let delta_pixel =  (-2.0 * (4.0 / self.image_height as f64 - 2.0) / zoom) / self.image_height as f64;
@@ -786,19 +813,8 @@ impl FractalRenderer {
 
         data_export.image_width = self.image_width;
         data_export.image_height = self.image_height;
-        data_export.data_type = if self.analytic_derivative {
-            DataType::Distance
-        } else {
-            DataType::Iteration
-        };
-
-        data_export.coloring_type = if self.analytic_derivative {
-            ColoringType::Distance
-        } else if step_iteration {
-            ColoringType::StepIteration
-        } else {
-            ColoringType::SmoothIteration
-        };
+        data_export.data_type = pixel_data_type;
+        data_export.coloring_type = coloring_type;
 
         data_export.clear_buffers();
     }

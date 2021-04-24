@@ -26,7 +26,8 @@ pub enum ColoringType {
     StepIteration,
     Distance,
     DistanceNormal,
-    DistanceCombined
+    DistanceCombined,
+    Stripe
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -68,15 +69,10 @@ impl DataExport {
         palette_cyclic: bool,
         palette_iteration_span: f32, 
         palette_offset: f32, 
-        analytic_derivative: bool, 
+        coloring_type: ColoringType,
+        data_type: DataType,
         fractal_type: FractalType, 
         export_type: ExportType) -> Self {
-
-        let (coloring_type, data_type) = if analytic_derivative {
-            (ColoringType::Distance, DataType::Distance)
-        } else {
-            (ColoringType::SmoothIteration, DataType::Iteration)
-        };
 
         // TODO maybe make the distance estimate arrays empty until required
         DataExport {
@@ -139,6 +135,30 @@ impl DataExport {
             // };
 
             self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2();
+
+            if self.coloring_type == ColoringType::Stripe {
+                // let output = pixel.stripe.0;
+                // let output = pixel.stripe.0 * self.smooth[pixel.index] + pixel.stripe.1 * (1.0 - self.smooth[pixel.index]);
+
+                let mut output = pixel.stripe.0 * self.smooth[pixel.index] + pixel.stripe.1 + pixel.stripe.2 * (1.0 - self.smooth[pixel.index]);
+                output /= 4.0;
+
+                // let d = self.smooth[pixel.index];
+                // let d2 = self.smooth[pixel.index] * d;
+                // let d3 = self.smooth[pixel.index] * d2;
+
+                // let h0 = 0.5 * (-d2 + d3);
+                // let h1 = 0.5 * (d + 4.0 * d2 - 3.0 * d3);
+                // let h2 = 0.5 * (2.0 - 5.0 * d2 + 3.0 * d3);
+                // let h3 = 0.5 * (-d + 2.0 * d2 - d3);
+
+                // let output = pixel.stripe.0 * h0 + pixel.stripe.1 * h1 + pixel.stripe.2 * h2 + pixel.stripe.3 * h3;
+
+                let temp = 255 - (255.0 * output) as u8;
+
+                self.set_with_scale(pixel.index, [temp, temp, temp], new_scale);
+                continue;
+            }
 
             if self.data_type == DataType::Distance {
                 let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
