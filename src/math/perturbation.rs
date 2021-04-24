@@ -1,4 +1,4 @@
-use crate::util::{FloatExp, FloatExtended, FractalType, PixelData, data_export::DataExport};
+use crate::util::{FloatExp, FloatExtended, FractalType, PixelData, data_export::DataExport, ComplexFixed};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
@@ -51,6 +51,10 @@ impl Perturbation {
                     // Number of iterations to the next extended iteration
                     let mut next_extended_iteration = first_extended_iteration - pixel.iteration;
 
+                    let mut stripe_iterations = 0;
+                    let mut stripe_iterations2 = 0;
+                    let mut stripe_storage = [ComplexFixed::new(0.0, 0.0); 5];
+
                     // Start running the core iteration loop
                     'outer: loop {
                         // Number of iterations remaining
@@ -93,6 +97,13 @@ impl Perturbation {
                                     break 'outer;
                                 }
 
+                                stripe_iterations += 1;
+                                stripe_iterations %= 5;
+                                stripe_iterations2 += 1;
+
+                                stripe_storage[stripe_iterations] = z;
+                                // stripe_storage[stripe_iterations] = 0.5 * (z.im / z_norm.sqrt()) as f32 + 0.5;                                
+
                                 // match fractal_type {
                                 //     FractalType::Mandelbrot2 => {
                                 //         pixel.delta_current.mantissa *= z + reference_data.z;
@@ -119,7 +130,6 @@ impl Perturbation {
                                 // }
 
                                 pixel.delta_current.mantissa *= scaled_scale_factor_1 * pixel.delta_current.mantissa + 2.0 * reference_data.z;
-                                // pixel.delta_current.mantissa *= 2.0 * reference_data.z;
                                 pixel.delta_current.mantissa += scaled_delta_reference;
                             }
                         }
@@ -160,6 +170,12 @@ impl Perturbation {
                                     new_pixels_complete += 1;
                                     break;
                                 }
+
+                                stripe_iterations += 1;
+                                stripe_iterations %= 5;
+                                stripe_iterations2 += 1;
+    
+                                stripe_storage[stripe_iterations] = z;
                             }
 
                             // match fractal_type {
@@ -188,6 +204,21 @@ impl Perturbation {
                         scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                         scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
                     }
+
+                    let temp = stripe_storage[0..5].iter().map(|z| {0.5 * (z.arg() as f32 * 5.0).sin() + 0.5}).collect::<Vec<f32>>();
+
+                    pixel.stripe.1 = temp[(stripe_iterations + 2) % 5] + temp[(stripe_iterations + 3) % 5] + temp[(stripe_iterations + 4) % 5];
+
+                    pixel.stripe.2 = temp[(stripe_iterations + 1) % 5];
+                    pixel.stripe.0 = temp[stripe_iterations];
+
+                    // let temp_sum: f32 = stripe_storage[0..stripe_iterations].iter().fold(0.0, |acc, z| {acc + 0.5 * (z.arg() as f32 * 5.0).sin() + 0.5}) 
+                    //     + stripe_storage[(stripe_iterations + 1)..5].iter().fold(0.0, |acc, z| {acc + 0.5 * (z.arg() as f32 * 5.0).sin() + 0.5});
+
+                    // let value = stripe_iterations2.max(5) as f32;
+
+                    // pixel.stripe.1 = temp_sum / (value - 1.0);
+                    // pixel.stripe.0 = (temp_sum + 0.5 * (stripe_storage[stripe_iterations].arg() as f32 * 5.0).sin() + 0.5) / value;
                 }
 
                 data_export.lock().export_pixels(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
