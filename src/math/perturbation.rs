@@ -116,6 +116,7 @@ impl Perturbation {
                                 // }
 
                                 pixel.delta_current.mantissa *= scaled_scale_factor_1 * pixel.delta_current.mantissa + 2.0 * reference_data.z;
+                                // pixel.delta_current.mantissa *= 2.0 * reference_data.z;
                                 pixel.delta_current.mantissa += scaled_delta_reference;
                             }
                         }
@@ -136,7 +137,7 @@ impl Perturbation {
                             let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
 
                             if need_escape_check {
-                                let z_norm = z.re * z.re + z.im * z.im;
+                                let z_norm = z.norm_sqr();
     
                                 if z_norm < reference_data.tolerance {
                                     pixel.iteration += additional_iterations;
