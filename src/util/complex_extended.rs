@@ -53,24 +53,38 @@ impl ComplexExtended {
         let positive_real = self.mantissa.re.abs();
         let positive_imag = self.mantissa.im.abs();
         
-        if positive_real > positive_imag {
+        if positive_real == 0.0 && positive_imag == 0.0 {
+            self.exponent = 0
+        } else if positive_real > positive_imag {
             let (temp_mantissa, added_exponent) = self.mantissa.re.frexp();
-
             self.mantissa.re = temp_mantissa;
             self.mantissa.im = self.mantissa.im.ldexp(-added_exponent);
-
-            self.exponent += added_exponent;
-        } else if positive_real < positive_imag {
-            let (temp_mantissa, added_exponent) = self.mantissa.im.frexp();
-
-            self.mantissa.im = temp_mantissa;
-            self.mantissa.re = self.mantissa.re.ldexp(-added_exponent);
-            
             self.exponent += added_exponent;
         } else {
-            // This would mean the number is zero
-            self.exponent = 0
+            let (temp_mantissa, added_exponent) = self.mantissa.im.frexp();
+            self.mantissa.im = temp_mantissa;
+            self.mantissa.re = self.mantissa.re.ldexp(-added_exponent);
+            self.exponent += added_exponent;
         }
+
+        // if positive_real > positive_imag {
+        //     let (temp_mantissa, added_exponent) = self.mantissa.re.frexp();
+
+        //     self.mantissa.re = temp_mantissa;
+        //     self.mantissa.im = self.mantissa.im.ldexp(-added_exponent);
+
+        //     self.exponent += added_exponent;
+        // } else if positive_real < positive_imag {
+        //     let (temp_mantissa, added_exponent) = self.mantissa.im.frexp();
+
+        //     self.mantissa.im = temp_mantissa;
+        //     self.mantissa.re = self.mantissa.re.ldexp(-added_exponent);
+            
+        //     self.exponent += added_exponent;
+        // } else {
+        //     // This would mean the number is zero
+        //     self.exponent = 0
+        // }
     }
 }
 

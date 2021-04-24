@@ -495,6 +495,7 @@ impl FractalRenderer {
             // TODO investigate other methods of choosing the next pixel
             let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
             // let glitch_reference_pixel = pixel_data[0].clone();
+            
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
             glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
