@@ -142,7 +142,7 @@ pub struct PixelData {
     pub delta_current: ComplexExtended,
     pub derivative_current: ComplexExtended,
     pub glitched: bool,
-    pub stripe: (f32, f32, f32, f32),
+    pub stripe: (f32, f32, f32),
 }
 
 #[derive(Copy, Clone, PartialEq)]

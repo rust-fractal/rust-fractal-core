@@ -46,6 +46,7 @@ pub struct FractalRenderer {
     pub render_time: u128,
     pub fractal_type: FractalType,
     pub root_zoom_factor: f64,
+    pub stripe_scale: f32,
 }
 
 impl FractalRenderer {
@@ -84,13 +85,18 @@ impl FractalRenderer {
             "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,
             "DISTANCE" => ColoringType::Distance,
             "STRIPE" => ColoringType::Stripe,
+            "DISTANCE_STRIPE" => ColoringType::DistanceStripe,
             _ => ColoringType::SmoothIteration
         };
 
         let pixel_data_type = match coloring_type {
-            ColoringType::SmoothIteration | ColoringType::StepIteration | ColoringType::Stripe => DataType::Iteration,
+            ColoringType::SmoothIteration | ColoringType::StepIteration => DataType::Iteration,
+            ColoringType::Stripe => DataType::Stripe,
+            ColoringType::DistanceStripe => DataType::DistanceStripe,
             _ => DataType::Distance
         };
+
+        let stripe_scale = settings.get_float("stripe_scale").unwrap_or(1.0) as f32;
 
         let jitter = settings.get_bool("jitter").unwrap_or(false);
         let jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
@@ -200,6 +206,7 @@ impl FractalRenderer {
             render_time: 0,
             fractal_type,
             root_zoom_factor: 0.0,
+            stripe_scale
         }
     }
 
@@ -389,7 +396,7 @@ impl FractalRenderer {
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
                 let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
 
-                let derivative = if self.pixel_data_type == DataType::Distance {
+                let derivative = if self.pixel_data_type == DataType::Distance || self.pixel_data_type == DataType::DistanceStripe {
                     self.series_approximation.evaluate_derivative(point_delta, chosen_iteration)
                 } else {
                     complex_default
@@ -403,7 +410,7 @@ impl FractalRenderer {
                     delta_current: new_delta,
                     derivative_current: derivative,
                     glitched: false,
-                    stripe: (0.0, 0.0, 0.0, 0.0)
+                    stripe: (0.0, 0.0, 0.0)
                 }
             }).collect::<Vec<PixelData>>();
 
@@ -451,11 +458,7 @@ impl FractalRenderer {
             let chunk_size = max((end_value - previous_value) / 512, 4);
 
             // This one has no offset because it is not a glitch resolving reference
-            if self.pixel_data_type == DataType::Distance {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type);
-            } else {
-                Perturbation::iterate_normal(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type);
-            };
+            Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
 
             previous_value = end_value;
         }
@@ -523,34 +526,33 @@ impl FractalRenderer {
 
             let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
-            if self.pixel_data_type == DataType::Distance {
-                pixel_data.par_iter_mut()
-                    .for_each(|pixel| {
-                        pixel.glitched = false;
-                        pixel.iteration = glitch_reference.start_iteration;
-                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                        pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                        pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
-                });
-            } else {
-                pixel_data.par_iter_mut()
-                    .for_each(|pixel| {
-                        pixel.glitched = false;
-                        pixel.iteration = glitch_reference.start_iteration;
-                        pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                        pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                        pixel.stripe = (0.0, 0.0, 0.0, 0.0)
-                });
-            }
+            match self.pixel_data_type {
+                DataType::Iteration | DataType::Stripe => {
+                    pixel_data.par_iter_mut()
+                        .for_each(|pixel| {
+                            pixel.glitched = false;
+                            pixel.iteration = glitch_reference.start_iteration;
+                            pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+                            pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                    });
+                },
+                DataType::Distance | DataType::DistanceStripe => {
+                    pixel_data.par_iter_mut()
+                        .for_each(|pixel| {
+                            pixel.glitched = false;
+                            pixel.iteration = glitch_reference.start_iteration;
+                            pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+                            pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                            pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
+                    });
+                },
+                _ => {}
+            };
             
             let chunk_size = max(pixel_data.len() / 512, 4);
             // println!("chunk size: {}", chunk_size);
 
-            if self.pixel_data_type == DataType::Distance {
-                Perturbation::iterate_normal_plus_derivative(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type);
-            } else {
-                Perturbation::iterate_normal(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type);
-            };
+            Perturbation::iterate(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
 
             // Remove all non-glitched points from the remaining points
             pixel_data.retain(|packet| {
@@ -752,13 +754,18 @@ impl FractalRenderer {
             "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,
             "DISTANCE" => ColoringType::Distance,
             "STRIPE" => ColoringType::Stripe,
+            "DISTANCE_STRIPE" => ColoringType::DistanceStripe,
             _ => ColoringType::SmoothIteration
         };
 
         let pixel_data_type = match coloring_type {
-            ColoringType::SmoothIteration | ColoringType::StepIteration | ColoringType::Stripe => DataType::Iteration,
+            ColoringType::SmoothIteration | ColoringType::StepIteration => DataType::Iteration,
+            ColoringType::Stripe => DataType::Stripe,
+            ColoringType::DistanceStripe => DataType::DistanceStripe,
             _ => DataType::Distance
         };
+
+        self.stripe_scale = settings.get_float("stripe_scale").unwrap_or(1.0) as f32;
 
         self.jitter = settings.get_bool("jitter").unwrap_or(false);
         self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
