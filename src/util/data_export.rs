@@ -26,7 +26,7 @@ pub enum ColoringType {
     StepIteration,
     Distance,
     DistanceNormal,
-    DistanceCombined,
+    DistanceStripe,
     Stripe
 }
 
@@ -34,6 +34,8 @@ pub enum ColoringType {
 pub enum DataType { 
     Iteration,
     Distance,
+    Stripe,
+    DistanceStripe,
     AtomDomain
 }
 
@@ -43,6 +45,7 @@ pub struct DataExport {
     pub buffer: Vec<u8>,
     pub iterations: Vec<u32>,
     pub smooth: Vec<f32>,
+    pub stripe: Vec<f32>,
     pub distance_x: Vec<f32>,
     pub distance_y: Vec<f32>,
     pub glitched: Vec<bool>,
@@ -81,6 +84,7 @@ impl DataExport {
             buffer: vec![0u8; image_width * image_height * 3],
             iterations: vec![0u32; image_width * image_height],
             smooth: vec![0.0f32; image_width * image_height],
+            stripe: vec![0.0f32; image_width * image_height],
             distance_x: vec![0.0f32; image_width * image_height],
             distance_y: vec![0.0f32; image_width * image_height],
             glitched: vec![false; image_width * image_height],
@@ -136,31 +140,11 @@ impl DataExport {
 
             self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2();
 
-            if self.coloring_type == ColoringType::Stripe {
-                // let output = pixel.stripe.0;
-                // let output = pixel.stripe.0 * self.smooth[pixel.index] + pixel.stripe.1 * (1.0 - self.smooth[pixel.index]);
-
-                let mut output = pixel.stripe.0 * self.smooth[pixel.index] + pixel.stripe.1 + pixel.stripe.2 * (1.0 - self.smooth[pixel.index]);
-                output /= 4.0;
-
-                // let d = self.smooth[pixel.index];
-                // let d2 = self.smooth[pixel.index] * d;
-                // let d3 = self.smooth[pixel.index] * d2;
-
-                // let h0 = 0.5 * (-d2 + d3);
-                // let h1 = 0.5 * (d + 4.0 * d2 - 3.0 * d3);
-                // let h2 = 0.5 * (2.0 - 5.0 * d2 + 3.0 * d3);
-                // let h3 = 0.5 * (-d + 2.0 * d2 - d3);
-
-                // let output = pixel.stripe.0 * h0 + pixel.stripe.1 * h1 + pixel.stripe.2 * h2 + pixel.stripe.3 * h3;
-
-                let temp = 255 - (255.0 * output) as u8;
-
-                self.set_with_scale(pixel.index, [temp, temp, temp], new_scale);
-                continue;
+            if self.data_type == DataType::Stripe || self.data_type == DataType::DistanceStripe {
+                self.stripe[pixel.index] = (pixel.stripe.0 + pixel.stripe.1 * self.smooth[pixel.index] + pixel.stripe.2 * (1.0 - self.smooth[pixel.index])) / 4.0;
             }
 
-            if self.data_type == DataType::Distance {
+            if self.data_type == DataType::Distance || self.data_type == DataType::DistanceStripe {
                 let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                 let temp2 = temp1.norm();
 
@@ -267,6 +251,7 @@ impl DataExport {
         self.buffer = vec![0u8; self.image_width * self.image_height * 3];
         self.iterations = vec![0xFFFFFFFF; self.image_width * self.image_height];
         self.smooth = vec![0.0f32; self.image_width * self.image_height];
+        self.stripe = vec![0.0f32; self.image_width * self.image_height];
         self.distance_x = vec![0.0f32; self.image_width * self.image_height];
         self.distance_y = vec![0.0f32; self.image_width * self.image_height];
         self.glitched = vec![false; self.image_width * self.image_height];
@@ -334,7 +319,6 @@ impl DataExport {
                 [r, g, b]
             },
             ColoringType::SmoothIteration | ColoringType::StepIteration => {
-                // TODO this will lose precision so refactor
                 let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
                 
                 if self.coloring_type == ColoringType::SmoothIteration {
@@ -352,6 +336,52 @@ impl DataExport {
     
                 [r, g, b]
             },
+            ColoringType::Stripe => {
+                let temp = 255 - (255.0 * self.stripe[k]) as u8;
+
+                [temp, temp, temp]
+            },
+            ColoringType::DistanceStripe => {
+                // Calculate the color of the area
+                let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
+                
+                floating_iteration += self.smooth[k] / self.palette_iteration_span;
+                
+                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
+    
+                let pos1 = temp.floor() as usize;
+                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
+    
+                let frac = temp.fract() as f64;
+    
+                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
+
+                // Calculate distance estimate factor
+                let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
+                let value = length.clamp(0.0, 1.0);
+                let value = 1.0 - 1.0 / (1.0 + (-10.0 * (value - 0.5)).exp());
+
+                // let bright = if self.stripe[k] < 0.5 {
+                //     2.0 * self.stripe[k] * value
+                // } else {
+                //     1.0 - 2.0 * (1.0 - value) * (1.0 - self.stripe[k])
+                // };
+
+                // x = bright = 0.5
+                let temp = self.stripe[k];
+
+                let bright = (temp * (1.0 - value) + 0.5 * value) as f64;
+
+                let (r, g, b) = if bright < 0.5 {
+                    ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
+                } else {
+                    (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
+                };
+
+                let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
+    
+                [r, g, b]
+            }
             _ => {
                 [0, 0, 0]
             }
@@ -415,16 +445,48 @@ impl DataExport {
                 self.image_height - image_y
             };
 
-            if self.data_type == DataType::Distance {
+            if self.data_type == DataType::DistanceStripe {
                 for i in image_x..(image_x + horizontal) {
                     for j in image_y..(image_y + vertical) {
-                        // TODO add the distance ones
                         let scale_index = j * self.image_width + i;
 
                         self.iterations[scale_index] = self.iterations[index];
+                        self.smooth[scale_index] = self.smooth[index];
                         self.glitched[scale_index] = self.glitched[index];
                         self.distance_x[scale_index] = self.distance_x[index];
                         self.distance_y[scale_index] = self.distance_y[index];
+                        self.stripe[scale_index] = self.stripe[index];
+    
+                        self.buffer[3 * (scale_index)] = value[0];
+                        self.buffer[3 * (scale_index) + 1] = value[1];
+                        self.buffer[3 * (scale_index) + 2] = value[2];
+                    }
+                }
+            } else if self.data_type == DataType::Distance {
+                for i in image_x..(image_x + horizontal) {
+                    for j in image_y..(image_y + vertical) {
+                        let scale_index = j * self.image_width + i;
+
+                        self.iterations[scale_index] = self.iterations[index];
+                        self.smooth[scale_index] = self.smooth[index];
+                        self.glitched[scale_index] = self.glitched[index];
+                        self.distance_x[scale_index] = self.distance_x[index];
+                        self.distance_y[scale_index] = self.distance_y[index];
+    
+                        self.buffer[3 * (scale_index)] = value[0];
+                        self.buffer[3 * (scale_index) + 1] = value[1];
+                        self.buffer[3 * (scale_index) + 2] = value[2];
+                    }
+                }
+            } else if self.data_type == DataType::Stripe {
+                for i in image_x..(image_x + horizontal) {
+                    for j in image_y..(image_y + vertical) {
+                        let scale_index = j * self.image_width + i;
+
+                        self.iterations[scale_index] = self.iterations[index];
+                        self.smooth[scale_index] = self.smooth[index];
+                        self.glitched[scale_index] = self.glitched[index];
+                        self.stripe[scale_index] = self.stripe[index];
     
                         self.buffer[3 * (scale_index)] = value[0];
                         self.buffer[3 * (scale_index) + 1] = value[1];
@@ -437,6 +499,7 @@ impl DataExport {
                         let scale_index = j * self.image_width + i;
 
                         self.iterations[scale_index] = self.iterations[index];
+                        self.smooth[scale_index] = self.smooth[index];
                         self.glitched[scale_index] = self.glitched[index];
     
                         self.buffer[3 * (scale_index)] = value[0];
