@@ -55,6 +55,7 @@ pub struct DataExport {
     pub display_glitches: bool,
     pub palette_iteration_span: f32,
     pub palette_offset: f32,
+    pub distance_transition: f32,
     pub centre_removed: bool,
     pub data_type: DataType,
     pub coloring_type: ColoringType,
@@ -72,6 +73,7 @@ impl DataExport {
         palette_cyclic: bool,
         palette_iteration_span: f32, 
         palette_offset: f32, 
+        distance_transition: f32, 
         coloring_type: ColoringType,
         data_type: DataType,
         fractal_type: FractalType, 
@@ -94,6 +96,7 @@ impl DataExport {
             display_glitches,
             palette_iteration_span,
             palette_offset,
+            distance_transition,
             centre_removed: false,
             data_type,
             coloring_type,
@@ -145,6 +148,7 @@ impl DataExport {
             }
 
             if self.data_type == DataType::Distance || self.data_type == DataType::DistanceStripe {
+                // This calculates the distance in terms of pixels
                 let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                 let temp2 = temp1.norm();
 
@@ -337,12 +341,6 @@ impl DataExport {
                 [r, g, b]
             },
             ColoringType::Stripe => {
-                let temp = 255 - (255.0 * self.stripe[k]) as u8;
-
-                [temp, temp, temp]
-            },
-            ColoringType::DistanceStripe => {
-                // Calculate the color of the area
                 let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
                 
                 floating_iteration += self.smooth[k] / self.palette_iteration_span;
@@ -356,21 +354,61 @@ impl DataExport {
     
                 let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
 
-                // Calculate distance estimate factor
-                let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
-                let value = length.clamp(0.0, 1.0);
-                let value = 1.0 - 1.0 / (1.0 + (-10.0 * (value - 0.5)).exp());
+                let bright = self.stripe[k] as f64;
 
-                // let bright = if self.stripe[k] < 0.5 {
-                //     2.0 * self.stripe[k] * value
-                // } else {
-                //     1.0 - 2.0 * (1.0 - value) * (1.0 - self.stripe[k])
-                // };
+                let (r, g, b) = if bright < 0.5 {
+                    ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
+                } else {
+                    (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
+                };
+
+                let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
+
+                [r, g, b]
+            },
+            ColoringType::DistanceStripe => {
+                // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
+                // Calculate the coloring of the area
+                let floating_iteration = (self.iterations[k] as f32 + self.smooth[k]) / self.palette_iteration_span;
+                
+                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
+    
+                let pos1 = temp.floor() as usize;
+                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
+    
+                let frac = temp.fract() as f64;
+    
+                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
+
+                // TODO add lighting option for if to use the normal
+
+                let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
+                normal /= normal.norm();
+
+                // This is brightness
+                let bright = (normal.re + 1.5) / (1.0 + 1.5);
+
+                // Calculate distance estimate in terms of pixels
+                let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
+
+                // Scale so transition will happen about 50 pixels
+                let length_scaled = (length_pixel / self.distance_transition).max(0.0);
+
+                // Apply sigmoid function for non-linear transform
+                let value = if length_scaled < 1.0 {
+                    1.0 - 1.0 / (1.0 + (-10.0 * (length_scaled - 0.5)).exp())
+                } else {
+                    0.0
+                };
 
                 // x = bright = 0.5
-                let temp = self.stripe[k];
+                let temp = if self.stripe[k] < 0.5 {
+                    2.0 * self.stripe[k] * bright
+                } else {
+                    1.0 - 2.0 * (1.0 - bright) * (1.0 - self.stripe[k])
+                };
 
-                let bright = (temp * (1.0 - value) + 0.5 * value) as f64;
+                let bright = (temp * (1.0 - value) + bright * value) as f64;
 
                 let (r, g, b) = if bright < 0.5 {
                     ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
@@ -391,7 +429,7 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, cyclic: bool) {
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, distance_transition: f32, cyclic: bool) {
         let mut new_palette = false;
         
         if let Some(palette) = palette {
@@ -425,6 +463,7 @@ impl DataExport {
         self.palette_iteration_span = palette_iteration_span;
         self.palette_offset = palette_offset;
         self.palette_cyclic = cyclic;
+        self.distance_transition = distance_transition;
     }
 
     #[inline]
