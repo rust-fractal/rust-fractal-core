@@ -3,7 +3,7 @@ use crate::math::Reference;
 
 use std::{collections::HashMap, f64::consts::LN_2};
 // use std::cmp::{min, max};
-use std::f32::consts::TAU;
+use std::f32::consts::{PI, TAU};
 
 use exr::{prelude::simple_image};
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
@@ -381,12 +381,28 @@ impl DataExport {
                 let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
 
                 // TODO add lighting option for if to use the normal
+                // Blinn phong from GPU mandelbrot
+
+                let light = [0.125f32, 0.5, 0.75, 0.2, 0.5, 0.5, 20.0];
 
                 let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
                 normal /= normal.norm();
 
-                // This is brightness
-                let bright = (normal.re + 1.5) / (1.0 + 1.5);
+                // This is diffuse lighting
+                let light_diffuse = (normal.re * light[0].cos() * light[1].cos() + normal.im * light[0].sin() * light[1].cos() + light[1].sin()) / (1.0 + light[1].sin());
+
+                // This is specular lighting
+                let phi_half = PI / 4.0 + light[1] / 4.0;
+                let mut light_specular = (normal.re * light[0].cos() * phi_half.sin() + normal.im * light[0].sin() * phi_half.sin() + phi_half.cos()) / (1.0 + phi_half.cos());
+
+                // Shininess
+                light_specular = light_specular.powf(light[6]);
+
+                // Ambient + diffuse + specular
+                let mut bright = light[3] + light[4] * light_diffuse + light[5] * light_specular;
+                
+                // Add intensity
+                bright = bright * light[2] - (1.0 - light[2]) / 2.0;
 
                 // Calculate distance estimate in terms of pixels
                 let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
