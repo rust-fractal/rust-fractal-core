@@ -3,7 +3,7 @@ use crate::math::Reference;
 
 use std::{collections::HashMap, f64::consts::LN_2};
 // use std::cmp::{min, max};
-use std::f32::consts::{FRAC_PI_4, TAU};
+use std::f32::consts::{FRAC_PI_4};
 
 use exr::{prelude::simple_image};
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
@@ -331,26 +331,71 @@ impl DataExport {
 
     #[inline]
     pub fn colour_index(&mut self, k: usize, scale: usize) {
+        
+
+
         let rgb: [u8; 3] = match self.coloring_type {
             ColoringType::Distance => {
-                // TODO have some alternative algorithms
+                // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
+                let floating_iteration = (self.iterations[k] as f32 + self.smooth[k]) / self.palette_iteration_span;
+
+                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
+    
+                let pos1 = temp.floor() as usize;
+                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
+    
+                let frac = temp.fract() as f64;
+    
+                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
+
+                // Blinn-phong from GPU mandelbrot
+                let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
+                normal /= normal.norm();
+
+                let bright = if self.lighting {
+                    // This is diffuse lighting
+                    let light_diffuse = (normal.re * self.lighting_parameters.diffuse[0] + normal.im * self.lighting_parameters.diffuse[1] + self.lighting_parameters.diffuse[2]) / (1.0 + self.lighting_parameters.diffuse[2]);
+
+                    // This is specular lighting
+                    let light_specular = ((normal.re * self.lighting_parameters.specular[0] + normal.im * self.lighting_parameters.specular[1] + self.lighting_parameters.specular[2]) / (1.0 + self.lighting_parameters.specular[2])).powi(self.lighting_parameters.shininess);
+
+                    // Ambient + diffuse + specular
+                    let bright = self.lighting_parameters.ambient + self.lighting_parameters.diffuse[3] * light_diffuse + self.lighting_parameters.specular[3] * light_specular;
+
+                    // Add intensity
+                    bright * self.lighting_parameters.opacity[0] - self.lighting_parameters.opacity[1]
+                } else {
+                    0.5
+                };
+
                 // Calculate distance estimate in terms of pixels
                 let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
 
                 // Scale so transition will happen about 50 pixels
                 let length_scaled = (length_pixel / self.distance_transition).max(0.0);
 
-                // colouring algorithm based on 'rainbow_fringe' by claude
-                let angle = self.distance_y[k].atan2(self.distance_x[k]);
-    
-                let mut hue = angle / TAU;
-                hue -= hue.floor();
-    
-                let saturation = (1.0 / (1.0 + length_scaled)).clamp(0.0, 1.0);
-                let value = length_scaled.clamp(0.0, 1.0);
-    
-                let color = Color::from_hsv(hue as f64 * 360.0, saturation as f64, value as f64);
-                let (r, g, b, _) = color.rgba_u8();
+                // Apply sigmoid function for non-linear transform
+                // let value = if length_scaled < 1.0 {
+                //     1.0 - 1.0 / (1.0 + (-10.0 * (length_scaled - 0.5)).exp())
+                // } else {
+                //     0.0
+                // };                
+                let value = if length_scaled < 1.0 {
+                    (-5.0 * length_scaled).exp()
+                } else {
+                    0.0
+                };
+
+                // let bright = (temp * (1.0 - value) + bright * value) as f64;
+                let bright = (bright * value) as f64;
+
+                let (r, g, b) = if bright < 0.5 {
+                    ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
+                } else {
+                    (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
+                };
+
+                let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
     
                 [r, g, b]
             },
