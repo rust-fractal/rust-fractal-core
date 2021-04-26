@@ -3,7 +3,7 @@ use crate::math::Reference;
 
 use std::{collections::HashMap, f64::consts::LN_2};
 // use std::cmp::{min, max};
-use std::f32::consts::{PI, TAU};
+use std::f32::consts::{FRAC_PI_4, TAU};
 
 use exr::{prelude::simple_image};
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
@@ -25,7 +25,6 @@ pub enum ColoringType {
     SmoothIteration,
     StepIteration,
     Distance,
-    DistanceNormal,
     DistanceStripe,
     Stripe
 }
@@ -37,6 +36,28 @@ pub enum DataType {
     Stripe,
     DistanceStripe,
     AtomDomain
+}
+
+pub struct LightingParameters {
+    pub diffuse: [f32; 4],
+    pub specular: [f32; 4],
+    pub shininess: i32,
+    pub opacity: [f32; 2],
+    pub ambient: f32
+}
+
+impl LightingParameters {
+    pub fn new(direction: f32, azimuth: f32, opacity: f32, ambient: f32, diffuse: f32, specular: f32, shininess: i32) -> Self { 
+        let phi_half = FRAC_PI_4 + azimuth / 2.0;
+
+        LightingParameters {
+            diffuse: [direction.cos() * azimuth.cos(), direction.sin() * azimuth.cos(), azimuth.sin(), diffuse],
+            specular: [direction.cos() * phi_half.sin(), direction.sin() * phi_half.sin(), phi_half.cos(), specular],
+            shininess,
+            opacity: [opacity, (1.0 - opacity) / 2.0],
+            ambient
+        } 
+    }
 }
 
 pub struct DataExport {
@@ -62,6 +83,8 @@ pub struct DataExport {
     pub maximum_iteration: usize,
     pub fractal_type: FractalType,
     pub export_type: ExportType,
+    pub lighting_parameters: LightingParameters,
+    pub lighting: bool,
 }
 
 impl DataExport {
@@ -74,6 +97,7 @@ impl DataExport {
         palette_iteration_span: f32, 
         palette_offset: f32, 
         distance_transition: f32, 
+        lighting: bool,
         coloring_type: ColoringType,
         data_type: DataType,
         fractal_type: FractalType, 
@@ -102,7 +126,9 @@ impl DataExport {
             coloring_type,
             maximum_iteration: 0,
             fractal_type,
-            export_type
+            export_type,
+            lighting_parameters: LightingParameters::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
+            lighting
         }
     }
 
@@ -306,16 +332,20 @@ impl DataExport {
         let rgb: [u8; 3] = match self.coloring_type {
             ColoringType::Distance => {
                 // TODO have some alternative algorithms
-                let length = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
-        
+                // Calculate distance estimate in terms of pixels
+                let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
+
+                // Scale so transition will happen about 50 pixels
+                let length_scaled = (length_pixel / self.distance_transition).max(0.0);
+
                 // colouring algorithm based on 'rainbow_fringe' by claude
                 let angle = self.distance_y[k].atan2(self.distance_x[k]);
     
                 let mut hue = angle / TAU;
                 hue -= hue.floor();
     
-                let saturation = (1.0 / (1.0 + length)).clamp(0.0, 1.0);
-                let value = length.clamp(0.0, 1.0);
+                let saturation = (1.0 / (1.0 + length_scaled)).clamp(0.0, 1.0);
+                let value = length_scaled.clamp(0.0, 1.0);
     
                 let color = Color::from_hsv(hue as f64 * 360.0, saturation as f64, value as f64);
                 let (r, g, b, _) = color.rgba_u8();
@@ -368,7 +398,6 @@ impl DataExport {
             },
             ColoringType::DistanceStripe => {
                 // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
-                // Calculate the coloring of the area
                 let floating_iteration = (self.iterations[k] as f32 + self.smooth[k]) / self.palette_iteration_span;
                 
                 let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
@@ -380,29 +409,25 @@ impl DataExport {
     
                 let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
 
-                // TODO add lighting option for if to use the normal
-                // Blinn phong from GPU mandelbrot
-
-                let light = [0.125f32, 0.5, 0.75, 0.2, 0.5, 0.5, 20.0];
-
+                // Blinn-phong from GPU mandelbrot
                 let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
                 normal /= normal.norm();
 
-                // This is diffuse lighting
-                let light_diffuse = (normal.re * light[0].cos() * light[1].cos() + normal.im * light[0].sin() * light[1].cos() + light[1].sin()) / (1.0 + light[1].sin());
+                let bright = if self.lighting {
+                    // This is diffuse lighting
+                    let light_diffuse = (normal.re * self.lighting_parameters.diffuse[0] + normal.im * self.lighting_parameters.diffuse[1] + self.lighting_parameters.diffuse[2]) / (1.0 + self.lighting_parameters.diffuse[2]);
 
-                // This is specular lighting
-                let phi_half = PI / 4.0 + light[1] / 4.0;
-                let mut light_specular = (normal.re * light[0].cos() * phi_half.sin() + normal.im * light[0].sin() * phi_half.sin() + phi_half.cos()) / (1.0 + phi_half.cos());
+                    // This is specular lighting
+                    let light_specular = ((normal.re * self.lighting_parameters.specular[0] + normal.im * self.lighting_parameters.specular[1] + self.lighting_parameters.specular[2]) / (1.0 + self.lighting_parameters.specular[2])).powi(self.lighting_parameters.shininess);
 
-                // Shininess
-                light_specular = light_specular.powf(light[6]);
+                    // Ambient + diffuse + specular
+                    let bright = self.lighting_parameters.ambient + self.lighting_parameters.diffuse[3] * light_diffuse + self.lighting_parameters.specular[3] * light_specular;
 
-                // Ambient + diffuse + specular
-                let mut bright = light[3] + light[4] * light_diffuse + light[5] * light_specular;
-                
-                // Add intensity
-                bright = bright * light[2] - (1.0 - light[2]) / 2.0;
+                    // Add intensity
+                    bright * self.lighting_parameters.opacity[0] - self.lighting_parameters.opacity[1]
+                } else {
+                    0.5
+                };
 
                 // Calculate distance estimate in terms of pixels
                 let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
@@ -417,7 +442,6 @@ impl DataExport {
                     0.0
                 };
 
-                // x = bright = 0.5
                 let temp = if self.stripe[k] < 0.5 {
                     2.0 * self.stripe[k] * bright
                 } else {
@@ -436,16 +460,13 @@ impl DataExport {
     
                 [r, g, b]
             }
-            _ => {
-                [0, 0, 0]
-            }
         };
 
         self.set_with_scale(k, rgb, scale)
     }
 
     #[inline]
-    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, distance_transition: f32, cyclic: bool) {
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, distance_transition: f32, cyclic: bool, lighting: bool) {
         let mut new_palette = false;
         
         if let Some(palette) = palette {
@@ -479,7 +500,13 @@ impl DataExport {
         self.palette_iteration_span = palette_iteration_span;
         self.palette_offset = palette_offset;
         self.palette_cyclic = cyclic;
+        self.lighting = lighting;
         self.distance_transition = distance_transition;
+    }
+
+    #[inline]
+    pub fn change_lighting(&mut self, direction: f32, azimuth: f32, opacity: f32, ambient: f32, diffuse: f32, specular: f32, shininess: i32) {
+        self.lighting_parameters = LightingParameters::new(direction, azimuth, opacity, ambient, diffuse, specular, shininess);
     }
 
     #[inline]
