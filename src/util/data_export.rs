@@ -49,6 +49,8 @@ pub struct LightingParameters {
 impl LightingParameters {
     pub fn new(direction: f32, azimuth: f32, opacity: f32, ambient: f32, diffuse: f32, specular: f32, shininess: i32) -> Self { 
         let phi_half = FRAC_PI_4 + azimuth / 2.0;
+        let direction = direction.to_radians();
+        let azimuth = azimuth.to_radians();
 
         LightingParameters {
             diffuse: [direction.cos() * azimuth.cos(), direction.sin() * azimuth.cos(), azimuth.sin(), diffuse],
