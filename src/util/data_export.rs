@@ -330,31 +330,53 @@ impl DataExport {
     // }
 
     #[inline]
+    pub fn blinn_phong(&self, k: usize) -> f32 {
+        if self.lighting {
+            // Blinn-phong from GPU mandelbrot
+            let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
+            normal /= normal.norm();
+            
+            // This is diffuse lighting
+            let light_diffuse = (normal.re * self.lighting_parameters.diffuse[0] + normal.im * self.lighting_parameters.diffuse[1] + self.lighting_parameters.diffuse[2]) / (1.0 + self.lighting_parameters.diffuse[2]);
+
+            // This is specular lighting
+            let light_specular = ((normal.re * self.lighting_parameters.specular[0] + normal.im * self.lighting_parameters.specular[1] + self.lighting_parameters.specular[2]) / (1.0 + self.lighting_parameters.specular[2])).powi(self.lighting_parameters.shininess);
+
+            // Ambient + diffuse + specular
+            let bright = self.lighting_parameters.ambient + self.lighting_parameters.diffuse[3] * light_diffuse + self.lighting_parameters.specular[3] * light_specular;
+
+            // Add intensity
+            bright * self.lighting_parameters.opacity[0] - self.lighting_parameters.opacity[1]
+        } else {
+            0.5
+        }
+    }
+
+    #[inline]
+    pub fn calculate_color_u8(&self, value: f32) -> [u8; 3] {
+        let pos1 = value.floor() as usize;
+        let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
+
+        let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], value.fract() as f64).rgba_u8();
+
+        [r, g, b]
+    }
+
+    #[inline]
+    pub fn calculate_color_f64(&self, value: f32) -> [f64; 3] {
+        let pos1 = value.floor() as usize;
+        let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
+    
+        let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], value.fract() as f64).rgba();
+
+        [r, g, b]
+    }
+
+    #[inline]
     pub fn colour_index(&mut self, k: usize, scale: usize) {
-        
-
-
         let rgb: [u8; 3] = match self.coloring_type {
             ColoringType::Distance => {
-                let bright = if self.lighting {
-                    // Blinn-phong from GPU mandelbrot
-                    let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
-                    normal /= normal.norm();
-                    
-                    // This is diffuse lighting
-                    let light_diffuse = (normal.re * self.lighting_parameters.diffuse[0] + normal.im * self.lighting_parameters.diffuse[1] + self.lighting_parameters.diffuse[2]) / (1.0 + self.lighting_parameters.diffuse[2]);
-
-                    // This is specular lighting
-                    let light_specular = ((normal.re * self.lighting_parameters.specular[0] + normal.im * self.lighting_parameters.specular[1] + self.lighting_parameters.specular[2]) / (1.0 + self.lighting_parameters.specular[2])).powi(self.lighting_parameters.shininess);
-
-                    // Ambient + diffuse + specular
-                    let bright = self.lighting_parameters.ambient + self.lighting_parameters.diffuse[3] * light_diffuse + self.lighting_parameters.specular[3] * light_specular;
-
-                    // Add intensity
-                    bright * self.lighting_parameters.opacity[0] - self.lighting_parameters.opacity[1]
-                } else {
-                    0.5
-                };
+                let bright = self.blinn_phong(k) as f64;
 
                 // Calculate distance estimate in terms of pixels
                 let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
@@ -371,21 +393,14 @@ impl DataExport {
                     self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract()
                 };
 
-                let pos1 = temp.floor() as usize;
-                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
-    
-                let frac = temp.fract() as f64;
-    
-                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
+                let [r, g, b] = self.calculate_color_f64(temp);
 
                 // Apply sigmoid function for non-linear transform
                 // let value = if length_scaled < 1.0 {
                 //     1.0 - 1.0 / (1.0 + (-10.0 * (length_scaled - 0.5)).exp())
                 // } else {
                 //     0.0
-                // };       
-
-                let bright = bright as f64;
+                // };
                 
                 let (r, g, b) = if bright < 0.5 {
                     ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
@@ -394,23 +409,6 @@ impl DataExport {
                 };
 
                 let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
-
-                // let (r, g, b, _) = if length_scaled < 1.0 {
-                //     let value = (-5.0 * length_scaled).exp();
-
-                //     // let bright = (temp * (1.0 - value) + bright * value) as f64;
-                //     let bright = (bright * value) as f64;
-
-                //     let (r, g, b) = if bright < 0.5 {
-                //         ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
-                //     } else {
-                //         (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
-                //     };
-
-                //     Color::from_rgb(r, g, b).rgba_u8()
-                // } else {
-                //     (0, 0, 0, 0)
-                // };
     
                 [r, g, b]
             },
@@ -423,14 +421,7 @@ impl DataExport {
                 
                 let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
     
-                let pos1 = temp.floor() as usize;
-                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
-    
-                let frac = temp.fract() as f64;
-    
-                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba_u8();
-    
-                [r, g, b]
+                self.calculate_color_u8(temp)
             },
             ColoringType::Stripe => {
                 let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
@@ -439,12 +430,7 @@ impl DataExport {
                 
                 let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
     
-                let pos1 = temp.floor() as usize;
-                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
-    
-                let frac = temp.fract() as f64;
-    
-                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
+                let [r, g, b] = self.calculate_color_f64(temp);
 
                 let bright = self.stripe[k] as f64;
 
@@ -464,32 +450,9 @@ impl DataExport {
                 
                 let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
     
-                let pos1 = temp.floor() as usize;
-                let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
-    
-                let frac = temp.fract() as f64;
-    
-                let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], frac).rgba();
+                let [r, g, b] = self.calculate_color_f64(temp);
 
-                // Blinn-phong from GPU mandelbrot
-                let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
-                normal /= normal.norm();
-
-                let bright = if self.lighting {
-                    // This is diffuse lighting
-                    let light_diffuse = (normal.re * self.lighting_parameters.diffuse[0] + normal.im * self.lighting_parameters.diffuse[1] + self.lighting_parameters.diffuse[2]) / (1.0 + self.lighting_parameters.diffuse[2]);
-
-                    // This is specular lighting
-                    let light_specular = ((normal.re * self.lighting_parameters.specular[0] + normal.im * self.lighting_parameters.specular[1] + self.lighting_parameters.specular[2]) / (1.0 + self.lighting_parameters.specular[2])).powi(self.lighting_parameters.shininess);
-
-                    // Ambient + diffuse + specular
-                    let bright = self.lighting_parameters.ambient + self.lighting_parameters.diffuse[3] * light_diffuse + self.lighting_parameters.specular[3] * light_specular;
-
-                    // Add intensity
-                    bright * self.lighting_parameters.opacity[0] - self.lighting_parameters.opacity[1]
-                } else {
-                    0.5
-                };
+                let bright = self.blinn_phong(k);
 
                 // Calculate distance estimate in terms of pixels
                 let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
