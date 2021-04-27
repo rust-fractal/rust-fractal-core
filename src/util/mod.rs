@@ -74,21 +74,33 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
         temp[1].parse::<f64>().unwrap() * LOG2_10
     };
 
-    FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
+    if second < 0.0 {
+        FloatExtended::new(first * 2.0f64.powf(-second.fract()), second.floor() as i32)
+    } else {
+        FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
+    }
 }
 
 pub fn extended_to_string_short(value: FloatExtended) -> String {
     let first = value.mantissa;
     let second = value.exponent as f64 * LOG10_2;
 
-    format!("{:.2}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
+    if second < 0.0 {
+        format!("{:.2}E{}", first * 10.0f64.powf(-second.fract()), second.floor() as i32)
+    } else {
+        format!("{:.2}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
+    }
 }
 
 pub fn extended_to_string_long(value: FloatExtended) -> String {
     let first = value.mantissa;
     let second = value.exponent as f64 * LOG10_2;
 
-    format!("{}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
+    if second < 0.0 {
+        format!("{}E{}", first * 10.0f64.powf(-second.fract()), second.floor() as i32)
+    } else {
+        format!("{}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
+    }
 }
 
 pub fn linear_interpolation_between_zoom(zoom1: FloatExtended, zoom2: FloatExtended, factor: f64) -> FloatExtended {
