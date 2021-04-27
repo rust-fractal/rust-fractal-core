@@ -75,7 +75,7 @@ pub fn string_to_extended(string: &str) -> FloatExtended {
     };
 
     if second < 0.0 {
-        FloatExtended::new(first * 2.0f64.powf(-second.fract()), second.floor() as i32)
+        FloatExtended::new(first * 2.0f64.powf(1.0 + second.fract()), second.floor() as i32)
     } else {
         FloatExtended::new(first * 2.0f64.powf(second.fract()), second.floor() as i32)
     }
@@ -86,7 +86,7 @@ pub fn extended_to_string_short(value: FloatExtended) -> String {
     let second = value.exponent as f64 * LOG10_2;
 
     if second < 0.0 {
-        format!("{:.2}E{}", first * 10.0f64.powf(-second.fract()), second.floor() as i32)
+        format!("{:.2}E{}", first * 10.0f64.powf(1.0 + second.fract()), second.floor() as i32)
     } else {
         format!("{:.2}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
     }
@@ -97,7 +97,7 @@ pub fn extended_to_string_long(value: FloatExtended) -> String {
     let second = value.exponent as f64 * LOG10_2;
 
     if second < 0.0 {
-        format!("{}E{}", first * 10.0f64.powf(-second.fract()), second.floor() as i32)
+        format!("{}E{}", first * 10.0f64.powf(1.0 + second.fract()), second.floor() as i32)
     } else {
         format!("{}E{}", first * 10.0f64.powf(second.fract()), second.floor() as i32)
     }
