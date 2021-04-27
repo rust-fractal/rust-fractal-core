@@ -87,6 +87,7 @@ pub struct DataExport {
     pub export_type: ExportType,
     pub lighting_parameters: LightingParameters,
     pub lighting: bool,
+    pub distance_color: bool,
 }
 
 impl DataExport {
@@ -130,7 +131,8 @@ impl DataExport {
             fractal_type,
             export_type,
             lighting_parameters: LightingParameters::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
-            lighting
+            lighting,
+            distance_color: true
         }
     }
 
@@ -330,7 +332,7 @@ impl DataExport {
     // }
 
     #[inline]
-    pub fn blinn_phong(&self, k: usize) -> f32 {
+    pub fn calculate_blinn_phong(&self, k: usize) -> f32 {
         if self.lighting {
             // Blinn-phong from GPU mandelbrot
             let mut normal = ComplexFixed::new(self.distance_x[k], self.distance_y[k]);
@@ -353,47 +355,53 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn calculate_color_u8(&self, value: f32) -> [u8; 3] {
+    pub fn calculate_color(&self, value: f32) -> Color {
         let pos1 = value.floor() as usize;
         let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
 
-        let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], value.fract() as f64).rgba_u8();
-
-        [r, g, b]
+        self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], value.fract() as f64)
     }
 
     #[inline]
-    pub fn calculate_color_f64(&self, value: f32) -> [f64; 3] {
-        let pos1 = value.floor() as usize;
-        let pos2 = (pos1 + 1) % self.palette_interpolated_buffer.len();
-    
-        let (r, g, b, _) = self.palette_interpolated_buffer[pos1].interpolate_rgb(&self.palette_interpolated_buffer[pos2], value.fract() as f64).rgba();
+    pub fn calculate_iteration_palette_value(&self, k: usize) -> Color {
+        let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
+               
+        // TODO add as another option
+        if self.coloring_type != ColoringType::StepIteration {
+            floating_iteration += self.smooth[k] / self.palette_iteration_span
+        };
+        
+        self.calculate_color(self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract())
+    }
 
-        [r, g, b]
+    #[inline]
+    pub fn calculate_distance_palette_value(&self, distance: f32) -> Color {
+        self.calculate_color(self.palette_interpolated_buffer.len() as f32 * (distance + self.palette_offset).fract())
+    }
+
+    #[inline]
+    pub fn calculate_scaled_distance(&self, k: usize) -> f32 {
+        // Calculate distance estimate in terms of pixels
+        let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
+
+        // Scale so transition will happen about 50 pixels
+        (length_pixel / self.distance_transition).max(0.0)
     }
 
     #[inline]
     pub fn colour_index(&mut self, k: usize, scale: usize) {
-        let rgb: [u8; 3] = match self.coloring_type {
+        let color = match self.coloring_type {
             ColoringType::Distance => {
-                let bright = self.blinn_phong(k) as f64;
+                let bright = self.calculate_blinn_phong(k) as f64;
 
-                // Calculate distance estimate in terms of pixels
-                let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
-
-                // Scale so transition will happen about 50 pixels
-                let length_scaled = (length_pixel / self.distance_transition).max(0.0);
+                let distance = self.calculate_scaled_distance(k);
 
                 // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
-                let temp = if true {
-                    self.palette_interpolated_buffer.len() as f32 * (length_scaled + self.palette_offset).fract()
+                let (r, g, b, _) = if self.distance_color {
+                    self.calculate_distance_palette_value(distance)
                 } else {
-                    let floating_iteration = (self.iterations[k] as f32 + self.smooth[k]) / self.palette_iteration_span;
-
-                    self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract()
-                };
-
-                let [r, g, b] = self.calculate_color_f64(temp);
+                    self.calculate_iteration_palette_value(k)
+                }.rgba();
 
                 // Apply sigmoid function for non-linear transform
                 // let value = if length_scaled < 1.0 {
@@ -408,29 +416,13 @@ impl DataExport {
                     (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
                 };
 
-                let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
-    
-                [r, g, b]
+                Color::from_rgb(r, g, b)
             },
             ColoringType::SmoothIteration | ColoringType::StepIteration => {
-                let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
-                
-                if self.coloring_type == ColoringType::SmoothIteration {
-                    floating_iteration += self.smooth[k] / self.palette_iteration_span
-                };
-                
-                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
-    
-                self.calculate_color_u8(temp)
+                self.calculate_iteration_palette_value(k)
             },
             ColoringType::Stripe => {
-                let mut floating_iteration = self.iterations[k] as f32 / self.palette_iteration_span;
-                
-                floating_iteration += self.smooth[k] / self.palette_iteration_span;
-                
-                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
-    
-                let [r, g, b] = self.calculate_color_f64(temp);
+                let (r, g, b, _) = self.calculate_iteration_palette_value(k).rgba();
 
                 let bright = self.stripe[k] as f64;
 
@@ -440,19 +432,12 @@ impl DataExport {
                     (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
                 };
 
-                let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
-
-                [r, g, b]
+                Color::from_rgb(r, g, b)
             },
             ColoringType::DistanceStripe => {
-                // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
-                let floating_iteration = (self.iterations[k] as f32 + self.smooth[k]) / self.palette_iteration_span;
-                
-                let temp = self.palette_interpolated_buffer.len() as f32 * (floating_iteration + self.palette_offset).fract();
-    
-                let [r, g, b] = self.calculate_color_f64(temp);
+                let (r, g, b, _) = self.calculate_iteration_palette_value(k).rgba();
 
-                let bright = self.blinn_phong(k);
+                let bright = self.calculate_blinn_phong(k);
 
                 // Calculate distance estimate in terms of pixels
                 let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
@@ -481,13 +466,13 @@ impl DataExport {
                     (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
                 };
 
-                let (r, g, b, _) = Color::from_rgb(r, g, b).rgba_u8();
-    
-                [r, g, b]
+                Color::from_rgb(r, g, b)
             }
         };
 
-        self.set_with_scale(k, rgb, scale)
+        let (r, g, b, _) = color.rgba_u8();
+
+        self.set_with_scale(k, [r, g, b], scale)
     }
 
     #[inline]
