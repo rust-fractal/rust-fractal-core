@@ -100,6 +100,7 @@ impl DataExport {
         palette_iteration_span: f32, 
         palette_offset: f32, 
         distance_transition: f32, 
+        distance_color: bool,
         lighting: bool,
         coloring_type: ColoringType,
         data_type: DataType,
@@ -132,7 +133,7 @@ impl DataExport {
             export_type,
             lighting_parameters: LightingParameters::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
             lighting,
-            distance_color: true
+            distance_color
         }
     }
 
@@ -389,6 +390,23 @@ impl DataExport {
     }
 
     #[inline]
+    pub fn gamma_blend(color: Color, bright: f64) -> Color {
+        let mut rgb = [color.red(), color.green(), color.blue()];
+
+        if bright < 0.5 {
+            for part in rgb.iter_mut() {
+                *part *= 2.0 * bright
+            }
+        } else {
+            for part in rgb.iter_mut() {
+                *part = 1.0 - 2.0 * (1.0 - *part) * (1.0 - bright)
+            }
+        }
+
+        Color::from_rgb(rgb[0], rgb[1], rgb[2])
+    }
+
+    #[inline]
     pub fn colour_index(&mut self, k: usize, scale: usize) {
         let color = match self.coloring_type {
             ColoringType::Distance => {
@@ -397,11 +415,11 @@ impl DataExport {
                 let distance = self.calculate_scaled_distance(k);
 
                 // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
-                let (r, g, b, _) = if self.distance_color {
+                let color = if self.distance_color {
                     self.calculate_distance_palette_value(distance)
                 } else {
                     self.calculate_iteration_palette_value(k)
-                }.rgba();
+                };
 
                 // Apply sigmoid function for non-linear transform
                 // let value = if length_scaled < 1.0 {
@@ -410,44 +428,31 @@ impl DataExport {
                 //     0.0
                 // };
                 
-                let (r, g, b) = if bright < 0.5 {
-                    ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
-                } else {
-                    (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
-                };
-
-                Color::from_rgb(r, g, b)
+                DataExport::gamma_blend(color, bright)
             },
             ColoringType::SmoothIteration | ColoringType::StepIteration => {
                 self.calculate_iteration_palette_value(k)
             },
             ColoringType::Stripe => {
-                let (r, g, b, _) = self.calculate_iteration_palette_value(k).rgba();
-
+                let color = self.calculate_iteration_palette_value(k);
                 let bright = self.stripe[k] as f64;
 
-                let (r, g, b) = if bright < 0.5 {
-                    ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
-                } else {
-                    (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
-                };
-
-                Color::from_rgb(r, g, b)
+                DataExport::gamma_blend(color, bright)
             },
             ColoringType::DistanceStripe => {
-                let (r, g, b, _) = self.calculate_iteration_palette_value(k).rgba();
-
                 let bright = self.calculate_blinn_phong(k);
 
-                // Calculate distance estimate in terms of pixels
-                let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
+                let distance = self.calculate_scaled_distance(k);
 
-                // Scale so transition will happen about 50 pixels
-                let length_scaled = (length_pixel / self.distance_transition).max(0.0);
+                let color = if self.distance_color {
+                    self.calculate_distance_palette_value(distance)
+                } else {
+                    self.calculate_iteration_palette_value(k)
+                };
 
                 // Apply sigmoid function for non-linear transform
-                let value = if length_scaled < 1.0 {
-                    1.0 - 1.0 / (1.0 + (-10.0 * (length_scaled - 0.5)).exp())
+                let value = if distance < 1.0 {
+                    1.0 - 1.0 / (1.0 + (-10.0 * (distance - 0.5)).exp())
                 } else {
                     0.0
                 };
@@ -460,13 +465,7 @@ impl DataExport {
 
                 let bright = (temp * (1.0 - value) + bright * value) as f64;
 
-                let (r, g, b) = if bright < 0.5 {
-                    ((2.0 * r * bright), (2.0 * g * bright), (2.0 * b * bright))
-                } else {
-                    (1.0 - 2.0 * (1.0 - r) * (1.0 - bright), 1.0 - 2.0 * (1.0 - g) * (1.0 - bright), 1.0 - 2.0 * (1.0 - b) * (1.0 - bright))
-                };
-
-                Color::from_rgb(r, g, b)
+                DataExport::gamma_blend(color, bright)
             }
         };
 
@@ -476,7 +475,7 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, distance_transition: f32, cyclic: bool, lighting: bool) {
+    pub fn change_palette(&mut self, palette: Option<Vec<(u8, u8, u8)>>, palette_iteration_span: f32, palette_offset: f32, distance_transition: f32, distance_color: bool, cyclic: bool, lighting: bool) {
         let mut new_palette = false;
         
         if let Some(palette) = palette {
@@ -512,6 +511,7 @@ impl DataExport {
         self.palette_cyclic = cyclic;
         self.lighting = lighting;
         self.distance_transition = distance_transition;
+        self.distance_color = distance_color;
     }
 
     #[inline]
