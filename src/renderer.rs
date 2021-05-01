@@ -76,6 +76,8 @@ impl FractalRenderer {
         let palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         let palette_cyclic = settings.get_bool("palette_cyclic").unwrap_or(true);
 
+        let distance_color = settings.get_bool("distance_color").unwrap_or(false);
+
         let lighting = settings.get_bool("lighting").unwrap_or(true);
 
         let lighting_direction = settings.get_float("lighting_direction").unwrap() as f32;
@@ -201,6 +203,7 @@ impl FractalRenderer {
                     palette_iteration_span, 
                     palette_offset, 
                     distance_transition, 
+                    distance_color,
                     lighting,
                     coloring_type, 
                     pixel_data_type, 
@@ -779,6 +782,7 @@ impl FractalRenderer {
         self.data_export.lock().palette_iteration_span = settings.get_float("palette_iteration_span").unwrap_or(100.0) as f32;
         self.data_export.lock().palette_offset = settings.get_float("palette_offset").unwrap_or(0.0) as f32;
         self.data_export.lock().distance_transition = settings.get_float("distance_transition").unwrap_or(0.0) as f32;
+        self.data_export.lock().distance_color = settings.get_bool("distance_color").unwrap_or(false);
 
         self.data_export.lock().lighting = settings.get_bool("lighting").unwrap_or(true);
 
