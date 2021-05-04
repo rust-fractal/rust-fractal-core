@@ -1,7 +1,7 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, ComplexExtended, FloatExtended, data_export::*, extended_to_string_long, extended_to_string_short, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended};
 use crate::math::{SeriesApproximation, Perturbation, Reference, BoxPeriod};
 
-use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
+use std::{sync::{atomic::AtomicBool, mpsc::Sender}, time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
@@ -546,129 +546,186 @@ impl FractalRenderer {
             });
         };
 
-        while pixel_data.len() as f64 > 0.01 * self.glitch_percentage * self.total_pixels as f64 {
-            // TODO investigate other methods of choosing the next pixel
-            // let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
-            // let glitch_reference_pixel = pixel_data[0].clone();
-            // let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
-            //     i.z_norm.partial_cmp(&j.z_norm).unwrap()
-            // }).unwrap().clone();
+        // let mut glitched_remaining = pixel_data.len();
 
-            let mut test_map = HashMap::new();
+        self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, &tx, delta_pixel_extended, None);
 
-            pixel_data.iter()
-                .for_each(|pixel| {
-                    match test_map.get_mut(&pixel.iteration) {
-                        Some(number) => {
-                            *number += 1;
-                        }
-                        None => {
-                            test_map.insert(pixel.iteration, 1);
-                        }
-                    }
-                });
-    
-            println!();
-    
-            println!("{:#?}", test_map);
-    
-            let most_common_iteration = test_map.iter().max_by_key(|&k| {
-                k.1
-            }).unwrap();
-    
-            // For use when finding the minimum thing to use
-            let lowest_iteration = test_map.iter().min_by_key(|&k| {
-                k.0
-            }).unwrap();
-    
-            println!("most common: {}, lowest: {}", most_common_iteration.0, lowest_iteration.0);
+        // let mut test_map: HashMap<usize, Vec<PixelData>> = HashMap::new();
 
-            // This randomly finds some pixel with the most common number of iterations
-            let glitch_reference_pixel = pixel_data.iter().find(|pixel| {
-                pixel.iteration == *most_common_iteration.0 as usize
-            }).unwrap().clone();
+        // pixel_data.iter()
+        //     .for_each(|pixel| {
+        //         match test_map.get_mut(&pixel.iteration) {
+        //             Some(pixels) => {
+        //                 pixels.push(pixel.clone());
+        //             }
+        //             None => {
+        //                 test_map.insert(pixel.iteration, vec![pixel.clone()]);
+        //             }
+        //         }
+        //     });
+
+        // while glitched_remaining as f64 > 0.01 * self.glitch_percentage * self.total_pixels as f64 || glitched_remaining == 0 {
+        //     // TODO investigate other methods of choosing the next pixel
+        //     // let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+        //     // let glitch_reference_pixel = pixel_data[0].clone();
+        //     // let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
+        //     //     i.z_norm.partial_cmp(&j.z_norm).unwrap()
+        //     // }).unwrap().clone();
+    
+        //     println!();
+
+        //     println!("glitched remaining: {}", glitched_remaining);
+    
+        //     // println!("{:#?}", test_map);
+        //     test_map.iter()
+        //         .for_each(|value| {
+        //             println!("{:>8} {:>8}", value.0, value.1.len());
+        //         });
+
+        //     let mut most_common_iteration = 0;
+        //     let mut most_common_pixels = 0;
+        //     let mut lowest_iteration = usize::MAX;
+    
+        //     test_map.iter().for_each(|(&index, vector)| {
+        //         if index < lowest_iteration {
+        //             lowest_iteration = index;
+        //         }
+
+        //         if vector.len() > most_common_pixels {
+        //             most_common_pixels = vector.len();
+        //             most_common_iteration = index;
+        //         }
+        //     });
+    
+        //     println!("most common: {}, lowest: {}", most_common_iteration, lowest_iteration);
+
+        //     let mut same_iteration_pixels = test_map.remove(&most_common_iteration).unwrap();
+
+        //     // This randomly finds some pixel with the most common number of iterations
+        //     let (glitch_index, mut glitch_reference_pixel) = same_iteration_pixels.iter_mut().enumerate().min_by(|i, j| {
+        //         i.1.z_norm.partial_cmp(&j.1.z_norm).unwrap()
+        //     }).unwrap();
             
-            let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
+        //     let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
-            glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+        //     // Need some kind of reference here that is run every pixel
+        //     glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
 
-            // This is the from the glitch reference to the central reference
-            let mut delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration) * -1.0;
-            let delta_center_reference = glitch_reference_pixel.delta_centre * -1.0;
+        //     // This is the from the glitch reference to the central reference
+        //     let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+        //     // let delta_center_reference = glitch_reference_pixel.delta_centre * -1.0;
 
-            // rebase this to the current glitch reference?
+        //     let mut temp = false;
 
-            let mut temp = Vec::new();
+        //     if glitch_reference.current_iteration < glitch_reference_pixel.iteration {
+        //         temp = true;
+        //     }
 
-            temp.push(delta_current_reference);
+        //     // NEED TO CHECK THIS
+        //     // TODO have some check for how many pixels have the same iteration value
+        //     glitch_reference_pixel.iteration = glitch_reference.current_iteration;
+        //     glitch_reference_pixel.z_norm = glitch_reference.reference_data.last().unwrap().z.norm_sqr();
 
-            // This is erroring when the centre is glitched...
-            for i in 1..(glitch_reference.current_iteration - glitch_reference.start_iteration) {
-                delta_current_reference *= glitch_reference.reference_data_extended[i - 1] * 2.0 + delta_current_reference;
-                delta_current_reference += delta_center_reference;
-                delta_current_reference.reduce();
-                temp.push(delta_current_reference);
-            };
+        //     let glitch_reference_pixel = glitch_reference_pixel.clone();
 
-            println!("glitch ref: {} {}", glitch_reference_pixel.delta_current, temp[glitch_reference_pixel.iteration - glitch_reference.start_iteration]);
-            println!("glitch ref: {} iterations", glitch_reference.current_iteration);
+        //     same_iteration_pixels.remove(glitch_index);
 
-            self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
+        //     glitched_remaining -= 1;
 
-            if self.stop_rendering(&stop_flag, frame_time) {
-                tx.send(()).unwrap();
-                return;
-            };
+        //     if same_iteration_pixels.len() < 1 {
+        //         temp = true;
+        //     }
 
-            // let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+        //     // rebase this to the current glitch reference?
 
-            match self.pixel_data_type {
-                DataType::Iteration | DataType::Stripe => {
-                    pixel_data.par_iter_mut()
-                        .for_each(|pixel| {
-                            // Pixel is left glitched if the current reference does not advance it
-                            if glitch_reference.current_iteration >= pixel.iteration {
-                                pixel.glitched = false;
-                                pixel.delta_current += temp[pixel.iteration - glitch_reference.start_iteration];
-                                pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                            }
+        //     // let mut temp = Vec::new();
 
-                            // pixel.iteration = glitch_reference.start_iteration;
-                            
-                    });
-                },
-                DataType::Distance | DataType::DistanceStripe => {
-                    pixel_data.par_iter_mut()
-                        .for_each(|pixel| {
-                            pixel.glitched = false;
-                            pixel.iteration = glitch_reference.start_iteration;
-                            pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                            pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                            pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
-                    });
-                },
-                _ => {}
-            };
-            
-            let chunk_size = max(pixel_data.len() / 512, 4);
-            // println!("chunk size: {}", chunk_size);
+        //     // temp.push(delta_current_reference);
 
-            Perturbation::iterate(&mut pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
+        //     // This is erroring when the centre is glitched...
+        //     // for i in 1..(glitch_reference.current_iteration - glitch_reference.start_iteration) {
+        //     //     delta_current_reference *= glitch_reference.reference_data_extended[i - 1] * 2.0 + delta_current_reference;
+        //     //     delta_current_reference += delta_center_reference;
+        //     //     delta_current_reference.reduce();
+        //     //     temp.push(delta_current_reference);
+        //     // };
 
-            // Remove all non-glitched points from the remaining points
-            pixel_data.retain(|packet| {
-                packet.glitched
-            });
+        //     // println!("glitch ref: {} {}", glitch_reference_pixel.delta_current, temp[glitch_reference_pixel.iteration - glitch_reference.start_iteration]);
+        //     // println!("glitch ref: {} iterations", glitch_reference.current_iteration);
 
-            // The pixels remaining should be rebased to the main again.... unless there is a better way
-            for pixel in &mut pixel_data {
-                if glitch_reference.current_iteration >= pixel.iteration {
-                    pixel.delta_current -= temp[pixel.iteration - glitch_reference.start_iteration]
-                }
-            }
 
-            thread::sleep(Duration::from_millis(1000));
-        };
+        //     self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
+
+        //     if self.stop_rendering(&stop_flag, frame_time) {
+        //         tx.send(()).unwrap();
+        //         return;
+        //     };
+
+        //     // let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+
+        //     if !temp {
+        //         match self.pixel_data_type {
+        //             DataType::Iteration | DataType::Stripe => {
+        //                 same_iteration_pixels.par_iter_mut()
+        //                     .for_each(|pixel| {
+        //                         // Pixel is left glitched if the current reference does not advance it
+        //                         pixel.glitched = false;
+        //                         pixel.delta_current -= glitch_reference_pixel.delta_current;
+        //                         pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+    
+        //                         // pixel.iteration = glitch_reference.start_iteration;
+                                
+        //                 });
+        //             },
+        //             DataType::Distance | DataType::DistanceStripe => {
+        //                 pixel_data.par_iter_mut()
+        //                     .for_each(|pixel| {
+        //                         pixel.glitched = false;
+        //                         pixel.iteration = glitch_reference.start_iteration;
+        //                         pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+        //                         pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+        //                         pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
+        //                 });
+        //             },
+        //             _ => {}
+        //         };
+                
+        //         let chunk_size = max(same_iteration_pixels.len() / 512, 4);
+        //         // println!("chunk size: {}", chunk_size);
+    
+        //         Perturbation::iterate(&mut same_iteration_pixels, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
+        //     }
+
+        //     glitched_remaining -= same_iteration_pixels.len();
+
+        //     // Remove all non-glitched points from the remaining points
+        //     same_iteration_pixels.retain(|packet| {
+        //         packet.glitched
+        //     });
+
+        //     glitched_remaining += same_iteration_pixels.len();
+
+        //     same_iteration_pixels.iter()
+        //         .for_each(|pixel| {
+        //             match test_map.get_mut(&pixel.iteration) {
+        //                 Some(pixels) => {
+        //                     pixels.push(pixel.clone());
+        //                 }
+        //                 None => {
+        //                     test_map.insert(pixel.iteration, vec![pixel.clone()]);
+        //                 }
+        //             }
+        //         });
+
+
+
+        //     // The pixels remaining should be rebased to the main again...
+        //     // for pixel in &mut test_map[most_common_iteration.0] {
+        //     //     pixel.delta_current -= temp[pixel.iteration - glitch_reference.start_iteration]
+        //     // }
+
+        //     thread::sleep(Duration::from_millis(1000));
+        // };
 
         tx.send(()).unwrap();
 
@@ -688,6 +745,128 @@ impl FractalRenderer {
             println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
             std::io::stdout().flush().unwrap();
         }
+    }
+
+    // Recursive glitch solving by glitch levels
+    // Start with a central reference that has ALL data stored for each iteration past the min skip
+    pub fn resolve_glitches(&mut self, pixel_data: &mut Vec<PixelData>, stop_flag: &Arc<AtomicBool>, frame_time: Instant, tx: &Sender<()>, delta_pixel_extended: FloatExtended, previous_reference: Option<&Reference>) {
+        let mut iteration_map: HashMap<usize, Vec<PixelData>> = HashMap::new();
+
+        // Sort into bins to process
+        pixel_data.iter()
+            .for_each(|pixel| {
+                match iteration_map.get_mut(&pixel.iteration) {
+                    Some(pixels) => {
+                        pixels.push(pixel.clone());
+                    }
+                    None => {
+                        iteration_map.insert(pixel.iteration, vec![pixel.clone()]);
+                    }
+                }
+            });
+
+        // Print out all the information about the pixels
+        iteration_map.iter()
+            .for_each(|value| {
+                println!("{:>8} {:>8}", value.0, value.1.len());
+            });
+
+        let previous_reference = match previous_reference {
+            Some(reference) => {
+                reference.clone()
+            },
+            None => {
+                let mut lowest_iteration = usize::MAX;
+        
+                iteration_map.iter().for_each(|(&index, _)| {
+                    if index < lowest_iteration {
+                        lowest_iteration = index;
+                    }
+                });
+
+                let mut previous_reference = self.center_reference.get_glitch_resolving_reference(lowest_iteration);
+                previous_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+
+                previous_reference
+            }
+        };
+
+        for (iteration, pixel_data) in iteration_map.iter_mut() {
+            println!("processing {} pixels at iteration {}", pixel_data.len(), iteration);
+
+            let (glitch_index, mut glitch_reference_pixel) = pixel_data.iter_mut().enumerate().min_by(|i, j| {
+                i.1.z_norm.partial_cmp(&j.1.z_norm).unwrap()
+            }).unwrap();
+
+            let mut glitch_reference = previous_reference.get_glitch_resolving_reference2(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
+            glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+
+            self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
+
+            let mut temp = false;
+
+            if glitch_reference.current_iteration < glitch_reference_pixel.iteration {
+                temp = true;
+            }
+
+            glitch_reference_pixel.iteration = glitch_reference.current_iteration;
+            glitch_reference_pixel.z_norm = glitch_reference.reference_data.last().unwrap().z.norm_sqr();
+
+            let glitch_reference_pixel = glitch_reference_pixel.clone();
+
+            pixel_data.remove(glitch_index);
+
+            if pixel_data.len() < 1 {
+                temp = true;
+            }
+
+            self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
+
+            if self.stop_rendering(&stop_flag, frame_time) {
+                tx.send(()).unwrap();
+                return;
+            };
+
+            if !temp {
+                match self.pixel_data_type {
+                    DataType::Iteration | DataType::Stripe => {
+                        pixel_data.par_iter_mut()
+                            .for_each(|pixel| {
+                                // Pixel is left glitched if the current reference does not advance it
+                                pixel.glitched = false;
+                                pixel.delta_current -= glitch_reference_pixel.delta_current;
+                                pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+    
+                                // pixel.iteration = glitch_reference.start_iteration;
+                                
+                        });
+                    },
+                    // DataType::Distance | DataType::DistanceStripe => {
+                    //     pixel_data.par_iter_mut()
+                    //         .for_each(|pixel| {
+                    //             pixel.glitched = false;
+                    //             pixel.iteration = glitch_reference.start_iteration;
+                    //             pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
+                    //             pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                    //             pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
+                    //     });
+                    // },
+                    _ => {}
+                };
+                
+                let chunk_size = max(pixel_data.len() / 512, 4);
+                // println!("chunk size: {}", chunk_size);
+    
+                Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
+
+                pixel_data.retain(|packet| {
+                    packet.glitched
+                });
+            }
+
+            self.resolve_glitches(pixel_data, stop_flag, frame_time, tx, delta_pixel_extended, Some(&glitch_reference))
+        }
+        
     }
 
     pub fn stop_rendering(&mut self, stop_flag: &Arc<AtomicBool>, frame_time: Instant) -> bool {
