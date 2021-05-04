@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, FractalType, to_fixed, to_extended};
+use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, FractalType, to_fixed, to_extended, FloatArbitrary};
 use std::sync::{Arc, atomic::{AtomicUsize, AtomicBool, Ordering}};
 
 #[derive(Clone)]
@@ -68,7 +68,7 @@ impl Reference {
         self.reference_data_extended.push(z_extended);
 
         while self.current_iteration < self.maximum_iteration {
-            if self.start_iteration == 1 && (self.data_storage_interval == 1 || self.current_iteration % self.data_storage_interval == 1) {
+            if self.data_storage_interval == 1 || self.current_iteration % self.data_storage_interval == 1 {
                 self.high_precision_data.push(self.z.clone());
             }
 
@@ -123,6 +123,43 @@ impl Reference {
         reference_maximum_iteration_counter.store(self.current_iteration, Ordering::SeqCst);
 
         // println!("{:?}", self.extended_iterations);
+    }
+
+    // This gets a reference that stores the high precision data every iteration
+    pub fn get_glitch_resolving_reference(&self, iteration: usize) -> Reference {
+        let iteration_reference = self.data_storage_interval * ((iteration - self.start_iteration) / self.data_storage_interval) + self.start_iteration;
+
+        let reference_c = self.c.clone();
+        let reference_z = self.high_precision_data[(iteration - self.start_iteration) / self.data_storage_interval].clone();
+
+        Reference::new(reference_z, reference_c, iteration_reference, self.maximum_iteration, 1, self.glitch_tolerance, self.zoom)
+    }
+
+    // This is for use when getting new references others with full data
+    pub fn get_glitch_resolving_reference2(&self, iteration: usize, reference_delta: ComplexExtended, current_delta: ComplexExtended) -> Reference {
+        assert!(self.data_storage_interval == 1);
+
+        let precision = self.c.real().prec();
+
+        let mut reference_c = self.c.clone();
+
+        let temp = FloatArbitrary::with_val(precision, reference_delta.exponent).exp2();
+        let temp2 = FloatArbitrary::with_val(precision, reference_delta.mantissa.re);
+        let temp3 = FloatArbitrary::with_val(precision, reference_delta.mantissa.im);
+
+        *reference_c.mut_real() += &temp2 * &temp;
+        *reference_c.mut_imag() += &temp3 * &temp;
+
+        let mut reference_z = self.high_precision_data[iteration - self.start_iteration].clone();
+
+        let temp = FloatArbitrary::with_val(precision, current_delta.exponent).exp2();
+        let temp2 = FloatArbitrary::with_val(precision, current_delta.mantissa.re);
+        let temp3 = FloatArbitrary::with_val(precision, current_delta.mantissa.im);
+
+        *reference_z.mut_real() += &temp2 * &temp;
+        *reference_z.mut_imag() += &temp3 * &temp;
+
+        Reference::new(reference_z, reference_c, iteration, self.maximum_iteration, 1, self.glitch_tolerance, self.zoom)
     }
 }
 
