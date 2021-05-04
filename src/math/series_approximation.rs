@@ -1,7 +1,6 @@
 use crate::util::{ComplexFixed, FractalType, to_extended};
 use crate::util::complex_extended::ComplexExtended;
 use crate::math::reference::Reference;
-use crate::util::FloatArbitrary;
 use crate::util::float_extended::FloatExtended;
 use rayon::prelude::*;
 
@@ -449,33 +448,6 @@ impl SeriesApproximation {
 
         self.approximation_probes.push(delta_n);
         self.approximation_probes_derivative.push(delta_derivative_n);
-    }
-
-    // Get the current reference, and the current number of iterations done
-    pub fn get_reference(&self, reference_delta: ComplexExtended, center_reference: &Reference) -> Reference {
-        let precision = center_reference.c.real().prec();
-        // let iteration_reference = self.data_storage_interval * ((self.min_valid_iteration - 1) / self.data_storage_interval) + 1;
-
-        let mut reference_c = center_reference.c.clone();
-        let temp = FloatArbitrary::with_val(precision, reference_delta.exponent).exp2();
-        let temp2 = FloatArbitrary::with_val(precision, reference_delta.mantissa.re);
-        let temp3 = FloatArbitrary::with_val(precision, reference_delta.mantissa.im);
-
-        *reference_c.mut_real() += &temp2 * &temp;
-        *reference_c.mut_imag() += &temp3 * &temp;
-
-        // let mut reference_z = self.center_reference.approximation_data[self.valid_iteration].clone();
-        let mut reference_z = center_reference.high_precision_data[(self.min_valid_iteration - 1) / self.data_storage_interval].clone();
-
-        let temp4 = self.evaluate(reference_delta, self.min_valid_iteration);
-        let temp = FloatArbitrary::with_val(precision, temp4.exponent).exp2();
-        let temp2 = FloatArbitrary::with_val(precision, temp4.mantissa.re);
-        let temp3 = FloatArbitrary::with_val(precision, temp4.mantissa.im);
-
-        *reference_z.mut_real() += &temp2 * &temp;
-        *reference_z.mut_imag() += &temp3 * &temp;
-
-        Reference::new(reference_z, reference_c, self.min_valid_iteration, center_reference.maximum_iteration, self.data_storage_interval, center_reference.glitch_tolerance, center_reference.zoom)
     }
 
     pub fn evaluate(&self, point_delta: ComplexExtended, iteration: usize) -> ComplexExtended {
