@@ -5,7 +5,7 @@ use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
-use rand::seq::SliceRandom;
+// use rand::seq::SliceRandom;
 use rand_distr::Distribution;
 
 use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
@@ -16,6 +16,8 @@ use config::Config;
 use std::thread;
 use std::sync::{Arc, mpsc};
 use std::sync::atomic::{Ordering, AtomicUsize};
+use std::collections::HashMap;
+
 use parking_lot::Mutex;
 
 pub struct FractalRenderer {
@@ -445,7 +447,8 @@ impl FractalRenderer {
                     delta_current: new_delta,
                     derivative_current: derivative,
                     glitched: false,
-                    stripe: (0.0, 0.0, 0.0)
+                    stripe: (0.0, 0.0, 0.0),
+                    z_norm: 0.0
                 }
             }).collect::<Vec<PixelData>>();
 
@@ -545,12 +548,70 @@ impl FractalRenderer {
 
         while pixel_data.len() as f64 > 0.01 * self.glitch_percentage * self.total_pixels as f64 {
             // TODO investigate other methods of choosing the next pixel
-            let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
+            // let glitch_reference_pixel = pixel_data.choose(&mut rand::thread_rng()).unwrap().clone();
             // let glitch_reference_pixel = pixel_data[0].clone();
+            // let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
+            //     i.z_norm.partial_cmp(&j.z_norm).unwrap()
+            // }).unwrap().clone();
+
+            let mut test_map = HashMap::new();
+
+            pixel_data.iter()
+                .for_each(|pixel| {
+                    match test_map.get_mut(&pixel.iteration) {
+                        Some(number) => {
+                            *number += 1;
+                        }
+                        None => {
+                            test_map.insert(pixel.iteration, 1);
+                        }
+                    }
+                });
+    
+            println!();
+    
+            println!("{:#?}", test_map);
+    
+            let most_common_iteration = test_map.iter().max_by_key(|&k| {
+                k.1
+            }).unwrap();
+    
+            // For use when finding the minimum thing to use
+            let lowest_iteration = test_map.iter().min_by_key(|&k| {
+                k.0
+            }).unwrap();
+    
+            println!("most common: {}, lowest: {}", most_common_iteration.0, lowest_iteration.0);
+
+            // This randomly finds some pixel with the most common number of iterations
+            let glitch_reference_pixel = pixel_data.iter().find(|pixel| {
+                pixel.iteration == *most_common_iteration.0 as usize
+            }).unwrap().clone();
             
             let mut glitch_reference = self.series_approximation.get_reference(glitch_reference_pixel.delta_centre, &self.center_reference);
 
             glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+
+            // This is the from the glitch reference to the central reference
+            let mut delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration) * -1.0;
+            let delta_center_reference = glitch_reference_pixel.delta_centre * -1.0;
+
+            // rebase this to the current glitch reference?
+
+            let mut temp = Vec::new();
+
+            temp.push(delta_current_reference);
+
+            // This is erroring when the centre is glitched...
+            for i in 1..(glitch_reference.current_iteration - glitch_reference.start_iteration) {
+                delta_current_reference *= glitch_reference.reference_data_extended[i - 1] * 2.0 + delta_current_reference;
+                delta_current_reference += delta_center_reference;
+                delta_current_reference.reduce();
+                temp.push(delta_current_reference);
+            };
+
+            println!("glitch ref: {} {}", glitch_reference_pixel.delta_current, temp[glitch_reference_pixel.iteration - glitch_reference.start_iteration]);
+            println!("glitch ref: {} iterations", glitch_reference.current_iteration);
 
             self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
 
@@ -559,16 +620,21 @@ impl FractalRenderer {
                 return;
             };
 
-            let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
+            // let delta_current_reference = self.series_approximation.evaluate(glitch_reference_pixel.delta_centre, glitch_reference.start_iteration);
 
             match self.pixel_data_type {
                 DataType::Iteration | DataType::Stripe => {
                     pixel_data.par_iter_mut()
                         .for_each(|pixel| {
-                            pixel.glitched = false;
-                            pixel.iteration = glitch_reference.start_iteration;
-                            pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                            pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                            // Pixel is left glitched if the current reference does not advance it
+                            if glitch_reference.current_iteration >= pixel.iteration {
+                                pixel.glitched = false;
+                                pixel.delta_current += temp[pixel.iteration - glitch_reference.start_iteration];
+                                pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
+                            }
+
+                            // pixel.iteration = glitch_reference.start_iteration;
+                            
                     });
                 },
                 DataType::Distance | DataType::DistanceStripe => {
@@ -593,6 +659,15 @@ impl FractalRenderer {
             pixel_data.retain(|packet| {
                 packet.glitched
             });
+
+            // The pixels remaining should be rebased to the main again.... unless there is a better way
+            for pixel in &mut pixel_data {
+                if glitch_reference.current_iteration >= pixel.iteration {
+                    pixel.delta_current -= temp[pixel.iteration - glitch_reference.start_iteration]
+                }
+            }
+
+            thread::sleep(Duration::from_millis(1000));
         };
 
         tx.send(()).unwrap();
