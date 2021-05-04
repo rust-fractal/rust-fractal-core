@@ -27,6 +27,10 @@ impl Perturbation {
                         if stop_flag.load(Ordering::SeqCst) {
                             break;
                         };
+
+                        if pixel.glitched {
+                            continue;
+                        };
     
                         pixel_index += 1;
     
@@ -79,6 +83,8 @@ impl Perturbation {
                                     if z_norm < reference_data.tolerance {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.glitched = true;
+
+                                        pixel.z_norm = z_norm;
     
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
@@ -90,6 +96,8 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
+
+                                        pixel.z_norm = z_norm;
     
                                         new_pixels_complete += 1;
                                         break 'outer;
@@ -107,7 +115,12 @@ impl Perturbation {
     
                             // If we have hit the iteration limit
                             if iterations_remaining == next_iteration_batch {
-                                pixel.iteration = reference.maximum_iteration;
+                                if (pixel.iteration + additional_iterations + next_iteration_batch) < reference.maximum_iteration {
+                                    pixel.glitched = true;
+                                    pixel.iteration = reference.current_iteration;
+                                } else {
+                                    pixel.iteration = reference.maximum_iteration;
+                                }
     
                                 new_pixels_complete += 1;
                                 break;
@@ -126,6 +139,8 @@ impl Perturbation {
                                     if z_norm < reference_data.tolerance {
                                         pixel.iteration += additional_iterations;
                                         pixel.glitched = true;
+
+                                        pixel.z_norm = z_norm;
     
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
@@ -137,6 +152,8 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
+
+                                        pixel.z_norm = z_norm;
     
                                         new_pixels_complete += 1;
                                         break;

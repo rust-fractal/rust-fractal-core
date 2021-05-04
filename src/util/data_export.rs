@@ -160,9 +160,6 @@ impl DataExport {
                 continue;
             }
 
-            let z = reference.reference_data[pixel.iteration - reference.start_iteration].z + pixel.delta_current.mantissa;
-            let z_norm = z.norm_sqr();
-
             // self.smooth[pixel.index] = match self.fractal_type {
             //     FractalType::Mandelbrot2 => {
             //         ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2()
@@ -172,7 +169,7 @@ impl DataExport {
             //     }
             // };
 
-            self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2();
+            self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (pixel.z_norm.ln() as f32).log2();
 
             if self.data_type == DataType::Stripe || self.data_type == DataType::DistanceStripe {
                 self.stripe[pixel.index] = (pixel.stripe.0 + pixel.stripe.1 * self.smooth[pixel.index] + pixel.stripe.2 * (1.0 - self.smooth[pixel.index])) / 4.0;
