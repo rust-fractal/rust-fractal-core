@@ -1,4 +1,4 @@
-use crate::util::{FloatExp, FloatExtended, FractalType, PixelData, data_export::{DataExport, DataType}, ComplexFixed};
+use crate::util::{FloatExp, FloatExtended, FractalType, PixelData, data_export::{DataExport, DataType}};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
@@ -9,10 +9,12 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use parking_lot::Mutex;
 
+const ESCAPE_RADIUS: f64 = 1e16;
+
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType, data_type: DataType, stripe_scale: f32) {
+    pub fn iterate(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType, data_type: DataType) {
         match data_type {
             DataType::Iteration => {
                 pixel_data.par_chunks_mut(chunk_size)
@@ -26,10 +28,6 @@ impl Perturbation {
                         // Check if the stop flag has been hit
                         if stop_flag.load(Ordering::SeqCst) {
                             break;
-                        };
-
-                        if pixel.glitched {
-                            continue;
                         };
     
                         pixel_index += 1;
@@ -83,21 +81,15 @@ impl Perturbation {
                                     if z_norm < reference_data.tolerance {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.glitched = true;
-
-                                        pixel.z_norm = z_norm;
-    
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
     
                                         break 'outer;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations + i;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
-
-                                        pixel.z_norm = z_norm;
     
                                         new_pixels_complete += 1;
                                         break 'outer;
@@ -139,22 +131,16 @@ impl Perturbation {
                                     if z_norm < reference_data.tolerance {
                                         pixel.iteration += additional_iterations;
                                         pixel.glitched = true;
-
-                                        pixel.z_norm = z_norm;
-    
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
     
                                         break;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
-
-                                        pixel.z_norm = z_norm;
-    
+                                        
                                         new_pixels_complete += 1;
                                         break;
                                     }
@@ -250,14 +236,12 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.glitched = true;
     
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
-    
                                         break 'outer;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations + i;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
     
@@ -305,14 +289,12 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations;
                                         pixel.glitched = true;
     
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
-    
                                         break;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
     
@@ -391,9 +373,6 @@ impl Perturbation {
                         // Number of iterations to the next extended iteration
                         let mut next_extended_iteration = first_extended_iteration - pixel.iteration;
     
-                        let mut stripe_iterations = 0;
-                        let mut stripe_storage = [ComplexFixed::new(0.0, 0.0); 5];
-    
                         // Start running the core iteration loop
                         'outer: loop {
                             // Number of iterations remaining
@@ -421,25 +400,23 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.glitched = true;
     
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
-    
                                         break 'outer;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
+                                        pixel.z_norm = z_norm;
     
                                         new_pixels_complete += 1;
                                         break 'outer;
                                     }
     
-                                    stripe_iterations += 1;
-                                    stripe_iterations %= 5;
+                                    pixel.stripe_iteration += 1;
+                                    pixel.stripe_iteration %= 4;
     
-                                    stripe_storage[stripe_iterations] = z;
+                                    pixel.stripe_storage[pixel.stripe_iteration] = z;
 
                                     pixel.delta_current.mantissa *= z + reference_data.z;
                                     pixel.delta_current.mantissa += scaled_delta_reference;
@@ -473,14 +450,12 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations;
                                         pixel.glitched = true;
     
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
-    
                                         break;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
     
@@ -488,10 +463,10 @@ impl Perturbation {
                                         break;
                                     }
     
-                                    stripe_iterations += 1;
-                                    stripe_iterations %= 5;
-        
-                                    stripe_storage[stripe_iterations] = z;
+                                    pixel.stripe_iteration += 1;
+                                    pixel.stripe_iteration %= 4;
+    
+                                    pixel.stripe_storage[pixel.stripe_iteration] = z;
                                 }
     
                                 pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
@@ -511,12 +486,6 @@ impl Perturbation {
                             scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                             scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
                         }
-    
-                        let temp = stripe_storage[0..5].iter().map(|z| {0.5 * (z.arg() as f32 * stripe_scale).sin() + 0.5}).collect::<Vec<f32>>();
-    
-                        pixel.stripe.0 = temp[(stripe_iterations + 2) % 5] + temp[(stripe_iterations + 3) % 5] + temp[(stripe_iterations + 4) % 5];
-                        pixel.stripe.1 = temp[stripe_iterations];
-                        pixel.stripe.2 = temp[(stripe_iterations + 1) % 5];
                     }
     
                     data_export.lock().export_pixels(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
@@ -562,10 +531,7 @@ impl Perturbation {
     
                         // Number of iterations to the next extended iteration
                         let mut next_extended_iteration = first_extended_iteration - pixel.iteration;
-    
-                        let mut stripe_iterations = 0;
-                        let mut stripe_storage = [ComplexFixed::new(0.0, 0.0); 5];
-    
+
                         // Start running the core iteration loop
                         'outer: loop {
                             // Number of iterations remaining
@@ -593,14 +559,12 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations + i;
                                         pixel.glitched = true;
     
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
-    
                                         break 'outer;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations + i;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
     
@@ -608,10 +572,10 @@ impl Perturbation {
                                         break 'outer;
                                     }
     
-                                    stripe_iterations += 1;
-                                    stripe_iterations %= 5;
+                                    pixel.stripe_iteration += 1;
+                                    pixel.stripe_iteration %= 4;
     
-                                    stripe_storage[stripe_iterations] = z;
+                                    pixel.stripe_storage[pixel.stripe_iteration] = z;
 
                                     pixel.derivative_current.mantissa *= 2.0 * z;
                                     pixel.derivative_current.mantissa += scaled_scale_factor_2;
@@ -653,14 +617,12 @@ impl Perturbation {
                                         pixel.iteration += additional_iterations;
                                         pixel.glitched = true;
     
-                                        pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                        pixel.delta_current.exponent = 0;
-    
                                         break;
                                     }
             
-                                    if z_norm > 1e16 {
+                                    if z_norm > ESCAPE_RADIUS {
                                         pixel.iteration += additional_iterations;
+                                        pixel.z_norm = z_norm;
                                         pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                         pixel.delta_current.exponent = 0;
     
@@ -668,10 +630,10 @@ impl Perturbation {
                                         break;
                                     }
     
-                                    stripe_iterations += 1;
-                                    stripe_iterations %= 5;
-        
-                                    stripe_storage[stripe_iterations] = z;
+                                    pixel.stripe_iteration += 1;
+                                    pixel.stripe_iteration %= 4;
+    
+                                    pixel.stripe_storage[pixel.stripe_iteration] = z;
                                 }
 
                                 pixel.derivative_current *= (reference.reference_data_extended[val1 + additional_iterations] + pixel.delta_current) * 2.0;
@@ -699,12 +661,6 @@ impl Perturbation {
                         }
 
                         pixel.derivative_current.reduce();
-    
-                        let temp = stripe_storage[0..5].iter().map(|z| {0.5 * (z.arg() as f32 * stripe_scale).sin() + 0.5}).collect::<Vec<f32>>();
-    
-                        pixel.stripe.0 = temp[(stripe_iterations + 2) % 5] + temp[(stripe_iterations + 3) % 5] + temp[(stripe_iterations + 4) % 5];
-                        pixel.stripe.1 = temp[stripe_iterations];
-                        pixel.stripe.2 = temp[(stripe_iterations + 1) % 5];
                     }
     
                     data_export.lock().export_pixels(&pixel_data[0..pixel_index], reference, delta_pixel, scale);

@@ -149,13 +149,13 @@ pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
 pub struct PixelData {
     pub index: usize,
     pub iteration: usize,
-    pub delta_centre: ComplexExtended,
     pub delta_reference: ComplexExtended,
     pub delta_current: ComplexExtended,
     pub derivative_current: ComplexExtended,
     pub glitched: bool,
-    pub stripe: (f32, f32, f32),
     pub z_norm: f64,
+    pub stripe_storage: [ComplexFixed<f64>; 4],
+    pub stripe_iteration: usize,
 }
 
 #[derive(Copy, Clone, PartialEq)]

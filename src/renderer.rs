@@ -48,7 +48,6 @@ pub struct FractalRenderer {
     pub render_time: u128,
     pub fractal_type: FractalType,
     pub root_zoom_factor: f64,
-    pub stripe_scale: f32,
 }
 
 impl FractalRenderer {
@@ -205,6 +204,7 @@ impl FractalRenderer {
                     palette_iteration_span, 
                     palette_offset, 
                     distance_transition, 
+                    stripe_scale,
                     distance_color,
                     lighting,
                     coloring_type, 
@@ -243,7 +243,6 @@ impl FractalRenderer {
             render_time: 0,
             fractal_type,
             root_zoom_factor: 0.0,
-            stripe_scale
         }
     }
 
@@ -442,13 +441,13 @@ impl FractalRenderer {
                 PixelData {
                     index: *index,
                     iteration: chosen_iteration,
-                    delta_centre: point_delta,
                     delta_reference: point_delta,
                     delta_current: new_delta,
                     derivative_current: derivative,
                     glitched: false,
-                    stripe: (0.0, 0.0, 0.0),
-                    z_norm: 0.0
+                    z_norm: 0.0,
+                    stripe_storage: [ComplexFixed::new(0.0, 0.0); 4],
+                    stripe_iteration: 0,
                 }
             }).collect::<Vec<PixelData>>();
 
@@ -496,7 +495,7 @@ impl FractalRenderer {
             let chunk_size = max((end_value - previous_value) / 512, 4);
 
             // This one has no offset because it is not a glitch resolving reference
-            Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
+            Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type);
 
             previous_value = end_value;
         }
@@ -547,7 +546,9 @@ impl FractalRenderer {
         };
 
         // Goes through all glitches and solved them - no need for glitch percentage at this time
-        self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, &tx, delta_pixel_extended, None);
+        if pixel_data.len() > 0 {
+            self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, &tx, delta_pixel_extended, None);
+        }
 
         tx.send(()).unwrap();
 
@@ -571,7 +572,7 @@ impl FractalRenderer {
 
     // Recursive glitch solving by glitch levels
     // Start with a central reference that has ALL data stored for each iteration past the min skip
-    pub fn resolve_glitches(&mut self, pixel_data: &mut Vec<PixelData>, stop_flag: &Arc<AtomicBool>, frame_time: Instant, tx: &Sender<()>, delta_pixel_extended: FloatExtended, previous_reference: Option<&Reference>) {
+    pub fn resolve_glitches(&mut self, pixel_data: &mut Vec<PixelData>, stop_flag: &Arc<AtomicBool>, frame_time: Instant, tx: &Sender<()>, delta_pixel_extended: FloatExtended, previous_reference: Option<Reference>) {
         let mut iteration_map: HashMap<usize, Vec<PixelData>> = HashMap::new();
 
         // Sort into bins to process
@@ -587,16 +588,17 @@ impl FractalRenderer {
                 }
             });
 
+        
+
         // Print out all the information about the pixels
-        iteration_map.iter()
-            .for_each(|value| {
-                println!("{:>8} {:>8}", value.0, value.1.len());
-            });
+        // iteration_map.iter()
+        //     .for_each(|value| {
+        //         println!("{:>8} {:>8}", value.0, value.1.len());
+        //     });
 
         let previous_reference = match previous_reference {
             Some(reference) => {
-                // TODO remove this
-                reference.clone()
+                reference
             },
             None => {
                 let mut lowest_iteration = usize::MAX;
@@ -614,8 +616,13 @@ impl FractalRenderer {
             }
         };
 
+        if self.stop_rendering(&stop_flag, frame_time) {
+            tx.send(()).unwrap();
+            return;
+        };
+
         for (iteration, pixel_data) in iteration_map.iter_mut() {
-            println!("processing {} pixels at iteration {}", pixel_data.len(), iteration);
+            // println!("processing {} pixels at iteration {}", pixel_data.len(), iteration);
 
             let (glitch_index, mut glitch_reference_pixel) = pixel_data.iter_mut().enumerate().min_by(|i, j| {
                 i.1.z_norm.partial_cmp(&j.1.z_norm).unwrap()
@@ -651,43 +658,28 @@ impl FractalRenderer {
             };
 
             if !temp {
-                match self.pixel_data_type {
-                    DataType::Iteration | DataType::Stripe => {
-                        pixel_data.par_iter_mut()
-                            .for_each(|pixel| {
-                                // Pixel is left glitched if the current reference does not advance it
-                                pixel.glitched = false;
-                                pixel.delta_current -= glitch_reference_pixel.delta_current;
-                                pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-    
-                                // pixel.iteration = glitch_reference.start_iteration;
-                                
-                        });
-                    },
-                    // DataType::Distance | DataType::DistanceStripe => {
-                    //     pixel_data.par_iter_mut()
-                    //         .for_each(|pixel| {
-                    //             pixel.glitched = false;
-                    //             pixel.iteration = glitch_reference.start_iteration;
-                    //             pixel.delta_current = self.series_approximation.evaluate( pixel.delta_centre, glitch_reference.start_iteration) - delta_current_reference;
-                    //             pixel.delta_reference = pixel.delta_centre - glitch_reference_pixel.delta_centre;
-                    //             pixel.derivative_current = self.series_approximation.evaluate_derivative(pixel.delta_centre, glitch_reference.start_iteration);
-                    //     });
-                    // },
-                    _ => {}
-                };
+                pixel_data.par_iter_mut()
+                    .for_each(|pixel| {
+                        // Pixel is left glitched if the current reference does not advance it
+                        pixel.glitched = false;
+                        pixel.delta_current -= glitch_reference_pixel.delta_current;
+                        pixel.delta_reference -= glitch_reference_pixel.delta_reference;
+
+                        // pixel.iteration = glitch_reference.start_iteration;
+                        
+                });
                 
                 let chunk_size = max(pixel_data.len() / 512, 4);
                 // println!("chunk size: {}", chunk_size);
     
-                Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, self.stripe_scale);
+                Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type);
 
                 pixel_data.retain(|packet| {
                     packet.glitched
                 });
             }
 
-            self.resolve_glitches(pixel_data, stop_flag, frame_time, tx, delta_pixel_extended, Some(&glitch_reference))
+            self.resolve_glitches(pixel_data, stop_flag, frame_time, tx, delta_pixel_extended, Some(glitch_reference))
         }
         
     }
@@ -893,7 +885,7 @@ impl FractalRenderer {
             _ => DataType::Distance
         };
 
-        self.stripe_scale = settings.get_float("stripe_scale").unwrap_or(1.0) as f32;
+        self.data_export.lock().stripe_scale = settings.get_float("stripe_scale").unwrap_or(1.0) as f32;
 
         self.jitter = settings.get_bool("jitter").unwrap_or(false);
         self.jitter_factor = settings.get_float("jitter_factor").unwrap_or(0.2);
