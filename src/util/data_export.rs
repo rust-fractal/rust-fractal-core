@@ -10,6 +10,10 @@ use colorgrad::{Color, CustomGradient, Interpolation, BlendMode};
 
 // This is 1e16f32.ln().log2() + 1.0
 const ESCAPE_RADIUS_LN_LOG2_P1: f32 = 5.203254472696 + 1.0;
+// const ESCAPE_RADIUS_LN_LOG2_P1: f32 = 7.203254472699 + 1.0;
+// const ESCAPE_RADIUS_LN_LOG2_P1: f32 = 8.2032544726997 + 1.0;
+
+
 // const ESCAPE_RADIUS_LN_LOG3_P1: f32 = 3.282888062227 + 1.0;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -88,6 +92,7 @@ pub struct DataExport {
     pub lighting_parameters: LightingParameters,
     pub lighting: bool,
     pub distance_color: bool,
+    pub stripe_scale: f32,
 }
 
 impl DataExport {
@@ -100,6 +105,7 @@ impl DataExport {
         palette_iteration_span: f32, 
         palette_offset: f32, 
         distance_transition: f32, 
+        stripe_scale: f32,
         distance_color: bool,
         lighting: bool,
         coloring_type: ColoringType,
@@ -133,7 +139,8 @@ impl DataExport {
             export_type,
             lighting_parameters: LightingParameters::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
             lighting,
-            distance_color
+            distance_color,
+            stripe_scale
         }
     }
 
@@ -172,7 +179,13 @@ impl DataExport {
             self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (pixel.z_norm.ln() as f32).log2();
 
             if self.data_type == DataType::Stripe || self.data_type == DataType::DistanceStripe {
-                self.stripe[pixel.index] = (pixel.stripe.0 + pixel.stripe.1 * self.smooth[pixel.index] + pixel.stripe.2 * (1.0 - self.smooth[pixel.index])) / 4.0;
+                let temp = pixel.stripe_storage.iter().map(|z| {0.5 * (z.arg() as f32 * self.stripe_scale).sin() + 0.5}).collect::<Vec<f32>>();
+
+                self.stripe[pixel.index] = (
+                    temp[(pixel.stripe_iteration + 2) % 4] 
+                    + temp[(pixel.stripe_iteration + 3) % 4] 
+                    + temp[pixel.stripe_iteration] * self.smooth[pixel.index] 
+                    + temp[(pixel.stripe_iteration + 1) % 4] * (1.0 - self.smooth[pixel.index])) / 3.0;
             }
 
             if self.data_type == DataType::Distance || self.data_type == DataType::DistanceStripe {
