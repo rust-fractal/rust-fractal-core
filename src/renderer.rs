@@ -639,6 +639,7 @@ impl FractalRenderer {
                 temp = true;
             }
 
+            // Needs to be resolved - causes some errors
             glitch_reference_pixel.iteration = glitch_reference.current_iteration;
             glitch_reference_pixel.z_norm = glitch_reference.reference_data.last().unwrap().z.norm_sqr();
 
