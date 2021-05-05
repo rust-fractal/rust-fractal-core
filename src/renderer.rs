@@ -624,32 +624,12 @@ impl FractalRenderer {
         for (iteration, pixel_data) in iteration_map.iter_mut() {
             // println!("processing {} pixels at iteration {}", pixel_data.len(), iteration);
 
-            let (glitch_index, mut glitch_reference_pixel) = pixel_data.iter_mut().enumerate().min_by(|i, j| {
-                i.1.z_norm.partial_cmp(&j.1.z_norm).unwrap()
-            }).unwrap();
+            let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
+                i.z_norm.partial_cmp(&j.z_norm).unwrap()
+            }).unwrap().clone();
 
             let mut glitch_reference = previous_reference.get_glitch_resolving_reference2(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
             glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
-
-            self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
-
-            let mut temp = false;
-
-            if glitch_reference.current_iteration < glitch_reference_pixel.iteration {
-                temp = true;
-            }
-
-            // Needs to be resolved - causes some errors
-            glitch_reference_pixel.iteration = glitch_reference.current_iteration;
-            glitch_reference_pixel.z_norm = glitch_reference.reference_data.last().unwrap().z.norm_sqr();
-
-            let glitch_reference_pixel = glitch_reference_pixel.clone();
-
-            pixel_data.remove(glitch_index);
-
-            if pixel_data.len() < 1 {
-                temp = true;
-            }
 
             self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
 
@@ -658,16 +638,12 @@ impl FractalRenderer {
                 return;
             };
 
-            if !temp {
+            if glitch_reference.current_iteration >= glitch_reference_pixel.iteration {
                 pixel_data.par_iter_mut()
                     .for_each(|pixel| {
-                        // Pixel is left glitched if the current reference does not advance it
                         pixel.glitched = false;
                         pixel.delta_current -= glitch_reference_pixel.delta_current;
                         pixel.delta_reference -= glitch_reference_pixel.delta_reference;
-
-                        // pixel.iteration = glitch_reference.start_iteration;
-                        
                 });
                 
                 let chunk_size = max(pixel_data.len() / 512, 4);
@@ -680,7 +656,9 @@ impl FractalRenderer {
                 });
             }
 
-            self.resolve_glitches(pixel_data, stop_flag, frame_time, tx, delta_pixel_extended, Some(glitch_reference))
+            if pixel_data.len() > 0 {
+                self.resolve_glitches(pixel_data, stop_flag, frame_time, tx, delta_pixel_extended, Some(glitch_reference))
+            }
         }
         
     }
