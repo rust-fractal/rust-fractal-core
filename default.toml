@@ -21,7 +21,7 @@ valid_iteration_probe_multiplier = 0.01
 
 experimental = true  
 
-coloring_type = "distance_stripe"
+coloring_type = "iteration"
 
 jitter = false
 

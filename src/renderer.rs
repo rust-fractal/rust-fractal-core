@@ -572,7 +572,7 @@ impl FractalRenderer {
 
     // Recursive glitch solving by glitch levels
     // Start with a central reference that has ALL data stored for each iteration past the min skip
-    pub fn resolve_glitches(&mut self, pixel_data: &mut Vec<PixelData>, stop_flag: &Arc<AtomicBool>, frame_time: Instant, tx: &Sender<()>, delta_pixel_extended: FloatExtended, previous_reference: Option<Reference>) {
+    pub fn resolve_glitches(&mut self, pixel_data: &mut [PixelData], stop_flag: &Arc<AtomicBool>, frame_time: Instant, tx: &Sender<()>, delta_pixel_extended: FloatExtended, previous_reference: Option<Reference>) {
         let mut iteration_map: HashMap<usize, Vec<PixelData>> = HashMap::new();
 
         // Sort into bins to process
@@ -587,14 +587,6 @@ impl FractalRenderer {
                     }
                 }
             });
-
-        
-
-        // Print out all the information about the pixels
-        // iteration_map.iter()
-        //     .for_each(|value| {
-        //         println!("{:>8} {:>8}", value.0, value.1.len());
-        //     });
 
         let previous_reference = match previous_reference {
             Some(reference) => {
@@ -622,8 +614,6 @@ impl FractalRenderer {
         };
 
         for (iteration, pixel_data) in iteration_map.iter_mut() {
-            // println!("processing {} pixels at iteration {}", pixel_data.len(), iteration);
-
             let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
                 i.z_norm.partial_cmp(&j.z_norm).unwrap()
             }).unwrap().clone();
@@ -646,7 +636,7 @@ impl FractalRenderer {
                         pixel.delta_reference -= glitch_reference_pixel.delta_reference;
                 });
                 
-                let chunk_size = max(pixel_data.len() / 512, 4);
+                let chunk_size = max(pixel_data.len() / 512, 8);
                 // println!("chunk size: {}", chunk_size);
     
                 Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type);
