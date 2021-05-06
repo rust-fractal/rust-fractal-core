@@ -1,7 +1,7 @@
 use crate::util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, ComplexExtended, FloatExtended, data_export::*, extended_to_string_long, extended_to_string_short, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended};
 use crate::math::{SeriesApproximation, Perturbation, Reference, BoxPeriod};
 
-use std::{sync::{atomic::AtomicBool, mpsc::Sender}, time::{Duration, Instant}};
+use std::{sync::{atomic::AtomicBool}, time::{Duration, Instant}};
 use std::io::Write;
 use std::cmp::{min, max};
 
@@ -492,7 +492,7 @@ impl FractalRenderer {
 
         for &value in values.iter() {
             let end_value = number_pixels / (value * value);
-            let chunk_size = max((end_value - previous_value) / 512, 4);
+            let chunk_size = max((end_value - previous_value) / 512, 16);
 
             // This one has no offset because it is not a glitch resolving reference
             Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type);
@@ -547,7 +547,7 @@ impl FractalRenderer {
 
         // Goes through all glitches and solved them - no need for glitch percentage at this time
         if pixel_data.len() > 0 {
-            self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, &tx, delta_pixel_extended, None);
+            self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, delta_pixel_extended, None);
         }
 
         tx.send(()).unwrap();
@@ -572,7 +572,7 @@ impl FractalRenderer {
 
     // Recursive glitch solving by glitch levels
     // Start with a central reference that has ALL data stored for each iteration past the min skip
-    pub fn resolve_glitches(&mut self, pixel_data: &mut [PixelData], stop_flag: &Arc<AtomicBool>, frame_time: Instant, tx: &Sender<()>, delta_pixel_extended: FloatExtended, previous_reference: Option<Reference>) {
+    pub fn resolve_glitches(&self, pixel_data: &mut [PixelData], stop_flag: &Arc<AtomicBool>, frame_time: Instant, delta_pixel_extended: FloatExtended, previous_reference: Option<Reference>) {
         let mut iteration_map: HashMap<usize, Vec<PixelData>> = HashMap::new();
 
         // Sort into bins to process
@@ -608,35 +608,33 @@ impl FractalRenderer {
             }
         };
 
-        if self.stop_rendering(&stop_flag, frame_time) {
-            tx.send(()).unwrap();
+        if stop_flag.load(Ordering::SeqCst) {
             return;
         };
 
-        for (iteration, pixel_data) in iteration_map.iter_mut() {
-            let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
-                i.z_norm.partial_cmp(&j.z_norm).unwrap()
-            }).unwrap().clone();
-
-            let mut glitch_reference = previous_reference.get_glitch_resolving_reference2(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
-            glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
-
-            self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
-
-            if self.stop_rendering(&stop_flag, frame_time) {
-                tx.send(()).unwrap();
-                return;
-            };
-
-            if glitch_reference.current_iteration >= glitch_reference_pixel.iteration {
-                pixel_data.par_iter_mut()
+        iteration_map.par_iter_mut()
+            .for_each(|(iteration, pixel_data)| {
+                let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
+                    i.z_norm.partial_cmp(&j.z_norm).unwrap()
+                }).unwrap().clone();
+    
+                let mut glitch_reference = previous_reference.get_glitch_resolving_reference2(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
+                glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+    
+                self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
+    
+                if stop_flag.load(Ordering::SeqCst) {
+                    return;
+                };
+    
+                pixel_data.iter_mut()
                     .for_each(|pixel| {
                         pixel.glitched = false;
                         pixel.delta_current -= glitch_reference_pixel.delta_current;
                         pixel.delta_reference -= glitch_reference_pixel.delta_reference;
                 });
                 
-                let chunk_size = max(pixel_data.len() / 512, 8);
+                let chunk_size = max(pixel_data.len() / 512, 16);
                 // println!("chunk size: {}", chunk_size);
     
                 Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type);
@@ -644,13 +642,11 @@ impl FractalRenderer {
                 pixel_data.retain(|packet| {
                     packet.glitched
                 });
-            }
 
-            if pixel_data.len() > 0 {
-                self.resolve_glitches(pixel_data, stop_flag, frame_time, tx, delta_pixel_extended, Some(glitch_reference))
-            }
-        }
-        
+                if pixel_data.len() > 0 {
+                    self.resolve_glitches(pixel_data, stop_flag, frame_time, delta_pixel_extended, Some(glitch_reference))
+                }
+            });
     }
 
     pub fn stop_rendering(&mut self, stop_flag: &Arc<AtomicBool>, frame_time: Instant) -> bool {
