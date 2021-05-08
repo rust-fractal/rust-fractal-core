@@ -42,7 +42,6 @@ pub struct FractalRenderer {
     pub pixel_data_type: DataType,
     pub jitter: bool,
     pub jitter_factor: f64,
-    pub experimental: bool,
     show_output: bool,
     pub progress: ProgressCounters,
     pub render_time: u128,
@@ -68,8 +67,11 @@ impl FractalRenderer {
         let frame_offset = settings.get_int("frame_offset").unwrap_or(0) as usize;
         let zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         let display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
+
         let auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
-        let experimental = settings.get_bool("experimental").unwrap_or(false);
+        let series_approximation_tiled = settings.get_bool("series_approximation_tiled").unwrap_or(true);
+        let series_approximation_enabled = settings.get_bool("series_approximation_enabled").unwrap_or(true);
+
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         let remove_centre = settings.get_bool("remove_centre").unwrap_or(false);
 
@@ -176,7 +178,8 @@ impl FractalRenderer {
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
             probe_sampling,
-            experimental,
+            series_approximation_tiled,
+            series_approximation_enabled,
             valid_iteration_probe_multiplier,
             data_storage_interval,
             fractal_type);
@@ -237,7 +240,6 @@ impl FractalRenderer {
             pixel_data_type,
             jitter,
             jitter_factor,
-            experimental,
             show_output,
             progress: ProgressCounters::new(maximum_iteration),
             render_time: 0,
@@ -302,7 +304,7 @@ impl FractalRenderer {
                 tx.send(()).unwrap();
                 return;
             };
-
+            
             self.series_approximation.maximum_iteration = self.center_reference.current_iteration;
             self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &stop_flag);
         } else {
@@ -322,7 +324,7 @@ impl FractalRenderer {
             drop(export);
 
             // Check to see if the series approximation order has changed intraframe
-            if self.series_approximation.order != (self.series_approximation.coefficients[0].len() - 1) {
+            if self.series_approximation.enabled && self.series_approximation.order != self.series_approximation.generated_order {
                 self.series_approximation.min_valid_iteration = 1;
                 self.series_approximation.generate_approximation(&self.center_reference, &self.progress.series_approximation, &stop_flag);
             }
@@ -360,13 +362,12 @@ impl FractalRenderer {
             -self.zoom.exponent, 
             cos_rotate, 
             sin_rotate, 
-            delta_pixel,
+            delta_pixel, 
             self.image_width,
             self.image_height,
             &self.center_reference,
             &self.progress.series_validation);
 
-        // -1 because we already know that 1 iteration can be skipped (take z = c)
         self.progress.min_series_approximation.store(self.series_approximation.min_valid_iteration, Ordering::SeqCst);
         self.progress.max_series_approximation.store(self.series_approximation.max_valid_iteration, Ordering::SeqCst);
 
@@ -402,8 +403,8 @@ impl FractalRenderer {
                 let mut i = (index % self.image_width) as f64;
                 let mut j = (index / self.image_width) as f64;
 
-                let chosen_iteration = if self.fractal_type == FractalType::Mandelbrot2 {
-                    if self.experimental {
+                let chosen_iteration = if self.series_approximation.enabled {
+                    if self.series_approximation.tiled {
                         let test1 = (i * sampling_resolution_width).floor() as usize;
                         let test2 = (j * sampling_resolution_height).floor() as usize;
 
@@ -809,7 +810,10 @@ impl FractalRenderer {
         self.zoom_scale_factor = settings.get_float("zoom_scale").unwrap_or(2.0);
         self.data_export.lock().display_glitches = settings.get_bool("display_glitches").unwrap_or(false);
         self.auto_adjust_iterations = settings.get_bool("auto_adjust_iterations").unwrap_or(true);
-        self.experimental = settings.get_bool("experimental").unwrap_or(false);
+
+        let series_approximation_tiled = settings.get_bool("series_approximation_tiled").unwrap_or(true);
+        let series_approximation_enabled = settings.get_bool("series_approximation_enabled").unwrap_or(true);
+
         let probe_sampling = settings.get_int("probe_sampling").unwrap_or(3) as usize;
         self.remove_centre = settings.get_bool("remove_centre").unwrap_or(true);
 
@@ -878,7 +882,8 @@ impl FractalRenderer {
             self.maximum_iteration, 
             FloatExtended::new(0.0, 0), 
             probe_sampling,
-            self.experimental,
+            series_approximation_tiled,
+            series_approximation_enabled,
             valid_iteration_probe_multiplier,
             data_storage_interval,
             self.fractal_type);

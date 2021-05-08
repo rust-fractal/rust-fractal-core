@@ -12,6 +12,7 @@ pub struct SeriesApproximation {
     pub maximum_iteration: usize,
     pub delta_pixel_square: FloatExtended,
     pub order: usize,
+    pub generated_order: usize,
     pub coefficients: Vec<Vec<ComplexExtended>>,
     probe_start: Vec<ComplexExtended>,
     approximation_probes: Vec<Vec<ComplexExtended>>,
@@ -21,7 +22,8 @@ pub struct SeriesApproximation {
     pub valid_iterations: Vec<usize>,
     pub valid_interpolation: Vec<usize>,
     pub probe_sampling: usize,
-    pub experimental: bool,
+    pub tiled: bool,
+    pub enabled: bool,
     pub valid_iteration_probe_multiplier: f32,
     pub data_storage_interval: usize,
     pub fractal_type: FractalType
@@ -32,7 +34,8 @@ impl SeriesApproximation {
         maximum_iteration: usize, 
         delta_pixel_square: FloatExtended, 
         probe_sampling: usize, 
-        experimental: bool, 
+        tiled: bool, 
+        enabled: bool,
         valid_iteration_probe_multiplier: f32,
         data_storage_interval: usize,
         fractal_type: FractalType) -> Self {
@@ -42,6 +45,7 @@ impl SeriesApproximation {
             maximum_iteration,
             delta_pixel_square,
             order,
+            generated_order: 0,
             coefficients: Vec::new(),
             probe_start: Vec::new(),
             approximation_probes: Vec::new(),
@@ -51,7 +55,8 @@ impl SeriesApproximation {
             valid_iterations: Vec::new(),
             valid_interpolation: Vec::new(),
             probe_sampling,
-            experimental,
+            tiled,
+            enabled,
             valid_iteration_probe_multiplier,
             data_storage_interval,
             fractal_type
@@ -59,6 +64,11 @@ impl SeriesApproximation {
     }
 
     pub fn generate_approximation(&mut self, center_reference: &Reference, series_approximation_counter: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>) {
+        if !self.enabled {
+            series_approximation_counter.store(1, Ordering::SeqCst);
+            return;
+        }
+
         series_approximation_counter.store(0, Ordering::SeqCst);
 
         // Reset the coefficients
@@ -116,6 +126,9 @@ impl SeriesApproximation {
 
             // self.coefficients.push(next_coefficients);
         }
+
+        // TODO maybe need something here to say series approximation was complete
+        self.generated_order = self.order;
     }
 
     pub fn check_approximation(&mut self, 
@@ -128,6 +141,15 @@ impl SeriesApproximation {
         image_height: usize,
         center_reference: &Reference,
         series_validation_counter: &Arc<AtomicUsize>) {
+
+        if !self.enabled {
+            self.min_valid_iteration = 1;
+            self.max_valid_iteration = 1;
+            
+            series_validation_counter.store(2, Ordering::SeqCst);
+            return;
+        }
+
         series_validation_counter.store(0, Ordering::SeqCst);
         
         // Delete the previous probes and calculate new ones
@@ -396,9 +418,8 @@ impl SeriesApproximation {
                 self.valid_interpolation.push(min_interpolation);
             }
         }
-
         
-        self.max_valid_iteration = if self.experimental {
+        self.max_valid_iteration = if self.tiled {
             *self.valid_interpolation.iter().max().unwrap()
         } else {
             self.min_valid_iteration
@@ -422,7 +443,7 @@ impl SeriesApproximation {
         //     print!("\x08]\n");
         // }
 
-        if !self.experimental {
+        if !self.tiled {
             self.valid_interpolation = vec![self.min_valid_iteration; (self.probe_sampling - 1) * (self.probe_sampling - 1)];
         }
     }
