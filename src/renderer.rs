@@ -330,6 +330,13 @@ impl FractalRenderer {
             }
         }
 
+        self.pixel_data_type = match self.data_export.lock().coloring_type {
+            ColoringType::SmoothIteration | ColoringType::StepIteration => DataType::Iteration,
+            ColoringType::Stripe => DataType::Stripe,
+            ColoringType::DistanceStripe => DataType::DistanceStripe,
+            _ => DataType::Distance
+        };
+
         if self.stop_rendering(&stop_flag, frame_time) {
             tx.send(()).unwrap();
             return;
