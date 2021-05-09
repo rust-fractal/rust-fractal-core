@@ -142,11 +142,6 @@ pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
             .interpolation(Interpolation::CatmullRom).mode(BlendMode::Oklab)
             .build().unwrap();
 
-    println!("{:?}", palette_generator.colors(16).iter().flat_map(|color| {
-        let color = color.rgba_u8();
-        [color.0, color.1, color.2] 
-    }).collect::<Vec<u8>>());
-
     (palette_generator.colors(6), palette_generator.colors(6 * 64))
 }
 
