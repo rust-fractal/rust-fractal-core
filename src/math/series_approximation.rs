@@ -179,7 +179,7 @@ impl SeriesApproximation {
 
         let test_val = max(
             ((self.min_valid_iteration as f32 * self.valid_iteration_probe_multiplier) as usize / self.data_storage_interval) * self.data_storage_interval, 
-            (10000 / self.data_storage_interval) * self.data_storage_interval);
+            (1000 / self.data_storage_interval) * self.data_storage_interval);
 
         let mut current_probe_check_value = if self.min_valid_iteration > test_val {
             self.min_valid_iteration - test_val
@@ -194,6 +194,8 @@ impl SeriesApproximation {
         };
 
         let mut first_valid_iterations = current_probe_check_value;
+
+        // println!("{} {} {} {}", first_valid_iterations, test_val, current_probe_check_value, next_probe_check_value);
         
         // TODO this can be refactored to be a little more efficient
         loop {
@@ -237,7 +239,6 @@ impl SeriesApproximation {
                     if relative_error / derivative > self.delta_pixel_square {
                         // println!("rel: {}, deri: {}, delta: {}", relative_error, derivative, self.delta_pixel_square);
                         // needs to get more than 2 in a row
-                        // println!("break at: {}", first_valid_iterations);
                         if first_valid_iterations <= (current_probe_check_value + 2 * test_val + 1) {
                             first_valid_iterations = next_probe_check_value;
                             break;
@@ -296,6 +297,8 @@ impl SeriesApproximation {
             1
         };
 
+        // println!("{} {} {} {}", current_probe_check_value, test_val, next_probe_check_value, first_valid_iterations);
+
         // This is the array that will be iterated
         // TODO it might be possible to put the top left one in already
         let mut valid_iterations = vec![current_probe_check_value; self.probe_sampling * self.probe_sampling];
@@ -350,6 +353,7 @@ impl SeriesApproximation {
                                 if relative_error / derivative > self.delta_pixel_square || relative_error.exponent > 0 {
                                     // println!("exceeded at: {} ", *probe_iteration_level);
 
+                                    // TODO here need to investigate adaptively changing this to either data storage interval for 2 * test
                                     if *probe_iteration_level <= (current_probe_check_value + self.data_storage_interval + 1) {
                                         *probe_iteration_level = next_probe_check_value;
                                         break;
