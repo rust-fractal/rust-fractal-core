@@ -155,8 +155,11 @@ impl DataExport {
 
             self.glitched[pixel.index] = pixel.glitched;
 
-            if pixel.glitched && self.display_glitches {
+            if pixel.glitched {
+                if self.display_glitches {
                 self.set_with_scale(pixel.index, [255, 0, 0], new_scale);
+                };
+                
                 continue;
             }
 

@@ -600,6 +600,7 @@ impl FractalRenderer {
                 let radius = delta_pixel_extended * self.image_width as f64;
                 let precision = max(64, -radius.exponent + 64) as u32;
 
+                
                 previous_reference.c.set_prec(precision);
                 previous_reference.z.set_prec(precision);
 
@@ -626,26 +627,26 @@ impl FractalRenderer {
                 let glitch_reference_pixel = pixel_data.iter().min_by(|i, j| {
                     i.z_norm.partial_cmp(&j.z_norm).unwrap()
                 }).unwrap().clone();
-    
+
                 let mut glitch_reference = previous_reference.get_glitch_resolving_reference(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
                 glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
-    
+
                 self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
     
                 if stop_flag.load(Ordering::SeqCst) {
                     return;
                 };
-    
-                pixel_data.iter_mut()
+
+                pixel_data.par_iter_mut()
                     .for_each(|pixel| {
                         pixel.glitched = false;
                         pixel.delta_current -= glitch_reference_pixel.delta_current;
                         pixel.delta_reference -= glitch_reference_pixel.delta_reference;
                 });
-                
-                let chunk_size = max(pixel_data.len() / 512, 16);
+
+                let chunk_size = max(pixel_data.len() / 512, 4);
                 // println!("chunk size: {}", chunk_size);
-    
+
                 Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, &self.series_approximation, false);
 
                 pixel_data.retain(|packet| {
