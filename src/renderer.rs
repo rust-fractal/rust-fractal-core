@@ -250,7 +250,7 @@ impl FractalRenderer {
         self.progress.reset();
         
         if self.show_output {
-            print!("{:<15}", extended_to_string_short(self.zoom));
+            print!(" {:<15}", extended_to_string_short(self.zoom));
             std::io::stdout().flush().unwrap();
         };
 
@@ -582,16 +582,36 @@ impl FractalRenderer {
             },
             None => {
                 let mut lowest_iteration = usize::MAX;
+                let mut highest_iteration = 0;
         
                 iteration_map.iter().for_each(|(&index, _)| {
                     if index < lowest_iteration {
                         lowest_iteration = index;
                     }
+
+                    if index > highest_iteration {
+                        highest_iteration = index;
+                    }
                 });
 
-                // TODO, this can slow down the rendering when the central pixel is particulaly well placed with a high iteration limit
-                let mut previous_reference = self.center_reference.get_glitch_resolving_reference(lowest_iteration);
+                let mut previous_reference = self.center_reference.get_central_glitch_resolving_reference(lowest_iteration);
+
+                // Modify the precision of the reference to the current image scale
+                let radius = delta_pixel_extended * self.image_width as f64;
+                let precision = max(64, -radius.exponent + 64) as u32;
+
+                previous_reference.c.set_prec(precision);
+                previous_reference.z.set_prec(precision);
+
+                let previous_maximum_iteration = previous_reference.maximum_iteration;
+
+                // We cap this to avoid running the reference too long when the central point has a large amount of iterations relative to the rest of the pixels
+                previous_reference.maximum_iteration = min(highest_iteration + 10000, previous_maximum_iteration);
+
                 previous_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+
+                // Reset the maximum iteration of the reference back to normal to make it seem the reference escaped early
+                previous_reference.maximum_iteration = previous_maximum_iteration;
 
                 previous_reference
             }
@@ -607,7 +627,7 @@ impl FractalRenderer {
                     i.z_norm.partial_cmp(&j.z_norm).unwrap()
                 }).unwrap().clone();
     
-                let mut glitch_reference = previous_reference.get_glitch_resolving_reference2(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
+                let mut glitch_reference = previous_reference.get_glitch_resolving_reference(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
                 glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
     
                 self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
@@ -690,7 +710,7 @@ impl FractalRenderer {
     pub fn render(&mut self) {
         // Print out the status information
         if self.show_output {
-            println!("{:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Iteration [ms]", "Correct [ms]", "Ref", "Frame [ms]");
+            println!(" {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Iteration [ms]", "Correct [ms]", "Ref", "Frame [ms]");
         };
 
         let mut count = 0;

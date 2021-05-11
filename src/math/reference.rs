@@ -126,7 +126,7 @@ impl Reference {
     }
 
     // This gets a reference that stores the high precision data every iteration
-    pub fn get_glitch_resolving_reference(&self, iteration: usize) -> Reference {
+    pub fn get_central_glitch_resolving_reference(&self, iteration: usize) -> Reference {
         let iteration_reference = self.data_storage_interval * ((iteration - self.start_iteration) / self.data_storage_interval) + self.start_iteration;
 
         let reference_c = self.c.clone();
@@ -136,7 +136,7 @@ impl Reference {
     }
 
     // This is for use when getting new references others with full data
-    pub fn get_glitch_resolving_reference2(&self, iteration: usize, reference_delta: ComplexExtended, current_delta: ComplexExtended) -> Reference {
+    pub fn get_glitch_resolving_reference(&self, iteration: usize, reference_delta: ComplexExtended, current_delta: ComplexExtended) -> Reference {
         assert!(self.data_storage_interval == 1);
 
         let precision = self.c.real().prec();
