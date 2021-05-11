@@ -438,20 +438,13 @@ impl FractalRenderer {
                 );
 
                 let point_delta = ComplexExtended::new(element, -self.zoom.exponent);
-                let new_delta = self.series_approximation.evaluate(point_delta, chosen_iteration);
-
-                let derivative = if self.pixel_data_type == DataType::Distance || self.pixel_data_type == DataType::DistanceStripe {
-                    self.series_approximation.evaluate_derivative(point_delta, chosen_iteration)
-                } else {
-                    complex_default
-                };
 
                 PixelData {
                     index: *index,
                     iteration: chosen_iteration,
                     delta_reference: point_delta,
-                    delta_current: new_delta,
-                    derivative_current: derivative,
+                    delta_current: point_delta,
+                    derivative_current: complex_default,
                     glitched: false,
                     z_norm: 0.0,
                     stripe_storage: [ComplexFixed::new(0.0, 0.0); 4],
@@ -503,7 +496,7 @@ impl FractalRenderer {
             let chunk_size = max((end_value - previous_value) / 512, 16);
 
             // This one has no offset because it is not a glitch resolving reference
-            Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type);
+            Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type, &self.series_approximation, true);
 
             previous_value = end_value;
         }
@@ -645,7 +638,7 @@ impl FractalRenderer {
                 let chunk_size = max(pixel_data.len() / 512, 16);
                 // println!("chunk size: {}", chunk_size);
     
-                Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type);
+                Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, &self.series_approximation, false);
 
                 pixel_data.retain(|packet| {
                     packet.glitched

@@ -9,12 +9,14 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use parking_lot::Mutex;
 
+use crate::math::SeriesApproximation;
+
 const ESCAPE_RADIUS: f64 = 1e16;
 
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType, data_type: DataType) {
+    pub fn iterate(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType, data_type: DataType, series_approximation: &SeriesApproximation, initial: bool) {
         match data_type {
             DataType::Iteration => {
                 pixel_data.par_chunks_mut(chunk_size)
@@ -29,6 +31,10 @@ impl Perturbation {
                         if stop_flag.load(Ordering::SeqCst) {
                             break;
                         };
+
+                        if initial {
+                            pixel.delta_current = series_approximation.evaluate(pixel.delta_reference, pixel.iteration);
+                        }
     
                         pixel_index += 1;
     
@@ -182,7 +188,12 @@ impl Perturbation {
                         if stop_flag.load(Ordering::SeqCst) {
                             break;
                         };
-    
+
+                        if initial {
+                            pixel.delta_current = series_approximation.evaluate(pixel.delta_reference, pixel.iteration);
+                            pixel.derivative_current = series_approximation.evaluate_derivative(pixel.delta_reference, pixel.iteration);
+                        }
+                        
                         pixel_index += 1;
     
                         // Variable to record the number of additional iterations
@@ -347,6 +358,10 @@ impl Perturbation {
                         if stop_flag.load(Ordering::SeqCst) {
                             break;
                         };
+
+                        if initial {
+                            pixel.delta_current = series_approximation.evaluate(pixel.delta_reference, pixel.iteration);
+                        }
     
                         pixel_index += 1;
     
@@ -505,6 +520,11 @@ impl Perturbation {
                         if stop_flag.load(Ordering::SeqCst) {
                             break;
                         };
+
+                        if initial {
+                            pixel.delta_current = series_approximation.evaluate(pixel.delta_reference, pixel.iteration);
+                            pixel.derivative_current = series_approximation.evaluate_derivative(pixel.delta_reference, pixel.iteration);
+                        }
     
                         pixel_index += 1;
     
