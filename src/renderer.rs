@@ -30,7 +30,6 @@ pub struct FractalRenderer {
     pub maximum_iteration: usize,
     pub glitch_percentage: f64,
     pub data_export: Arc<Mutex<DataExport>>,
-    start_render_time: Instant,
     pub remaining_frames: usize,
     frame_offset: usize,
     pub zoom_scale_factor: f64,
@@ -228,7 +227,6 @@ impl FractalRenderer {
             maximum_iteration,
             glitch_percentage,
             data_export,
-            start_render_time: Instant::now(),
             remaining_frames,
             frame_offset,
             zoom_scale_factor,
@@ -252,8 +250,7 @@ impl FractalRenderer {
         self.progress.reset();
         
         if self.show_output {
-            print!("{:<6}", frame_index + self.frame_offset);
-            print!("| {:<15}", extended_to_string_short(self.zoom));
+            print!("{:<15}", extended_to_string_short(self.zoom));
             std::io::stdout().flush().unwrap();
         };
 
@@ -392,8 +389,6 @@ impl FractalRenderer {
             std::io::stdout().flush().unwrap();
         };
 
-        let packing_time = Instant::now();
-
         if self.remove_centre != self.data_export.lock().centre_removed {
             self.render_indices = FractalRenderer::generate_render_indices(self.image_width, self.image_height, self.remove_centre, self.zoom_scale_factor, self.data_export.lock().export_type);
             self.data_export.lock().centre_removed = self.remove_centre;
@@ -452,11 +447,6 @@ impl FractalRenderer {
                 }
             }).collect::<Vec<PixelData>>();
 
-        if self.show_output {
-            print!("| {:<15}", packing_time.elapsed().as_millis());
-            std::io::stdout().flush().unwrap();
-        };
-
         if self.stop_rendering(&stop_flag, frame_time) {
             return;
         };
@@ -493,9 +483,8 @@ impl FractalRenderer {
 
         for &value in values.iter() {
             let end_value = number_pixels / (value * value);
-            let chunk_size = max((end_value - previous_value) / 512, 16);
+            let chunk_size = max((end_value - previous_value) / 512, 8);
 
-            // This one has no offset because it is not a glitch resolving reference
             Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type, &self.series_approximation, true);
 
             previous_value = end_value;
@@ -559,14 +548,12 @@ impl FractalRenderer {
             std::io::stdout().flush().unwrap();
         };
         
-        let saving_time = Instant::now();
         self.data_export.lock().save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
 
         self.render_time = frame_time.elapsed().as_millis();
 
         if self.show_output {
-            print!("| {:<15}", saving_time.elapsed().as_millis());
-            println!("| {:<15}| {:<15}", frame_time.elapsed().as_millis(), self.start_render_time.elapsed().as_millis());
+            println!("| {:<15}", frame_time.elapsed().as_millis());
             std::io::stdout().flush().unwrap();
         }
     }
@@ -602,6 +589,7 @@ impl FractalRenderer {
                     }
                 });
 
+                // TODO, this can slow down the rendering when the central pixel is particulaly well placed with a high iteration limit
                 let mut previous_reference = self.center_reference.get_glitch_resolving_reference(lowest_iteration);
                 previous_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
 
@@ -702,7 +690,7 @@ impl FractalRenderer {
     pub fn render(&mut self) {
         // Print out the status information
         if self.show_output {
-            println!("{:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}", "Frame", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Packing [ms]", "Iteration [ms]", "Correct [ms]", "Ref", "Saving [ms]", "Frame [ms]", "TOTAL [ms]");
+            println!("{:<15}| {:<15}| {:<15}| {:<6}| {:<15}| {:<15}| {:<15}| {:<6}| {:<15}", "Zoom", "Approx [ms]", "Skipped [it]", "Order", "Maximum [it]", "Iteration [ms]", "Correct [ms]", "Ref", "Frame [ms]");
         };
 
         let mut count = 0;
@@ -905,7 +893,6 @@ impl FractalRenderer {
 
         self.zoom = zoom;
 
-        self.start_render_time = Instant::now();
         self.progress.reset_all(self.maximum_iteration);
 
         data_export.image_width = self.image_width;
