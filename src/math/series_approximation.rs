@@ -308,6 +308,7 @@ impl SeriesApproximation {
 
         let first_check_probes = vec![0, self.probe_sampling - 1, self.probe_sampling * (self.probe_sampling - 1), self.probe_sampling * self.probe_sampling - 1];
 
+        // The check value here is much larger - we want to make sure that our assumptions are correct
         self.iterate_probes(center_reference, &mut valid_iterations, Some(&first_check_probes), test_val, 10 * test_val);
 
         // self.valid_iterations = valid_iterations.clone();
@@ -330,12 +331,13 @@ impl SeriesApproximation {
                 }
             }).collect::<Vec<usize>>();
     
-            self.iterate_probes(center_reference, &mut valid_iterations, Some(&next_check_probes), test_val, 10 * self.data_storage_interval);
+            // Check value here is much smaller, because we have checked that the corner probes work well we assume that the
+            // rest of the skip will be relatively constant
+            self.iterate_probes(center_reference, &mut valid_iterations, Some(&next_check_probes), test_val, test_val);
         }
 
         self.valid_iterations = valid_iterations;
         self.interpolate_probes();
-        // self.print_probe_iteration_buffer();
 
         self.max_valid_iteration = if self.tiled {
             *self.valid_interpolation.iter().max().unwrap()
@@ -347,7 +349,8 @@ impl SeriesApproximation {
             self.min_valid_iteration = 1;
         };
         
-        self.print_probe_interpolation_buffer();
+        // self.print_probe_iteration_buffer();
+        // self.print_probe_interpolation_buffer();
 
         series_validation_counter.fetch_add(1, Ordering::Relaxed);
     }
