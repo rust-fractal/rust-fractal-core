@@ -1,6 +1,12 @@
 ![image](render.png)
 
-# rust-fractal
+<h1 align="center">rust-fractal-gui</h1>
+<p align="center">
+  <a href="https://github.com/rust-fractal/rust-fractal-core/blob/master/LICENSE"><img src="https://img.shields.io/github/license/rust-fractal/rust-fractal-gui" alt="Repository License"></a>
+  <a href="https://github.com/rust-fractal/rust-fractal-core/"><img src="https://img.shields.io/tokei/lines/github/rust-fractal/rust-fractal-gui" alt="Repository Size"></a>
+  <a href="https://github.com/rust-fractal/rust-fractal-core/releases"><img src="https://img.shields.io/github/downloads/rust-fractal/rust-fractal-gui/total?style=flat" alt="Github Release"></a>
+</p>
+
 A mandelbrot fractal renderer implementing both perturbation and series approximation. A reference point is iterated at high-precision, arbitrary precision and differences from this are calculated in machine precision. This allows for a large reduction in computation required to render and image, especially at high zoom levels. This generator features:
 
 - Perturbation based iteration with glitch detection.
@@ -13,7 +19,7 @@ A mandelbrot fractal renderer implementing both perturbation and series approxim
 - Utilises scaling and mantissa-exponent based extended precision to allow for arbitrary zoom, whilst maintaining good performance. Verified to be working at depths exceeding E50000. Theoretically, this is only limited by MPFR's precision.
 
 ## Compiling
-You need to be able to compile the 'rug' crate which requires a rust GNU toolchain. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, build the crate with:
+You need to be able to compile the 'rug' crate which requires a rust GNU toolchain. A nightly toolchain is also required. Look in the documentation for rug for more information on how to do this. Once all required dependencies have been installed, build the crate with:
 
 ```cargo build --release```
 
