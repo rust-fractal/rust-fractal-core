@@ -16,7 +16,7 @@ smallvec = "^1.4.2"
 clap = "^3.0.0-beta.1"
 config = "^0.9"
 half = "^1.6.0"
-parking_lot = { version = "0.11", features = ["nightly"] }
+parking_lot = { version = "0.11.1", features = ["nightly"] }
 colorgrad = { git = "https://github.com/mazznoer/colorgrad-rs" }
 
 [dependencies.rug]
