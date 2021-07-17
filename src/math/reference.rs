@@ -1,4 +1,6 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, FractalType, to_fixed, to_extended, FloatArbitrary};
+use rug::ops::PowAssign;
+
+use crate::util::{ComplexArbitrary, ComplexFixed, ComplexExtended, FloatExtended, to_fixed, to_extended, FloatArbitrary};
 use std::sync::{Arc, atomic::{AtomicUsize, AtomicBool, Ordering}};
 
 #[derive(Clone)]
@@ -43,7 +45,7 @@ impl Reference {
         }
     }
 
-    pub fn run(&mut self, reference_counter: &Arc<AtomicUsize>, reference_maximum_iteration_counter: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, fractal_type: FractalType) {
+    pub fn run<const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(&mut self, reference_counter: &Arc<AtomicUsize>, reference_maximum_iteration_counter: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>) {
         let z_fixed = to_fixed(&self.z);
         let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
@@ -78,14 +80,33 @@ impl Reference {
 
             reference_counter.fetch_add(1, Ordering::SeqCst);
 
-            match fractal_type {
-                FractalType::Mandelbrot2 => {
-                    self.z.square_mut();
-                    self.z += &self.c;
-                }
-                FractalType::Mandelbrot3 => {
+            match FRACTAL_TYPE {
+                1 => {
+                    // Burning ship
+                    self.z.mut_real().abs_mut();
+                    self.z.mut_imag().abs_mut();
+
                     self.z *= self.z.clone().square();
                     self.z += &self.c;
+                }
+                _ => {
+                    match FRACTAL_POWER {
+                        2 => {
+                            // Power 2 mandelbrot
+                            self.z.square_mut();
+                            self.z += &self.c;
+                        },
+                        3 => {
+                            // Power 3 mandelbrot
+                            self.z *= self.z.clone().square();
+                            self.z += &self.c;
+                        },
+                        _ => {
+                            // Power N mandelbrot
+                            self.z.pow_assign(FRACTAL_POWER as i64);
+                            self.z += &self.c;
+                        }
+                    }
                 }
             }
 

@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexFixed, FractalType, PixelData, ProgressCounters, ComplexExtended, FloatExtended, data_export::*, extended_to_string_long, extended_to_string_short, generate_default_palette, get_approximation_terms, get_delta_top_left, string_to_extended};
+use crate::util::{ComplexArbitrary, ComplexExtended, ComplexFixed, FloatExtended, FractalType, PixelData, ProgressCounters, data_export::*, extended_to_string_long, extended_to_string_short, generate_default_palette, generate_pascal_coefficients, get_approximation_terms, get_delta_top_left, string_to_extended};
 use crate::math::{SeriesApproximation, Perturbation, Reference, BoxPeriod};
 
 use std::{sync::{atomic::AtomicBool}, time::{Duration, Instant}};
@@ -19,6 +19,9 @@ use std::sync::atomic::{Ordering, AtomicUsize};
 use std::collections::HashMap;
 
 use parking_lot::Mutex;
+
+const FRACTAL_TYPE: usize = 0;
+const FRACTAL_POWER: usize = 9;
 
 pub struct FractalRenderer {
     pub image_width: usize,
@@ -46,6 +49,7 @@ pub struct FractalRenderer {
     pub render_time: u128,
     pub fractal_type: FractalType,
     pub root_zoom_factor: f64,
+    pub pascal: Vec<f64>
 }
 
 impl FractalRenderer {
@@ -243,6 +247,7 @@ impl FractalRenderer {
             render_time: 0,
             fractal_type,
             root_zoom_factor: 0.0,
+            pascal: generate_pascal_coefficients(FRACTAL_POWER + 1)
         }
     }
 
@@ -295,7 +300,7 @@ impl FractalRenderer {
         if frame_index == 0 {
             self.data_export.lock().maximum_iteration = self.maximum_iteration;
 
-            self.center_reference.run(&self.progress.reference, &self.progress.reference_maximum, &stop_flag, self.fractal_type);
+            self.center_reference.run::<FRACTAL_TYPE, FRACTAL_POWER>(&self.progress.reference, &self.progress.reference_maximum, &stop_flag);
 
             if self.stop_rendering(&stop_flag, frame_time) {
                 tx.send(()).unwrap();
@@ -487,16 +492,16 @@ impl FractalRenderer {
 
             match self.pixel_data_type {
                 DataType::Distance => {
-                    Perturbation::iterate::<1>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                    Perturbation::iterate::<1, FRACTAL_TYPE, FRACTAL_POWER>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, &self.series_approximation, true, &self.pascal);
                 },
                 DataType::Stripe => {
-                    Perturbation::iterate::<2>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                    Perturbation::iterate::<2, FRACTAL_TYPE, FRACTAL_POWER>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, &self.series_approximation, true, &self.pascal);
                 },
                 DataType::DistanceStripe => {
-                    Perturbation::iterate::<3>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                    Perturbation::iterate::<3, FRACTAL_TYPE, FRACTAL_POWER>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, &self.series_approximation, true, &self.pascal);
                 },
                 _ => {
-                    Perturbation::iterate::<0>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                    Perturbation::iterate::<0, FRACTAL_TYPE, FRACTAL_POWER>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, &self.series_approximation, true, &self.pascal);
                 }
             }
 
@@ -622,7 +627,7 @@ impl FractalRenderer {
                 // We cap this to avoid running the reference too long when the central point has a large amount of iterations relative to the rest of the pixels
                 previous_reference.maximum_iteration = min(highest_iteration + 10000, previous_maximum_iteration);
 
-                previous_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+                previous_reference.run::<FRACTAL_TYPE, FRACTAL_POWER>(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag);
 
                 // Reset the maximum iteration of the reference back to normal to make it seem the reference escaped early
                 previous_reference.maximum_iteration = previous_maximum_iteration;
@@ -642,7 +647,7 @@ impl FractalRenderer {
                 }).unwrap().clone();
 
                 let mut glitch_reference = previous_reference.get_glitch_resolving_reference(*iteration, glitch_reference_pixel.delta_reference, glitch_reference_pixel.delta_current);
-                glitch_reference.run(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag, self.fractal_type);
+                glitch_reference.run::<FRACTAL_TYPE, FRACTAL_POWER>(&Arc::new(AtomicUsize::new(0)), &Arc::new(AtomicUsize::new(0)), &stop_flag);
 
                 self.progress.reference_count.fetch_add(1, Ordering::SeqCst);
     
@@ -658,25 +663,23 @@ impl FractalRenderer {
                 });
 
                 let chunk_size = max(pixel_data.len() / 512, 4);
-                // println!("chunk size: {}", chunk_size);
 
 
                 match self.pixel_data_type {
                     DataType::Distance => {
-                        Perturbation::iterate::<1>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+                        Perturbation::iterate::<1, FRACTAL_TYPE, FRACTAL_POWER>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, &self.series_approximation, false, &self.pascal);
 
                     },
                     DataType::Stripe => {
-                        Perturbation::iterate::<2>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+                        Perturbation::iterate::<2, FRACTAL_TYPE, FRACTAL_POWER>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, &self.series_approximation, false, &self.pascal);
 
                     },
                     DataType::DistanceStripe => {
-                        Perturbation::iterate::<3>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+                        Perturbation::iterate::<3, FRACTAL_TYPE, FRACTAL_POWER>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, &self.series_approximation, false, &self.pascal);
 
                     },
                     _ => {
-                        Perturbation::iterate::<0>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
-
+                        Perturbation::iterate::<0, FRACTAL_TYPE, FRACTAL_POWER>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, &self.series_approximation, false, &self.pascal);
                     }
                 }
 

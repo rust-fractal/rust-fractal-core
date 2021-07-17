@@ -109,6 +109,36 @@ pub fn linear_interpolation_between_zoom(zoom1: FloatExtended, zoom2: FloatExten
     FloatExtended::new(2.0f64.powf(temp.fract()), temp.floor() as i32)
 }
 
+pub fn generate_pascal_coefficients(row: usize) -> Vec<f64> {
+    let mut current_row = vec![1.0; row + 1];
+
+    for i in 2..row {
+        let previous_row = current_row.clone();
+
+        for j in 1..i {
+            current_row[j] = previous_row[j - 1] + previous_row[j]
+        }
+    }
+
+    current_row
+}
+
+pub fn diff_abs(a: f64, b: f64) -> f64 {
+    if a >= 0.0 {
+        if a + b >= 0.0 {
+            b
+        } else {
+            -2.0 * a - b
+        }
+    } else {
+        if a + b > 0.0 {
+            2.0 * a + b
+        } else {
+            -b
+        }
+    }
+}
+
 pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: usize, cos_rotate: f64, sin_rotate: f64) -> ComplexFixed<f64> {
     let aspect = image_width as f64 / image_height as f64;
 
