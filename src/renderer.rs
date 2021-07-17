@@ -485,7 +485,20 @@ impl FractalRenderer {
             let end_value = number_pixels / (value * value);
             let chunk_size = max((end_value - previous_value) / 512, 8);
 
-            Perturbation::iterate(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, self.pixel_data_type, &self.series_approximation, true);
+            match self.pixel_data_type {
+                DataType::Distance => {
+                    Perturbation::iterate::<1>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                },
+                DataType::Stripe => {
+                    Perturbation::iterate::<2>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                },
+                DataType::DistanceStripe => {
+                    Perturbation::iterate::<3>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                },
+                _ => {
+                    Perturbation::iterate::<0>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, self.fractal_type, &self.series_approximation, true);
+                }
+            }
 
             previous_value = end_value;
         }
@@ -647,7 +660,25 @@ impl FractalRenderer {
                 let chunk_size = max(pixel_data.len() / 512, 4);
                 // println!("chunk size: {}", chunk_size);
 
-                Perturbation::iterate(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, self.pixel_data_type, &self.series_approximation, false);
+
+                match self.pixel_data_type {
+                    DataType::Distance => {
+                        Perturbation::iterate::<1>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+
+                    },
+                    DataType::Stripe => {
+                        Perturbation::iterate::<2>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+
+                    },
+                    DataType::DistanceStripe => {
+                        Perturbation::iterate::<3>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+
+                    },
+                    _ => {
+                        Perturbation::iterate::<0>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, self.fractal_type, &self.series_approximation, false);
+
+                    }
+                }
 
                 pixel_data.retain(|packet| {
                     packet.glitched
