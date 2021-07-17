@@ -1,10 +1,10 @@
 
 
-use crate::util::{FloatExp, FloatExtended, FractalType, PixelData, data_export::DataExport};
+use crate::util::{FloatExp, FloatExtended, PixelData, data_export::DataExport};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
-use crate::util::ComplexExtended;
+use crate::util::{ComplexExtended, ComplexFixed};
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -18,7 +18,120 @@ const ESCAPE_RADIUS: f64 = 1e16;
 pub struct Perturbation {}
 
 impl Perturbation {
-    pub fn iterate<const DATA_TYPE: usize>(pixel_data: &mut [PixelData], reference: &Reference, pixels_complete: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>, data_export: Arc<Mutex<DataExport>>, delta_pixel: FloatExtended, scale: usize, chunk_size: usize, _fractal_type: FractalType, series_approximation: &SeriesApproximation, initial: bool) {
+    #[inline(always)]
+    fn perturb_function<const DATA_TYPE: usize, const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(
+        delta_current_mantissa: &mut ComplexFixed<f64>, 
+        derivative_current_mantissa: &mut ComplexFixed<f64>,
+        z: ComplexFixed<f64>, 
+        delta_reference: ComplexFixed<f64>, 
+        scale_factor_1: f64,
+        scale_factor_2: f64,
+        pascal: &Vec<f64>) {
+
+        match DATA_TYPE {
+            1 | 3 => {
+                match FRACTAL_TYPE {
+                    _ => {
+                        match FRACTAL_POWER {
+                            2 => {
+                                let temp = scale_factor_1 * *delta_current_mantissa;
+                                let temp2 = 2.0 * z;
+        
+                                *derivative_current_mantissa *= temp2 + 2.0 * temp;
+                                *derivative_current_mantissa += scale_factor_2;
+        
+                                *delta_current_mantissa *= temp2 + temp;
+                                *delta_current_mantissa += delta_reference;
+                            },
+                            3 => {
+                                let temp = scale_factor_1 * *delta_current_mantissa;
+                                let temp2 = 3.0 * z;
+                                let temp3 = z + temp;
+        
+                                *derivative_current_mantissa *= temp3 * temp3 * 3.0;
+                                *derivative_current_mantissa += scale_factor_2;
+        
+                                *delta_current_mantissa *= temp2 * temp3 + temp * temp;
+                                *delta_current_mantissa += delta_reference;
+                            },
+                            // This should be a generic implementation for mandelbrot powers > 3
+                            _ => {
+                                let temp = scale_factor_1 * *delta_current_mantissa;
+
+                                *derivative_current_mantissa *= FRACTAL_POWER as f64 * (z + temp).powi(FRACTAL_POWER as i32 - 1);
+                                *derivative_current_mantissa += scale_factor_2;
+
+                                // for 3rd power 3Z^2 + 3Z * z + z * z
+                                // for 4th power 4Z^3 + 6Z^2 * z + 4Z * z^2 + z^3
+                                let mut sum = pascal[1] * z + temp;
+                                let mut z_p = z;
+
+                                for i in 2..FRACTAL_POWER { 
+                                    sum *= temp; 
+                                    z_p *= z;
+                                    sum += pascal[i] * z_p;
+                                }
+
+                                *delta_current_mantissa *= sum;
+                                *delta_current_mantissa += delta_reference;
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {
+                match FRACTAL_TYPE {
+                    _ => {
+                        match FRACTAL_POWER {
+                            2 => {
+                                *delta_current_mantissa *= 2.0 * z + scale_factor_1 * *delta_current_mantissa;
+                                *delta_current_mantissa += delta_reference;
+                            },
+                            3 => {
+                                let temp = scale_factor_1 * *delta_current_mantissa;
+                                let temp2 = 3.0 * z;
+
+                                *delta_current_mantissa *= temp2 * z + temp * (temp2 + temp);
+                                *delta_current_mantissa += delta_reference;
+                            }
+                            // This should be a generic implementation for mandelbrot powers > 3
+                            _ => {
+                                let temp = scale_factor_1 * *delta_current_mantissa;
+
+                                // for 3rd power 3Z^2 + 3Z * z + z * z
+                                // for 4th power 4Z^3 + 6Z^2 * z + 4Z * z^2 + z^3
+                                let mut sum = pascal[1] * z + temp;
+                                let mut z_p = z;
+
+                                for i in 2..FRACTAL_POWER { 
+                                    sum *= temp; 
+                                    z_p *= z;
+                                    sum += pascal[i] * z_p;
+                                }
+
+                                *delta_current_mantissa *= sum;
+                                *delta_current_mantissa += delta_reference;
+                            }
+                        }
+                        
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn iterate<const DATA_TYPE: usize, const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(
+        pixel_data: &mut [PixelData], 
+        reference: &Reference, 
+        pixels_complete: &Arc<AtomicUsize>, 
+        stop_flag: &Arc<AtomicBool>, 
+        data_export: Arc<Mutex<DataExport>>, 
+        delta_pixel: FloatExtended, 
+        scale: usize, 
+        chunk_size: usize, 
+        series_approximation: &SeriesApproximation, 
+        initial: bool,
+        pascal: &Vec<f64>) {
         pixel_data.par_chunks_mut(chunk_size)
         .for_each(|pixel_data| {
             // Record the number of new pixels that have been completed
@@ -71,7 +184,7 @@ impl Perturbation {
                 'outer: loop {
                     // Number of iterations remaining
                     let iterations_remaining = val3 - additional_iterations;
-                    let mut next_iteration_batch = iterations_remaining.min(250);
+                    let mut next_iteration_batch = iterations_remaining.min(10);
 
                     // Check if we need to to a new extended iteration
                     let need_extended_iteration = if next_extended_iteration < next_iteration_batch {
@@ -87,6 +200,7 @@ impl Perturbation {
                     // If we need to check for escaping in these iterations
                     if need_escape_check {
                         for (i, reference_data) in reference_batch.iter().enumerate() {
+                            // This is Z + z
                             let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
                             let z_norm = z.norm_sqr();
 
@@ -114,28 +228,27 @@ impl Perturbation {
                                 pixel.stripe_storage[pixel.stripe_iteration] = z;
                             }
 
-                            if DATA_TYPE == 1 || DATA_TYPE == 3 {
-                                pixel.derivative_current.mantissa *= 2.0 * z;
-                                pixel.derivative_current.mantissa += scaled_scale_factor_2;
-                            }
-
-                            pixel.delta_current.mantissa *= z + reference_data.z;
-                            pixel.delta_current.mantissa += scaled_delta_reference;
+                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE, FRACTAL_POWER>(
+                                &mut pixel.delta_current.mantissa,
+                                &mut pixel.derivative_current.mantissa,
+                                reference_data.z,
+                                scaled_delta_reference,
+                                scaled_scale_factor_1,
+                                scaled_scale_factor_2,
+                                pascal
+                            )
                         }
                     } else {
                         for reference_data in reference_batch.iter() {
-                            if DATA_TYPE == 1 || DATA_TYPE == 3 {
-                                let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
-
-                                pixel.derivative_current.mantissa *= 2.0 * z;
-                                pixel.derivative_current.mantissa += scaled_scale_factor_2;
-
-                                pixel.delta_current.mantissa *= z + reference_data.z;
-                                pixel.delta_current.mantissa += scaled_delta_reference;
-                            } else {
-                                pixel.delta_current.mantissa *= scaled_scale_factor_1 * pixel.delta_current.mantissa + 2.0 * reference_data.z;
-                                pixel.delta_current.mantissa += scaled_delta_reference;
-                            }
+                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE, FRACTAL_POWER>(
+                                &mut pixel.delta_current.mantissa,
+                                &mut pixel.derivative_current.mantissa,
+                                reference_data.z,
+                                scaled_delta_reference,
+                                scaled_scale_factor_1,
+                                scaled_scale_factor_2,
+                                pascal
+                            )
                         }
                     }
 
