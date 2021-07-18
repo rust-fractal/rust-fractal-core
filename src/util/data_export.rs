@@ -405,7 +405,7 @@ impl DataExport {
 
     #[inline]
     pub fn gamma_blend(color: Color, bright: f64) -> Color {
-        let mut rgb = [color.red(), color.green(), color.blue()];
+        let mut rgb = [color.r, color.g, color.b];
 
         if bright < 0.5 {
             for part in rgb.iter_mut() {
