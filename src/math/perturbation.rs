@@ -4,7 +4,7 @@ use crate::util::{FloatExp, FloatExtended, PixelData, data_export::DataExport};
 
 use rayon::prelude::*;
 use crate::math::reference::Reference;
-use crate::util::{ComplexExtended, ComplexFixed};
+use crate::util::{ComplexExtended, ComplexFixed, diff_abs};
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -19,20 +19,21 @@ pub struct Perturbation {}
 
 impl Perturbation {
     #[inline(always)]
-    fn perturb_function<const DATA_TYPE: usize, const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(
+    fn perturb_function<const DATA_TYPE: usize, const FRACTAL_TYPE: usize>(
         delta_current_mantissa: &mut ComplexFixed<f64>, 
         derivative_current_mantissa: &mut ComplexFixed<f64>,
         z: ComplexFixed<f64>, 
         delta_reference: ComplexFixed<f64>, 
         scale_factor_1: f64,
         scale_factor_2: f64,
-        pascal: &Vec<f64>) {
+        pascal: &Vec<f64>,
+        fractal_power: usize) {
 
         match DATA_TYPE {
             1 | 3 => {
                 match FRACTAL_TYPE {
                     _ => {
-                        match FRACTAL_POWER {
+                        match fractal_power {
                             2 => {
                                 let temp = scale_factor_1 * *delta_current_mantissa;
                                 let temp2 = 2.0 * z;
@@ -58,7 +59,7 @@ impl Perturbation {
                             _ => {
                                 let temp = scale_factor_1 * *delta_current_mantissa;
 
-                                *derivative_current_mantissa *= FRACTAL_POWER as f64 * (z + temp).powi(FRACTAL_POWER as i32 - 1);
+                                *derivative_current_mantissa *= fractal_power as f64 * (z + temp).powi(fractal_power as i32 - 1);
                                 *derivative_current_mantissa += scale_factor_2;
 
                                 // for 3rd power 3Z^2 + 3Z * z + z * z
@@ -66,7 +67,7 @@ impl Perturbation {
                                 let mut sum = pascal[1] * z + temp;
                                 let mut z_p = z;
 
-                                for i in 2..FRACTAL_POWER { 
+                                for i in 2..fractal_power { 
                                     sum *= temp; 
                                     z_p *= z;
                                     sum += pascal[i] * z_p;
@@ -81,10 +82,24 @@ impl Perturbation {
             },
             _ => {
                 match FRACTAL_TYPE {
+                    1 => {
+                        let temp_re = delta_current_mantissa.re;
+
+                        delta_current_mantissa.re = (2.0 * z.re + temp_re * scale_factor_1) * temp_re - (2.0 * z.im + delta_current_mantissa.im * scale_factor_1) * delta_current_mantissa.im;
+                        delta_current_mantissa.im = 2.0 * diff_abs(z.re * z.im / scale_factor_1, z.re * delta_current_mantissa.im + temp_re * (z.im + delta_current_mantissa.im * scale_factor_1));
+
+                        *delta_current_mantissa += delta_reference;
+                    }
                     _ => {
-                        match FRACTAL_POWER {
+                        match fractal_power {
                             2 => {
                                 *delta_current_mantissa *= 2.0 * z + scale_factor_1 * *delta_current_mantissa;
+
+                                // let temp = delta_current_mantissa.re;
+
+                                // delta_current_mantissa.re = (2.0 * z.re + temp * scale_factor_1) * temp - (2.0 * z.im + delta_current_mantissa.im * scale_factor_1) * delta_current_mantissa.im;
+                                // delta_current_mantissa.im = 2.0 * ((z.re + temp * scale_factor_1) * delta_current_mantissa.im + z.im * temp);
+
                                 *delta_current_mantissa += delta_reference;
                             },
                             3 => {
@@ -103,7 +118,7 @@ impl Perturbation {
                                 let mut sum = pascal[1] * z + temp;
                                 let mut z_p = z;
 
-                                for i in 2..FRACTAL_POWER { 
+                                for i in 2..fractal_power { 
                                     sum *= temp; 
                                     z_p *= z;
                                     sum += pascal[i] * z_p;
@@ -132,6 +147,7 @@ impl Perturbation {
         series_approximation: &SeriesApproximation, 
         initial: bool,
         pascal: &Vec<f64>) {
+
         pixel_data.par_chunks_mut(chunk_size)
         .for_each(|pixel_data| {
             // Record the number of new pixels that have been completed
@@ -184,7 +200,7 @@ impl Perturbation {
                 'outer: loop {
                     // Number of iterations remaining
                     let iterations_remaining = val3 - additional_iterations;
-                    let mut next_iteration_batch = iterations_remaining.min(10);
+                    let mut next_iteration_batch = iterations_remaining.min(250);
 
                     // Check if we need to to a new extended iteration
                     let need_extended_iteration = if next_extended_iteration < next_iteration_batch {
@@ -228,26 +244,28 @@ impl Perturbation {
                                 pixel.stripe_storage[pixel.stripe_iteration] = z;
                             }
 
-                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE, FRACTAL_POWER>(
+                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
                                 &mut pixel.derivative_current.mantissa,
                                 reference_data.z,
                                 scaled_delta_reference,
                                 scaled_scale_factor_1,
                                 scaled_scale_factor_2,
-                                pascal
+                                pascal,
+                                FRACTAL_POWER
                             )
                         }
                     } else {
                         for reference_data in reference_batch.iter() {
-                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE, FRACTAL_POWER>(
+                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
                                 &mut pixel.derivative_current.mantissa,
                                 reference_data.z,
                                 scaled_delta_reference,
                                 scaled_scale_factor_1,
                                 scaled_scale_factor_2,
-                                pascal
+                                pascal,
+                                FRACTAL_POWER
                             )
                         }
                     }
@@ -330,7 +348,7 @@ impl Perturbation {
                 }
             }
 
-            data_export.lock().export_pixels(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
+            data_export.lock().export_pixels::<DATA_TYPE>(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
             pixels_complete.fetch_add(new_pixels_complete, Ordering::Relaxed);
         });
     }
