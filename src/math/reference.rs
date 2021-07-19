@@ -86,7 +86,7 @@ impl Reference {
                     self.z.mut_real().abs_mut();
                     self.z.mut_imag().abs_mut();
 
-                    self.z *= self.z.clone().square();
+                    self.z.square_mut();
                     self.z += &self.c;
                 }
                 _ => {

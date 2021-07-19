@@ -123,20 +123,27 @@ pub fn generate_pascal_coefficients(row: usize) -> Vec<f64> {
     current_row
 }
 
+#[inline]
 pub fn diff_abs(a: f64, b: f64) -> f64 {
-    if a >= 0.0 {
-        if a + b >= 0.0 {
-            b
-        } else {
-            -2.0 * a - b
-        }
-    } else {
-        if a + b > 0.0 {
-            2.0 * a + b
-        } else {
-            -b
-        }
+    match (a >= 0.0, a + b >= 0.0) {
+        (true, true) => b,
+        (true, _) => -2.0 * a - b,
+        (_, true) => 2.0 * a + b,
+        (_, _) => -b
     }
+    // if a >= 0.0 {
+    //     if a + b >= 0.0 {
+    //         b
+    //     } else {
+    //         -(2.0 * a + b)
+    //     }
+    // } else {
+    //     if a + b > 0.0 {
+    //         2.0 * a + b
+    //     } else {
+    //         -b
+    //     }
+    // }
 }
 
 pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: usize, cos_rotate: f64, sin_rotate: f64) -> ComplexFixed<f64> {

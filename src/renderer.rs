@@ -20,8 +20,8 @@ use std::collections::HashMap;
 
 use parking_lot::Mutex;
 
-const FRACTAL_TYPE: usize = 0;
-const FRACTAL_POWER: usize = 9;
+const FRACTAL_TYPE: usize = 1;
+const FRACTAL_POWER: usize = 2;
 
 pub struct FractalRenderer {
     pub image_width: usize,
