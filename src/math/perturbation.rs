@@ -150,6 +150,82 @@ impl Perturbation {
         }
     }
 
+    #[inline(always)]
+    fn perturb_function_extended<const DATA_TYPE: usize, const FRACTAL_TYPE: usize>(
+        delta_current: &mut ComplexExtended, 
+        jacobian: &mut [ComplexExtended; 2],
+        z: ComplexExtended, 
+        delta_reference: ComplexExtended, 
+        pascal: &Vec<f64>,
+        fractal_power: usize) {
+
+        match DATA_TYPE {
+            1 | 3 => {
+                match FRACTAL_TYPE {
+                    1 => {
+                        unimplemented!()
+                    }
+                    _ => {
+                        match fractal_power {
+                            2 => {
+                                jacobian[0] *= (z + *delta_current) * 2.0;
+                                jacobian[0] += ComplexExtended::new2(1.0, 0.0, 0);
+
+                                *delta_current *= z * 2.0 + *delta_current;
+                                *delta_current += delta_reference;
+                            },
+                            // This should be a generic implementation for mandelbrot powers > 3
+                            _ => {
+                                jacobian[0] *= (z + *delta_current).powi(fractal_power as i32 - 1) * fractal_power as f64;
+                                jacobian[0] += ComplexExtended::new2(1.0, 0.0, 0);
+
+                                let mut sum = z * pascal[1] + *delta_current;
+                                let mut z_p = z;
+
+                                for i in 2..fractal_power { 
+                                    sum *= *delta_current; 
+                                    z_p *= z;
+                                    sum += z_p * pascal[i];
+                                }
+
+                                *delta_current *= sum;
+                                *delta_current += delta_reference;
+                            }
+                        }
+                    }
+                }
+            },
+            _ => {
+                match FRACTAL_TYPE {
+                    1 => {
+                        unimplemented!()
+                    }
+                    _ => {
+                        match fractal_power {
+                            2 => {
+                                *delta_current *= z * 2.0 + *delta_current;
+                                *delta_current += delta_reference;
+                            },
+                            _ => {
+                                let mut sum = z * pascal[1] + *delta_current;
+                                let mut z_p = z;
+
+                                for i in 2..fractal_power { 
+                                    sum *= *delta_current; 
+                                    z_p *= z;
+                                    sum += z_p * pascal[i];
+                                }
+
+                                *delta_current *= sum;
+                                *delta_current += delta_reference;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub fn iterate<const DATA_TYPE: usize, const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(
         pixel_data: &mut [PixelData], 
         reference: &Reference, 
@@ -162,6 +238,8 @@ impl Perturbation {
         series_approximation: &SeriesApproximation, 
         initial: bool,
         pascal: &Vec<f64>) {
+
+        let iterations_before_check = 500 / FRACTAL_POWER;
 
         pixel_data.par_chunks_mut(chunk_size)
         .for_each(|pixel_data| {
@@ -216,7 +294,7 @@ impl Perturbation {
                 'outer: loop {
                     // Number of iterations remaining
                     let iterations_remaining = val3 - additional_iterations;
-                    let mut next_iteration_batch = iterations_remaining.min(250);
+                    let mut next_iteration_batch = iterations_remaining.min(iterations_before_check);
 
                     // Check if we need to to a new extended iteration
                     let need_extended_iteration = if next_extended_iteration < next_iteration_batch {
@@ -334,14 +412,15 @@ impl Perturbation {
                             }
                         }
 
-                        if DATA_TYPE == 1 || DATA_TYPE == 3 {
-                            pixel.jacobian_current[0] *= (reference.reference_data_extended[val1 + additional_iterations] + pixel.delta_current) * 2.0;
-                            pixel.jacobian_current[0] += ComplexExtended::new2(1.0, 0.0, 0);
-                        }
+                        Perturbation::perturb_function_extended::<DATA_TYPE, FRACTAL_TYPE>(
+                            &mut pixel.delta_current,
+                            &mut pixel.jacobian_current,
+                            reference.reference_data_extended[val1 + additional_iterations],
+                            pixel.delta_reference,
+                            pascal,
+                            FRACTAL_POWER
+                        );
 
-                        pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
-                        pixel.delta_current += pixel.delta_reference;
-                        
                         additional_iterations += 1;
 
                         extended_index += 1;
