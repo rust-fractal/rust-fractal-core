@@ -21,7 +21,7 @@ impl Perturbation {
     #[inline(always)]
     fn perturb_function<const DATA_TYPE: usize, const FRACTAL_TYPE: usize>(
         delta_current_mantissa: &mut ComplexFixed<f64>, 
-        derivative_current_mantissa: &mut ComplexFixed<f64>,
+        jacobian: &mut [ComplexExtended; 2],
         z: ComplexFixed<f64>, 
         delta_reference: ComplexFixed<f64>, 
         scale_factor_1: f64,
@@ -32,14 +32,35 @@ impl Perturbation {
         match DATA_TYPE {
             1 | 3 => {
                 match FRACTAL_TYPE {
+                    1 => {
+                        let jacobian_a_copy = jacobian[0].mantissa.clone();
+                        let jacobian_b_copy = jacobian[1].mantissa.clone();
+
+                        let loc = z + scale_factor_1 * *delta_current_mantissa;
+
+                        let sign = 2.0 * (loc.re * loc.im).signum();
+
+                        // TODO needs to be scaled
+                        jacobian[0].mantissa.re = 2.0 * (loc.re * jacobian_a_copy.re - loc.im * jacobian_b_copy.re) + scale_factor_2;
+                        jacobian[0].mantissa.im = 2.0 * (loc.re * jacobian_a_copy.im - loc.im * jacobian_b_copy.im);
+                        jacobian[1].mantissa.re = sign * (loc.re * jacobian_b_copy.re + loc.im * jacobian_a_copy.re);
+                        jacobian[1].mantissa.im = sign * (loc.re * jacobian_b_copy.im + loc.im * jacobian_a_copy.im) + scale_factor_2;
+
+                        let temp_re = delta_current_mantissa.re;
+
+                        delta_current_mantissa.re = (2.0 * z.re + temp_re * scale_factor_1) * temp_re - (2.0 * z.im + delta_current_mantissa.im * scale_factor_1) * delta_current_mantissa.im;
+                        delta_current_mantissa.im = 2.0 * diff_abs(z.re * z.im / scale_factor_1, z.re * delta_current_mantissa.im + temp_re * (z.im + delta_current_mantissa.im * scale_factor_1));
+
+                        *delta_current_mantissa += delta_reference;
+                    }
                     _ => {
                         match fractal_power {
                             2 => {
                                 let temp = scale_factor_1 * *delta_current_mantissa;
                                 let temp2 = 2.0 * z;
         
-                                *derivative_current_mantissa *= temp2 + 2.0 * temp;
-                                *derivative_current_mantissa += scale_factor_2;
+                                jacobian[0].mantissa *= temp2 + 2.0 * temp;
+                                jacobian[0].mantissa += scale_factor_2;
         
                                 *delta_current_mantissa *= temp2 + temp;
                                 *delta_current_mantissa += delta_reference;
@@ -49,8 +70,8 @@ impl Perturbation {
                                 let temp2 = 3.0 * z;
                                 let temp3 = z + temp;
         
-                                *derivative_current_mantissa *= temp3 * temp3 * 3.0;
-                                *derivative_current_mantissa += scale_factor_2;
+                                jacobian[0].mantissa *= temp3 * temp3 * 3.0;
+                                jacobian[0].mantissa += scale_factor_2;
         
                                 *delta_current_mantissa *= temp2 * temp3 + temp * temp;
                                 *delta_current_mantissa += delta_reference;
@@ -59,8 +80,8 @@ impl Perturbation {
                             _ => {
                                 let temp = scale_factor_1 * *delta_current_mantissa;
 
-                                *derivative_current_mantissa *= fractal_power as f64 * (z + temp).powi(fractal_power as i32 - 1);
-                                *derivative_current_mantissa += scale_factor_2;
+                                jacobian[0].mantissa *= fractal_power as f64 * (z + temp).powi(fractal_power as i32 - 1);
+                                jacobian[0].mantissa += scale_factor_2;
 
                                 // for 3rd power 3Z^2 + 3Z * z + z * z
                                 // for 4th power 4Z^3 + 6Z^2 * z + 4Z * z^2 + z^3
@@ -94,12 +115,6 @@ impl Perturbation {
                         match fractal_power {
                             2 => {
                                 *delta_current_mantissa *= 2.0 * z + scale_factor_1 * *delta_current_mantissa;
-
-                                // let temp = delta_current_mantissa.re;
-
-                                // delta_current_mantissa.re = (2.0 * z.re + temp * scale_factor_1) * temp - (2.0 * z.im + delta_current_mantissa.im * scale_factor_1) * delta_current_mantissa.im;
-                                // delta_current_mantissa.im = 2.0 * ((z.re + temp * scale_factor_1) * delta_current_mantissa.im + z.im * temp);
-
                                 *delta_current_mantissa += delta_reference;
                             },
                             3 => {
@@ -165,7 +180,8 @@ impl Perturbation {
                     pixel.delta_current = series_approximation.evaluate(pixel.delta_reference, pixel.iteration);
 
                     if DATA_TYPE == 1 || DATA_TYPE == 3 {
-                        pixel.derivative_current = series_approximation.evaluate_derivative(pixel.delta_reference, pixel.iteration);
+                        pixel.jacobian_current[0] = series_approximation.evaluate_derivative(pixel.delta_reference, pixel.iteration);
+                        pixel.jacobian_current[1].scale_to_exponent(pixel.jacobian_current[0].exponent);
                     }
                 }
 
@@ -176,7 +192,7 @@ impl Perturbation {
 
                 // Scaled factors and reference values for the scaled double implementation
                 let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
-                let mut scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.derivative_current.exponent);
+                let mut scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.jacobian_current[0].exponent);
 
                 let mut scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
@@ -246,7 +262,7 @@ impl Perturbation {
 
                             Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
-                                &mut pixel.derivative_current.mantissa,
+                                &mut pixel.jacobian_current,
                                 reference_data.z,
                                 scaled_delta_reference,
                                 scaled_scale_factor_1,
@@ -259,7 +275,7 @@ impl Perturbation {
                         for reference_data in reference_batch.iter() {
                             Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
-                                &mut pixel.derivative_current.mantissa,
+                                &mut pixel.jacobian_current,
                                 reference_data.z,
                                 scaled_delta_reference,
                                 scaled_scale_factor_1,
@@ -318,9 +334,9 @@ impl Perturbation {
                             }
                         }
 
-                        if DATA_TYPE == 2 || DATA_TYPE == 3 {
-                            pixel.derivative_current *= (reference.reference_data_extended[val1 + additional_iterations] + pixel.delta_current) * 2.0;
-                            pixel.derivative_current += ComplexExtended::new2(1.0, 0.0, 0);
+                        if DATA_TYPE == 1 || DATA_TYPE == 3 {
+                            pixel.jacobian_current[0] *= (reference.reference_data_extended[val1 + additional_iterations] + pixel.delta_current) * 2.0;
+                            pixel.jacobian_current[0] += ComplexExtended::new2(1.0, 0.0, 0);
                         }
 
                         pixel.delta_current *= reference.reference_data_extended[val1 + additional_iterations] * 2.0 + pixel.delta_current;
@@ -339,8 +355,9 @@ impl Perturbation {
                     pixel.delta_current.reduce();
 
                     if DATA_TYPE == 1 || DATA_TYPE == 3 {
-                        pixel.derivative_current.reduce();
-                        scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.derivative_current.exponent);
+                        pixel.jacobian_current[0].reduce();
+                        pixel.jacobian_current[1].scale_to_exponent(pixel.jacobian_current[0].exponent);
+                        scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.jacobian_current[0].exponent);
                     }
 
                     scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
@@ -348,7 +365,7 @@ impl Perturbation {
                 }
             }
 
-            data_export.lock().export_pixels::<DATA_TYPE>(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
+            data_export.lock().export_pixels::<DATA_TYPE, FRACTAL_TYPE, FRACTAL_POWER>(&pixel_data[0..pixel_index], reference, delta_pixel, scale);
             pixels_complete.fetch_add(new_pixels_complete, Ordering::Relaxed);
         });
     }

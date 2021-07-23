@@ -29,12 +29,14 @@ pub trait FloatExp: Sized {
 }
 
 impl FloatExp for f64 {
+    #[inline]
     fn frexp(self) -> (Self, i32) {
         let mut exp: c_int = 0;
         let res = unsafe { frexp(self, &mut exp) };
         (res, exp)
     }
 
+    #[inline]
     fn ldexp(self, exp: i32) -> Self {
         unsafe { ldexp(self, exp) }
     }
@@ -188,7 +190,7 @@ pub struct PixelData {
     pub iteration: usize,
     pub delta_reference: ComplexExtended,
     pub delta_current: ComplexExtended,
-    pub derivative_current: ComplexExtended,
+    pub jacobian_current: [ComplexExtended; 2],
     pub glitched: bool,
     pub z_norm: f64,
     pub stripe_storage: [ComplexFixed<f64>; 4],

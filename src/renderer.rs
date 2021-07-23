@@ -399,7 +399,7 @@ impl FractalRenderer {
             self.data_export.lock().centre_removed = self.remove_centre;
         }
 
-        let complex_default = ComplexExtended::new2(1.0, 0.0, 0);
+        let jacobian_default = [ComplexExtended::new2(1.0, 0.0, 0), ComplexExtended::new2(0.0, 1.0, 0)];
         let sampling_resolution_width = (self.series_approximation.probe_sampling - 1) as f64 / self.image_width as f64;
         let sampling_resolution_height = (self.series_approximation.probe_sampling - 1) as f64 / self.image_height as f64;
 
@@ -444,7 +444,7 @@ impl FractalRenderer {
                     iteration: chosen_iteration,
                     delta_reference: point_delta,
                     delta_current: point_delta,
-                    derivative_current: complex_default,
+                    jacobian_current: jacobian_default,
                     glitched: false,
                     z_norm: 0.0,
                     stripe_storage: [ComplexFixed::new(0.0, 0.0); 4],
