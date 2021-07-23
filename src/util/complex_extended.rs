@@ -50,12 +50,9 @@ impl ComplexExtended {
 
     #[inline]
     pub fn reduce(&mut self) {
-        let positive_real = self.mantissa.re.abs();
-        let positive_imag = self.mantissa.im.abs();
-        
-        if positive_real == 0.0 && positive_imag == 0.0 {
+        if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
             self.exponent = 0
-        } else if positive_real > positive_imag {
+        } else if self.mantissa.re * self.mantissa.re > self.mantissa.im * self.mantissa.im {
             let (temp_mantissa, added_exponent) = self.mantissa.re.frexp();
             self.mantissa.re = temp_mantissa;
             self.mantissa.im = self.mantissa.im.ldexp(-added_exponent);
@@ -66,25 +63,14 @@ impl ComplexExtended {
             self.mantissa.re = self.mantissa.re.ldexp(-added_exponent);
             self.exponent += added_exponent;
         }
+    }
 
-        // if positive_real > positive_imag {
-        //     let (temp_mantissa, added_exponent) = self.mantissa.re.frexp();
-
-        //     self.mantissa.re = temp_mantissa;
-        //     self.mantissa.im = self.mantissa.im.ldexp(-added_exponent);
-
-        //     self.exponent += added_exponent;
-        // } else if positive_real < positive_imag {
-        //     let (temp_mantissa, added_exponent) = self.mantissa.im.frexp();
-
-        //     self.mantissa.im = temp_mantissa;
-        //     self.mantissa.re = self.mantissa.re.ldexp(-added_exponent);
-            
-        //     self.exponent += added_exponent;
-        // } else {
-        //     // This would mean the number is zero
-        //     self.exponent = 0
-        // }
+    #[inline]
+    pub fn scale_to_exponent(&mut self, exponent: i32) {
+        let added_exponent = exponent - self.exponent;
+        self.mantissa.re = self.mantissa.re.ldexp(added_exponent);
+        self.mantissa.im = self.mantissa.im.ldexp(added_exponent);
+        self.exponent = exponent;
     }
 }
 
@@ -187,47 +173,18 @@ impl Div<ComplexExtended> for ComplexExtended {
     }
 }
 
-// impl Add<f64> for ComplexExtended {
-//     type Output = ComplexExtended;
-//
-//     fn add(self, other: f64) -> Self::Output {
-//         if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
-//             ComplexExtended::new2(other, 0.0, 0)
-//         } else if other == 0.0 {
-//             self
-//         } else {
-//             let (new_mantissa, new_exponent) = if self.exponent == temp.exponent {
-//                 (self.mantissa + temp.mantissa, self.exponent)
-//             } else if self.exponent > temp.exponent {
-//                 (self.mantissa + temp.mantissa / 2.0f64.powi(self.exponent - temp.exponent), self.exponent)
-//             } else {
-//                 (temp.mantissa + self.mantissa / 2.0f64.powi(temp.exponent - self.exponent), temp.exponent)
-//             };
-//             ComplexExtended::new(new_mantissa, new_exponent)
-//         }
-//     }
-// }
-//
-// impl Sub<f64> for ComplexExtended {
-//     type Output = ComplexExtended;
-//
-//     fn sub(self, other: f64) -> Self::Output {
-//         if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
-//             ComplexExtended::new2(-other, 0.0, 0)
-//         } else if other == 0.0 {
-//             self
-//         } else {
-//             let (new_mantissa, new_exponent) = if self.exponent == other.exponent {
-//                 (self.mantissa - other.mantissa, self.exponent)
-//             } else if self.exponent > other.exponent {
-//                 (self.mantissa - other.mantissa / 2.0f64.powi(self.exponent - other.exponent), self.exponent)
-//             } else {
-//                 (-1.0 * other.mantissa + self.mantissa / 2.0f64.powi(other.exponent - self.exponent), other.exponent)
-//             };
-//             ComplexExtended::new(new_mantissa, new_exponent)
-//         }
-//     }
-// }
+
+impl Mul<FloatExtended> for ComplexExtended {
+    type Output = ComplexExtended;
+
+    #[inline]
+    fn mul(self, other: FloatExtended) -> Self::Output {
+        ComplexExtended::new(
+            self.mantissa * other.mantissa,
+            self.exponent + other.exponent
+        )
+    }
+}
 
 impl Mul<f64> for ComplexExtended {
     type Output = ComplexExtended;

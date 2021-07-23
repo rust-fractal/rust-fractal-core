@@ -146,7 +146,7 @@ impl DataExport {
     }
 
     #[inline]
-    pub fn export_pixels<const DATA_TYPE: usize>(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended, scale: usize) {
+    pub fn export_pixels<const DATA_TYPE: usize, const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(&mut self, pixel_data: &[PixelData], reference: &Reference, delta_pixel: FloatExtended, scale: usize) {
         for pixel in pixel_data {
             let new_scale = if self.export_type == ExportType::Gui {
                 scale
@@ -171,15 +171,7 @@ impl DataExport {
                 continue;
             }
 
-            // self.smooth[pixel.index] = match self.fractal_type {
-            //     FractalType::Mandelbrot2 => {
-            //         ESCAPE_RADIUS_LN_LOG2_P1 - (z_norm.ln() as f32).log2()
-            //     }
-            //     FractalType::Mandelbrot3 => {
-            //         ESCAPE_RADIUS_LN_LOG3_P1 - (z_norm.ln() as f32).log(3.0)
-            //     }
-            // };
-
+            // TODO need a way of changing the constant
             self.smooth[pixel.index] = ESCAPE_RADIUS_LN_LOG2_P1 - (pixel.z_norm.ln() as f32).log2();
 
             if DATA_TYPE == 2 || DATA_TYPE == 3 {
@@ -196,24 +188,30 @@ impl DataExport {
                 // This calculates the distance in terms of pixels
                 let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
                 let temp2 = temp1.norm();
-
                 let temp3 = 2.0f64.powi(temp1.exponent - temp2.exponent) / temp2.mantissa;
+
+                let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * LN_2)).to_float();
 
                 let norm_z_x = temp1.mantissa.re * temp3;
                 let norm_z_y = temp1.mantissa.im * temp3;
 
-                let jxa = FloatExtended::new(pixel.derivative_current.mantissa.re, pixel.derivative_current.exponent);
-                let jya = FloatExtended::new(pixel.derivative_current.mantissa.im, pixel.derivative_current.exponent);
+                let mut scaled_j_a = (pixel.jacobian_current[0] * delta_pixel).to_float();
 
-                let scaled_jxa = (jxa * delta_pixel).to_float();
-                let scaled_jya = (jya * delta_pixel).to_float();
+                let scaled_j_b = if FRACTAL_TYPE == 0 {
+                    let temp = scaled_j_a.im;
+                    scaled_j_a.im *= -1.0;
 
-                let num = (temp2 * (temp2.mantissa.ln() + temp2.exponent as f64 * LN_2)).to_float();
+                    ComplexFixed::new(temp, scaled_j_a.re)
+                } else {
+                    (pixel.jacobian_current[1] * delta_pixel).to_float()
+                };
 
-                let den_1 = norm_z_x * scaled_jxa + norm_z_y * scaled_jya;
-                let den_2 = norm_z_x * -1.0 * scaled_jya + norm_z_y * scaled_jxa;
+                let dex = norm_z_x * scaled_j_a.re + norm_z_y * scaled_j_b.re;
+                let dey = norm_z_x * scaled_j_a.im + norm_z_y * scaled_j_b.im;
+            
+                // TODO implement jacobian for scaling
 
-                let output = num / ComplexFixed::new(den_1, den_2);
+                let output = num / ComplexFixed::new(dex, dey);
 
                 self.distance_x[pixel.index] = output.re as f32;
                 self.distance_y[pixel.index] = output.im as f32;
@@ -331,30 +329,6 @@ impl DataExport {
         }
     }
 
-    // pub fn interpolate_glitches(&mut self, pixel_data: &[PixelData]) {
-    //     if !self.display_glitches {
-    //         for pixel in pixel_data {
-    //             let k = pixel.image_y * self.image_width + pixel.image_x;
-
-    //             let k_up = (max(1, pixel.image_y) - 1) * self.image_width + pixel.image_x;
-    //             let k_down = (min(self.image_height - 2, pixel.image_y) + 1) * self.image_width + pixel.image_x;
-
-    //             let k_left = pixel.image_y * self.image_width + max(1, pixel.image_x) - 1;
-    //             let k_right = pixel.image_y * self.image_width + min(self.image_width - 2, pixel.image_x) + 1;
-
-    //             self.iterations[k] = (self.iterations[k_up] + self.iterations[k_down] + self.iterations[k_left] + self.iterations[k_right]) / 4;
-    //             self.smooth[k] = (self.smooth[k_up] + self.smooth[k_down] + self.smooth[k_left] + self.smooth[k_right]) / 4.0;
-
-    //             if self.data_type == DataType::Distance {
-    //                 self.distance_x[k] = (self.distance_x[k_up] + self.distance_x[k_down] + self.distance_x[k_left] + self.distance_x[k_right]) / 4.0;
-    //                 self.distance_y[k] = (self.distance_y[k_up] + self.distance_y[k_down] + self.distance_y[k_left] + self.distance_y[k_right]) / 4.0;
-    //             }
-
-    //             self.colour_index(k, 1);
-    //         }
-    //     }
-    // }
-
     #[inline]
     pub fn calculate_blinn_phong(&self, k: usize) -> f32 {
         if self.lighting {
@@ -405,11 +379,7 @@ impl DataExport {
 
     #[inline]
     pub fn calculate_scaled_distance(&self, k: usize) -> f32 {
-        // Calculate distance estimate in terms of pixels
-        let length_pixel = (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt();
-
-        // Scale so transition will happen about 50 pixels
-        (length_pixel / self.distance_transition).max(0.0)
+        (self.distance_x[k].powi(2) + self.distance_y[k].powi(2)).sqrt() / self.distance_transition
     }
 
     #[inline]
@@ -444,7 +414,11 @@ impl DataExport {
                     self.calculate_iteration_palette_value(k)
                 };
                 
-                DataExport::gamma_blend(color, bright)
+                // DataExport::gamma_blend(color, bright)
+
+                let out = distance.tanh() as f64;
+
+                Color::from_rgb(out, out, out)
             },
             ColoringType::SmoothIteration | ColoringType::StepIteration => {
                 self.calculate_iteration_palette_value(k)
