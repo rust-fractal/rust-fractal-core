@@ -49,6 +49,14 @@ impl ComplexExtended {
     }
 
     #[inline]
+    pub fn powi(&self, exp: i32) -> ComplexExtended {
+        ComplexExtended {
+            mantissa: self.mantissa.powi(exp),
+            exponent: self.exponent * exp
+        }
+    }
+
+    #[inline]
     pub fn reduce(&mut self) {
         if self.mantissa.re == 0.0 && self.mantissa.im == 0.0 {
             self.exponent = 0
