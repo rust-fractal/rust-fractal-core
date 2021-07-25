@@ -403,12 +403,12 @@ impl DataExport {
     pub fn colour_index<const DATA_TYPE: usize>(&mut self, k: usize, scale: usize) {
         let color = match self.coloring_type {
             ColoringType::Distance => {
-                let bright = self.calculate_blinn_phong(k) as f64;
+                let _bright = self.calculate_blinn_phong(k) as f64;
 
                 let distance = self.calculate_scaled_distance(k);
 
                 // TODO, it could be possible to have some kind of continous distance estimate - which is based on the zoom level as well; so that keyframes can be added together
-                let color = if self.distance_color {
+                let _color = if self.distance_color {
                     self.calculate_distance_palette_value(distance)
                 } else {
                     self.calculate_iteration_palette_value(k)

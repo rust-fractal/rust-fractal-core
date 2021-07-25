@@ -1,4 +1,4 @@
-use crate::util::{ComplexArbitrary, ComplexExtended, ComplexFixed, FloatExtended, FractalType, PixelData, ProgressCounters, data_export::*, extended_to_string_long, extended_to_string_short, generate_default_palette, generate_pascal_coefficients, get_approximation_terms, get_delta_top_left, string_to_extended};
+use crate::util::{ComplexArbitrary, ComplexExtended, ComplexFixed, FloatExtended, FractalType, PixelData, ProgressCounters, data_export::*, extended_to_string_long, extended_to_string_short, generate_default_palette, generate_pascal_coefficients, get_approximation_terms, get_data_coloring_type_from_settings, get_delta_top_left, get_fractal_type_from_settings, string_to_extended};
 use crate::math::{SeriesApproximation, Perturbation, Reference, BoxPeriod};
 
 use std::{sync::{atomic::AtomicBool}, time::{Duration, Instant}};
@@ -41,7 +41,7 @@ pub struct FractalRenderer {
     pub period_finding: BoxPeriod,
     render_indices: Vec<usize>,
     pub remove_centre: bool,
-    pub pixel_data_type: DataType,
+    pub data_type: DataType,
     pub jitter: bool,
     pub jitter_factor: f64,
     show_output: bool,
@@ -86,13 +86,13 @@ impl FractalRenderer {
 
         let lighting = settings.get_bool("lighting").unwrap_or(true);
 
-        let lighting_direction = settings.get_float("lighting_direction").unwrap() as f32;
-        let lighting_azimuth = settings.get_float("lighting_azimuth").unwrap() as f32;
-        let lighting_opacity = settings.get_float("lighting_opacity").unwrap() as f32;
-        let lighting_ambient = settings.get_float("lighting_ambient").unwrap() as f32;
-        let lighting_diffuse = settings.get_float("lighting_diffuse").unwrap() as f32;
-        let lighting_specular = settings.get_float("lighting_specular").unwrap() as f32;
-        let lighting_shininess = settings.get_int("lighting_shininess").unwrap() as i32;
+        let lighting_direction = settings.get_float("lighting_direction").unwrap_or(30.0) as f32;
+        let lighting_azimuth = settings.get_float("lighting_azimuth").unwrap_or(35.0) as f32;
+        let lighting_opacity = settings.get_float("lighting_opacity").unwrap_or(0.75) as f32;
+        let lighting_ambient = settings.get_float("lighting_ambient").unwrap_or(0.4) as f32;
+        let lighting_diffuse = settings.get_float("lighting_diffuse").unwrap_or(0.5) as f32;
+        let lighting_specular = settings.get_float("lighting_specular").unwrap_or(0.5) as f32;
+        let lighting_shininess = settings.get_int("lighting_shininess").unwrap_or(20) as i32;
 
         let distance_transition = settings.get_float("distance_transition").unwrap_or(0.0) as f32;
 
@@ -100,21 +100,9 @@ impl FractalRenderer {
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
 
-        let coloring_type = match settings.get("coloring_type").unwrap_or_else(|_| String::from("smooth_iteration")).to_ascii_uppercase().as_ref() {
-            "SMOOTH_ITERATION" | "SMOOTH" => ColoringType::SmoothIteration,
-            "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,
-            "DISTANCE" => ColoringType::Distance,
-            "STRIPE" => ColoringType::Stripe,
-            "DISTANCE_STRIPE" => ColoringType::DistanceStripe,
-            _ => ColoringType::SmoothIteration
-        };
+        let fractal_type = get_fractal_type_from_settings(&settings);
 
-        let pixel_data_type = match coloring_type {
-            ColoringType::SmoothIteration | ColoringType::StepIteration => DataType::Iteration,
-            ColoringType::Stripe => DataType::Stripe,
-            ColoringType::DistanceStripe => DataType::DistanceStripe,
-            _ => DataType::Distance
-        };
+        let (coloring_type, data_type) = get_data_coloring_type_from_settings(&settings);
 
         let stripe_scale = settings.get_float("stripe_scale").unwrap_or(1.0) as f32;
 
@@ -175,8 +163,6 @@ impl FractalRenderer {
             glitch_tolerance,
             zoom);
 
-        let fractal_type = FractalType::Mandelbrot2;
-
         let series_approximation = SeriesApproximation::new_central(auto_approximation, 
             maximum_iteration, 
             FloatExtended::new(0.0, 0), 
@@ -184,8 +170,7 @@ impl FractalRenderer {
             series_approximation_tiled,
             series_approximation_enabled,
             valid_iteration_probe_multiplier,
-            data_storage_interval,
-            fractal_type);
+            data_storage_interval);
 
         let temporary_delta = ComplexExtended::new2(0.0, 0.0, 0);
 
@@ -214,7 +199,7 @@ impl FractalRenderer {
                     distance_color,
                     lighting,
                     coloring_type, 
-                    pixel_data_type, 
+                    data_type, 
                     fractal_type, 
                     export_type)
         ));
@@ -239,7 +224,7 @@ impl FractalRenderer {
             period_finding,
             render_indices,
             remove_centre,
-            pixel_data_type,
+            data_type,
             jitter,
             jitter_factor,
             show_output,
@@ -332,7 +317,7 @@ impl FractalRenderer {
             }
         }
 
-        self.pixel_data_type = match self.data_export.lock().coloring_type {
+        self.data_type = match self.data_export.lock().coloring_type {
             ColoringType::SmoothIteration | ColoringType::StepIteration => DataType::Iteration,
             ColoringType::Stripe => DataType::Stripe,
             ColoringType::DistanceStripe => DataType::DistanceStripe,
@@ -490,7 +475,7 @@ impl FractalRenderer {
             let end_value = number_pixels / (value * value);
             let chunk_size = max((end_value - previous_value) / 512, 8);
 
-            match self.pixel_data_type {
+            match self.data_type {
                 DataType::Distance => {
                     Perturbation::iterate::<1, FRACTAL_TYPE, FRACTAL_POWER>(&mut pixel_data[previous_value..end_value], &self.center_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, value, chunk_size, &self.series_approximation, true, &self.pascal);
                 },
@@ -665,7 +650,7 @@ impl FractalRenderer {
                 let chunk_size = max(pixel_data.len() / 512, 4);
 
 
-                match self.pixel_data_type {
+                match self.data_type {
                     DataType::Distance => {
                         Perturbation::iterate::<1, FRACTAL_TYPE, FRACTAL_POWER>(pixel_data, &glitch_reference, &self.progress.iteration, &stop_flag, self.data_export.clone(), delta_pixel_extended, 1, chunk_size, &self.series_approximation, false, &self.pascal);
 
@@ -928,8 +913,7 @@ impl FractalRenderer {
             series_approximation_tiled,
             series_approximation_enabled,
             valid_iteration_probe_multiplier,
-            data_storage_interval,
-            self.fractal_type);
+            data_storage_interval);
 
         let mut data_export = self.data_export.lock();
 
