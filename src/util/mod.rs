@@ -8,6 +8,7 @@ pub mod progress;
 
 use colorgrad::{CustomGradient, Interpolation, Color, BlendMode};
 pub use complex_extended::ComplexExtended;
+use config::Config;
 pub use float_extended::FloatExtended;
 pub use recolour_exr::RecolourExr;
 pub use progress::ProgressCounters;
@@ -17,6 +18,8 @@ pub type ComplexArbitrary = rug::Complex;
 pub type FloatArbitrary = rug::Float;
 
 use std::os::raw::{c_double, c_int};
+
+use self::data_export::{ColoringType, DataType};
 
 extern "C" {
     fn frexp(x: c_double, exp: *mut c_int) -> c_double;
@@ -133,19 +136,6 @@ pub fn diff_abs(a: f64, b: f64) -> f64 {
         (_, true) => 2.0 * a + b,
         (_, _) => -b
     }
-    // if a >= 0.0 {
-    //     if a + b >= 0.0 {
-    //         b
-    //     } else {
-    //         -(2.0 * a + b)
-    //     }
-    // } else {
-    //     if a + b > 0.0 {
-    //         2.0 * a + b
-    //     } else {
-    //         -b
-    //     }
-    // }
 }
 
 pub fn get_delta_top_left(delta_pixel: f64, image_width: usize, image_height: usize, cos_rotate: f64, sin_rotate: f64) -> ComplexFixed<f64> {
@@ -184,6 +174,36 @@ pub fn generate_default_palette() -> (Vec<Color>, Vec<Color>) {
     (palette_generator.colors(6), palette_generator.colors(6 * 64))
 }
 
+pub fn get_fractal_type_from_settings(settings: &Config) -> FractalType {
+    let fractal_power = settings.get_int("fractal_power").unwrap_or(2) as usize;
+
+    match settings.get("fractal_type").unwrap_or_else(|_| String::from("mandelbrot")).to_ascii_uppercase().as_ref() {
+        "MANDELBROT" => FractalType::Mandelbrot(fractal_power),
+        "BURNINGSHIP" => FractalType::BurningShip(fractal_power),
+        _ => FractalType::Mandelbrot(fractal_power)
+    }
+}
+
+pub fn get_data_coloring_type_from_settings(settings: &Config) -> (ColoringType, DataType) {
+    let coloring_type = match settings.get("coloring_type").unwrap_or_else(|_| String::from("smooth_iteration")).to_ascii_uppercase().as_ref() {
+        "SMOOTH_ITERATION" | "SMOOTH" => ColoringType::SmoothIteration,
+        "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,
+        "DISTANCE" => ColoringType::Distance,
+        "STRIPE" => ColoringType::Stripe,
+        "DISTANCE_STRIPE" => ColoringType::DistanceStripe,
+        _ => ColoringType::SmoothIteration
+    };
+
+    let data_type = match coloring_type {
+        ColoringType::SmoothIteration | ColoringType::StepIteration => DataType::Iteration,
+        ColoringType::Stripe => DataType::Stripe,
+        ColoringType::DistanceStripe => DataType::DistanceStripe,
+        _ => DataType::Distance
+    };
+
+    (coloring_type, data_type)
+}
+
 #[derive(Clone)]
 pub struct PixelData {
     pub index: usize,
@@ -199,6 +219,6 @@ pub struct PixelData {
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum FractalType {
-    Mandelbrot2,
-    Mandelbrot3
+    Mandelbrot(usize),
+    BurningShip(usize)
 }
