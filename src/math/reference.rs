@@ -135,11 +135,6 @@ impl Reference {
 
         reference_maximum_iteration_counter.store(self.current_iteration, Ordering::SeqCst);
 
-        println!("{:?}", self.reference_data[0]);
-        println!("{:?}", self.reference_data[1]);
-        println!("{:?}", self.reference_data[2]);
-
-
         println!("{:?}", self.extended_iterations);
     }
 
