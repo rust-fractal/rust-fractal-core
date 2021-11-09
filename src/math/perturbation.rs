@@ -266,19 +266,20 @@ impl Perturbation {
                 pixel_index += 1;
 
                 // Variable to record the number of additional iterations
-                let mut additional_iterations = 0;
+                let mut reference_iteration = pixel.iteration;
 
                 // Scaled factors and reference values for the scaled double implementation
                 let mut scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
                 let mut scaled_scale_factor_2 = 1.0f64.ldexp(-pixel.jacobian_current[0].exponent);
-
                 let mut scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
 
                 // Get the reference slice that is worked on
-                let val1 = pixel.iteration - reference.start_iteration;
-                let val2 = reference.current_iteration - reference.start_iteration;
-                let val3 = reference.current_iteration - pixel.iteration;
-                let reference_slice = &reference.reference_data[val1..=val2];
+                // let val1 = pixel.iteration - reference.start_iteration;
+                // let val2 = reference.current_iteration - reference.start_iteration;
+                // let val3 = reference.current_iteration - pixel.iteration;
+
+
+                // let reference_slice = &reference.reference_data[val1..=val2];
 
                 // Get the number of iterations to the first extended iteration
                 let (mut extended_index, &first_extended_iteration) = reference.extended_iterations
@@ -293,7 +294,7 @@ impl Perturbation {
                 // Start running the core iteration loop
                 'outer: loop {
                     // Number of iterations remaining
-                    let iterations_remaining = val3 - additional_iterations;
+                    let iterations_remaining = reference.maximum_iteration - pixel.iteration;
                     let mut next_iteration_batch = iterations_remaining.min(iterations_before_check);
 
                     // Check if we need to to a new extended iteration
@@ -305,24 +306,18 @@ impl Perturbation {
                     };
 
                     let need_escape_check = pixel.delta_current.exponent > -500;
-                    let reference_batch = &reference_slice[additional_iterations..(additional_iterations + next_iteration_batch)];
+                    // let mut reference_batch = &reference.reference_data[reference_iteration..(reference_iteration + next_iteration_batch)];
 
                     // If we need to check for escaping in these iterations
                     if need_escape_check {
-                        for (i, reference_data) in reference_batch.iter().enumerate() {
-                            // This is Z + z
-                            let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                        for i in 0..next_iteration_batch {
+                            let mut reference_z = reference.reference_data[reference_iteration];
+                            
+                            let z = reference_z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
                             let z_norm = z.norm_sqr();
 
-                            if z_norm < reference_data.tolerance {
-                                pixel.iteration += additional_iterations + i;
-                                pixel.glitched = true;
-
-                                break 'outer;
-                            }
-
                             if z_norm > ESCAPE_RADIUS {
-                                pixel.iteration += additional_iterations + i;
+                                pixel.iteration += i;
                                 pixel.z_norm = z_norm;
                                 pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                 pixel.delta_current.exponent = 0;
@@ -338,23 +333,53 @@ impl Perturbation {
                                 pixel.stripe_storage[pixel.stripe_iteration] = z;
                             }
 
-                            Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
-                                &mut pixel.delta_current.mantissa,
-                                &mut pixel.jacobian_current,
-                                reference_data.z,
-                                scaled_delta_reference,
-                                scaled_scale_factor_1,
-                                scaled_scale_factor_2,
-                                pascal,
-                                FRACTAL_POWER
-                            )
+                            if z_norm < (scaled_scale_factor_1 * pixel.delta_current.mantissa).norm_sqr() || reference_iteration == reference.current_iteration {
+                                pixel.delta_current.mantissa = z / scaled_scale_factor_1;
+
+                                // pixel.delta_current.mantissa = z;
+                                // pixel.delta_current.exponent = 0;
+                                // pixel.delta_current.reduce();
+                                // scaled_scale_factor_1 = 1.0f64.ldexp(pixel.delta_current.exponent);
+                                // scaled_delta_reference = 1.0f64.ldexp(pixel.delta_reference.exponent - pixel.delta_current.exponent) * pixel.delta_reference.mantissa;
+
+                                reference_iteration = 0;
+                                reference_z = reference.reference_data[reference_iteration];
+                            }
+
+                            if reference.extended_iterations.contains(&reference_iteration) {
+                                Perturbation::perturb_function_extended::<DATA_TYPE, FRACTAL_TYPE>(
+                                    &mut pixel.delta_current,
+                                    &mut pixel.jacobian_current,
+                                    reference.reference_data_extended[reference_iteration],
+                                    pixel.delta_reference,
+                                    pascal,
+                                    FRACTAL_POWER
+                                );
+                            } else {
+                                Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
+                                    &mut pixel.delta_current.mantissa,
+                                    &mut pixel.jacobian_current,
+                                    reference_z,
+                                    scaled_delta_reference,
+                                    scaled_scale_factor_1,
+                                    scaled_scale_factor_2,
+                                    pascal,
+                                    FRACTAL_POWER
+                                );
+                            }
+
+                            
+
+                            reference_iteration += 1;
                         }
                     } else {
-                        for reference_data in reference_batch.iter() {
+                        for i in reference_iteration..(reference_iteration + next_iteration_batch) {
+                            // for reference_data in reference_batch.iter() {
+
                             Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
                                 &mut pixel.jacobian_current,
-                                reference_data.z,
+                                reference.reference_data[i],
                                 scaled_delta_reference,
                                 scaled_scale_factor_1,
                                 scaled_scale_factor_2,
@@ -362,12 +387,13 @@ impl Perturbation {
                                 FRACTAL_POWER
                             )
                         }
+
+                        reference_iteration += next_iteration_batch;
                     }
 
                     // If we have hit the iteration limit
                     if iterations_remaining == next_iteration_batch {
-                        if (pixel.iteration + additional_iterations + next_iteration_batch) < reference.maximum_iteration {
-                            pixel.glitched = true;
+                        if (pixel.iteration + next_iteration_batch) < reference.maximum_iteration {
                             pixel.iteration = reference.current_iteration;
                         } else {
                             pixel.iteration = reference.maximum_iteration;
@@ -377,55 +403,54 @@ impl Perturbation {
                         break;
                     }
 
-                    additional_iterations += next_iteration_batch;
+                    pixel.iteration += next_iteration_batch;
                     next_extended_iteration -= next_iteration_batch;
 
                     if need_extended_iteration {
-                        let reference_data = &reference_slice[additional_iterations];
-                        let z = reference_data.z + scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                        // println!("{}", reference_iteration);
+                        let reference_data = &reference.reference_data[reference_iteration];
 
-                        if need_escape_check {
-                            let z_norm = z.norm_sqr();
+                        let z = reference_data + scaled_scale_factor_1 * pixel.delta_current.mantissa;
+                        let z_norm = z.norm_sqr();
 
-                            if z_norm < reference_data.tolerance {
-                                pixel.iteration += additional_iterations;
-                                pixel.glitched = true;
+                        if z_norm > ESCAPE_RADIUS {
+                            pixel.iteration += 1;
+                            pixel.z_norm = z_norm;
+                            pixel.delta_current.mantissa = pixel.delta_current.to_float();
+                            pixel.delta_current.exponent = 0;
+                            
+                            new_pixels_complete += 1;
+                            break;
+                        }
 
-                                break;
-                            }
+                        if DATA_TYPE == 2 || DATA_TYPE == 3 {
+                            pixel.stripe_iteration += 1;
+                            pixel.stripe_iteration %= 4;
 
-                            if z_norm > ESCAPE_RADIUS {
-                                pixel.iteration += additional_iterations;
-                                pixel.z_norm = z_norm;
-                                pixel.delta_current.mantissa = pixel.delta_current.to_float();
-                                pixel.delta_current.exponent = 0;
-                                
-                                new_pixels_complete += 1;
-                                break;
-                            }
+                            pixel.stripe_storage[pixel.stripe_iteration] = z;
+                        }
 
-                            if DATA_TYPE == 2 || DATA_TYPE == 3 {
-                                pixel.stripe_iteration += 1;
-                                pixel.stripe_iteration %= 4;
+                        if z_norm < (scaled_scale_factor_1 * pixel.delta_current.mantissa).norm_sqr() || reference_iteration == reference.current_iteration - 1 {
+                            pixel.delta_current.mantissa = z / scaled_scale_factor_1;
 
-                                pixel.stripe_storage[pixel.stripe_iteration] = z;
-                            }
+                            reference_iteration = 0;
                         }
 
                         Perturbation::perturb_function_extended::<DATA_TYPE, FRACTAL_TYPE>(
                             &mut pixel.delta_current,
                             &mut pixel.jacobian_current,
-                            reference.reference_data_extended[val1 + additional_iterations],
+                            reference.reference_data_extended[reference_iteration],
                             pixel.delta_reference,
                             pascal,
                             FRACTAL_POWER
                         );
 
-                        additional_iterations += 1;
+                        reference_iteration += 1;
+                        pixel.iteration += 1;
 
                         extended_index += 1;
                         next_extended_iteration = if extended_index < reference.extended_iterations.len() {
-                            reference.extended_iterations[extended_index] - additional_iterations - pixel.iteration 
+                            reference.extended_iterations[extended_index] - pixel.iteration 
                         } else {
                             0xFFFFFFFF
                         };
