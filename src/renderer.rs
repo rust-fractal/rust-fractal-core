@@ -153,11 +153,16 @@ impl FractalRenderer {
         let center_location = ComplexArbitrary::with_val(
             precision as u32,
             ComplexArbitrary::parse("(".to_owned() + &center_real + "," + &center_imag + ")").expect("provided location not valid"));
+
+        let zero = ComplexArbitrary::with_val(
+            center_location.prec().0 as u32,
+            ComplexArbitrary::parse("(0.0,0.0)").expect("provided location not valid"));
+
         let auto_approximation = get_approximation_terms(approximation_order, image_width, image_height);
 
-        let reference = Reference::new(center_location.clone(), 
+        let reference = Reference::new(zero, 
             center_location, 
-            1, 
+            0, 
             maximum_iteration, 
             data_storage_interval,
             glitch_tolerance,
@@ -504,52 +509,52 @@ impl FractalRenderer {
             std::io::stdout().flush().unwrap();
         };
         
-        let correction_time = Instant::now();
+        // let correction_time = Instant::now();
 
-        // Remove all non-glitched points from the remaining points
-        pixel_data.retain(|packet| {
-            packet.glitched
-        });
+        // // Remove all non-glitched points from the remaining points
+        // pixel_data.retain(|packet| {
+        //     packet.glitched
+        // });
 
-        let glitched_pixels = pixel_data.len() as f64;
-        self.progress.glitched_maximum.fetch_add(pixel_data.len(), Ordering::SeqCst);
+        // let glitched_pixels = pixel_data.len() as f64;
+        // self.progress.glitched_maximum.fetch_add(pixel_data.len(), Ordering::SeqCst);
 
-        let complete_pixels = total_pixels - glitched_pixels;
+        // let complete_pixels = total_pixels - glitched_pixels;
 
-        let (tx, rx) = mpsc::channel();
+        // let (tx, rx) = mpsc::channel();
 
-        if self.show_output {
-            let thread_counter = Arc::clone(&self.progress.iteration);
-            print!("|               ");
+        // if self.show_output {
+        //     let thread_counter = Arc::clone(&self.progress.iteration);
+        //     print!("|               ");
 
-            thread::spawn(move || {
-                loop {
-                    thread::sleep(Duration::from_millis(100));
-                    match rx.try_recv() {
-                        Ok(_) => {
-                            break;
-                        },
-                        Err(_) => {
-                            print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", 100.0 * (thread_counter.load(Ordering::Relaxed) as f64 - complete_pixels) / glitched_pixels));
-                            std::io::stdout().flush().unwrap();
-                        }
-                    };
-                };
-            });
-        };
+        //     thread::spawn(move || {
+        //         loop {
+        //             thread::sleep(Duration::from_millis(100));
+        //             match rx.try_recv() {
+        //                 Ok(_) => {
+        //                     break;
+        //                 },
+        //                 Err(_) => {
+        //                     print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:^14}", format!("{:.2}%", 100.0 * (thread_counter.load(Ordering::Relaxed) as f64 - complete_pixels) / glitched_pixels));
+        //                     std::io::stdout().flush().unwrap();
+        //                 }
+        //             };
+        //         };
+        //     });
+        // };
 
-        // Goes through all glitches and solved them - no need for glitch percentage at this time
-        if pixel_data.len() > 0 {
-            self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, delta_pixel_extended, None);
-        }
+        // // Goes through all glitches and solved them - no need for glitch percentage at this time
+        // if pixel_data.len() > 0 {
+        //     self.resolve_glitches(&mut pixel_data, &stop_flag, frame_time, delta_pixel_extended, None);
+        // }
 
-        tx.send(()).unwrap();
+        // tx.send(()).unwrap();
 
-        if self.show_output {
-            print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", correction_time.elapsed().as_millis());
-            print!("| {:<6}", self.progress.reference_count.load(Ordering::SeqCst));
-            std::io::stdout().flush().unwrap();
-        };
+        // if self.show_output {
+        //     print!("\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08\x08{:<15}", correction_time.elapsed().as_millis());
+        //     print!("| {:<6}", self.progress.reference_count.load(Ordering::SeqCst));
+        //     std::io::stdout().flush().unwrap();
+        // };
         
         self.data_export.lock().save(&filename, self.series_approximation.order, &extended_to_string_long(self.zoom));
 

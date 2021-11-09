@@ -10,7 +10,7 @@ pub struct Reference {
     pub maximum_iteration: usize,
     pub z: ComplexArbitrary,
     pub c: ComplexArbitrary,
-    pub reference_data: Vec<ReferenceIteration>,
+    pub reference_data: Vec<ComplexFixed<f64>>,
     pub extended_iterations: Vec<usize>,
     pub reference_data_extended: Vec<ComplexExtended>,
     // This is for every 100th iteration, when we do glitch correction the new references will be spawed from these values
@@ -21,19 +21,22 @@ pub struct Reference {
     pub glitch_tolerance: f64,
 }
 
-#[derive(Clone)]
-pub struct ReferenceIteration {
-    pub z: ComplexFixed<f64>,
-    pub tolerance: f64,
-}
+// #[derive(Clone)]
+// pub struct ReferenceIteration {
+//     pub z: ComplexFixed<f64>
+// }
 
 impl Reference {
     pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize, data_storage_interval: usize, glitch_tolerance: f64, zoom: FloatExtended) -> Reference {
+        let zero = ComplexArbitrary::with_val(
+            c.prec().0 as u32,
+            ComplexArbitrary::parse("(0.0,0.0)").expect("provided location not valid"));
+
         Reference {
             start_iteration: current_iteration,
             current_iteration,
             maximum_iteration,
-            z,
+            z: zero,
             c,
             reference_data: Vec::new(),
             extended_iterations: Vec::new(),
@@ -47,22 +50,17 @@ impl Reference {
 
     pub fn run<const FRACTAL_TYPE: usize, const FRACTAL_POWER: usize>(&mut self, reference_counter: &Arc<AtomicUsize>, reference_maximum_iteration_counter: &Arc<AtomicUsize>, stop_flag: &Arc<AtomicBool>) {
         let z_fixed = to_fixed(&self.z);
-        let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+        // let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
 
         // This is if we need to use the extended precision for the reference
-        if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
-            self.extended_iterations.push(self.current_iteration);
-        }
+        // if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
+        //     self.extended_iterations.push(self.current_iteration);
+        // }
 
         // We pack these together as they are always accessed together
         // The first iteration is z_1=c = iteration 1 is index 0
         // access with iteration - start_iteration
-        self.reference_data.push(
-            ReferenceIteration {
-                z: z_fixed,
-                tolerance,
-            }
-        );
+        self.reference_data.push(z_fixed);
 
         let mut z_extended = to_extended(&self.z);
         z_extended.reduce();
@@ -113,7 +111,7 @@ impl Reference {
             self.current_iteration += 1;
     
             let z_fixed = to_fixed(&self.z);
-            let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
+            // let tolerance = self.glitch_tolerance * z_fixed.norm_sqr();
     
             // This is if we need to use the extended precision for the reference
             if z_fixed.re.abs() < 1e-300 && z_fixed.im.abs() < 1e-300 {
@@ -121,13 +119,7 @@ impl Reference {
                 self.extended_iterations.push(self.current_iteration);
             }
     
-            // We pack these together as they are always accessed together
-            self.reference_data.push(
-                ReferenceIteration {
-                    z: z_fixed,
-                    tolerance,
-                }
-            );
+            self.reference_data.push(z_fixed);
     
             let mut z_extended = to_extended(&self.z);
             z_extended.reduce();
@@ -143,7 +135,12 @@ impl Reference {
 
         reference_maximum_iteration_counter.store(self.current_iteration, Ordering::SeqCst);
 
-        // println!("{:?}", self.extended_iterations);
+        println!("{:?}", self.reference_data[0]);
+        println!("{:?}", self.reference_data[1]);
+        println!("{:?}", self.reference_data[2]);
+
+
+        println!("{:?}", self.extended_iterations);
     }
 
     // This gets a reference that stores the high precision data every iteration
