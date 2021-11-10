@@ -286,14 +286,15 @@ impl Perturbation {
                 // CORE ITERATION LOOP
                 'outer: loop {
                     let iterations_remaining = reference.maximum_iteration - pixel.iteration;
-                    let mut next_iteration_batch = iterations_remaining.min(iterations_before_check);
-
-                    if next_extended_iteration < reference_index + next_iteration_batch {
-                        next_iteration_batch = next_extended_iteration - reference_index;
-                    }
+                    let next_iteration_batch = iterations_remaining
+                        .min(iterations_before_check)
+                        .min(next_extended_iteration - reference_index);
 
                     // If we should be doing escape checks
                     if pixel.delta_current.exponent > -500 {
+                        // for loop to avoid bounds checks
+
+
                         let mut i = 0;
 
                         while i < next_iteration_batch && reference_index < next_extended_iteration {
@@ -350,11 +351,11 @@ impl Perturbation {
 
                         pixel.iteration += i;
                     } else {
-                        for i in reference_index..(reference_index + next_iteration_batch) {
+                        for reference_z in reference.reference_data[reference_index..(reference_index + next_iteration_batch)].iter() {
                             Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
                                 &mut pixel.jacobian_current,
-                                reference.reference_data[i],
+                                *reference_z,
                                 scaled_delta_reference,
                                 scale_factor_delta,
                                 scale_factor_derivative,
