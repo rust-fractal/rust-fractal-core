@@ -288,8 +288,8 @@ impl Perturbation {
                     let iterations_remaining = reference.maximum_iteration - pixel.iteration;
                     let mut next_iteration_batch = iterations_remaining.min(iterations_before_check);
 
-                    if next_extended_iteration < pixel.iteration + next_iteration_batch {
-                        next_iteration_batch = next_extended_iteration - pixel.iteration;
+                    if next_extended_iteration < reference_index + next_iteration_batch {
+                        next_iteration_batch = next_extended_iteration - reference_index;
                     }
 
                     // If we should be doing escape checks
@@ -305,6 +305,7 @@ impl Perturbation {
                             // Check for escape
                             if z_norm > ESCAPE_RADIUS {
                                 pixel.iteration += i;
+                                pixel.reference_iteration = reference_index;
                                 pixel.z_norm = z_norm;
                                 pixel.delta_current.mantissa = pixel.delta_current.to_float();
                                 pixel.delta_current.exponent = 0;
@@ -349,7 +350,6 @@ impl Perturbation {
 
                         pixel.iteration += i;
                     } else {
-                        // println!("hit2 {} {}", reference_index, reference_index + next_iteration_batch);
                         for i in reference_index..(reference_index + next_iteration_batch) {
                             Perturbation::perturb_function::<DATA_TYPE, FRACTAL_TYPE>(
                                 &mut pixel.delta_current.mantissa,
@@ -370,12 +370,12 @@ impl Perturbation {
                     if pixel.iteration >= reference.maximum_iteration {
                         // println!("hit3 {} {}", pixel.iteration, reference.maximum_iteration);
                         pixel.iteration = reference.maximum_iteration;
+                        pixel.reference_iteration = reference_index;
                         new_pixels_complete += 1;
                         break;
                     }
 
                     if reference_index == next_extended_iteration {
-                        // println!("hit {}", reference_index);
                         let reference_z = reference.reference_data[reference_index];
 
                         let z = reference_z + scale_factor_delta * pixel.delta_current.mantissa;

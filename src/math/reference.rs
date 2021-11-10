@@ -21,13 +21,8 @@ pub struct Reference {
     pub glitch_tolerance: f64,
 }
 
-// #[derive(Clone)]
-// pub struct ReferenceIteration {
-//     pub z: ComplexFixed<f64>
-// }
-
 impl Reference {
-    pub fn new(z: ComplexArbitrary, c: ComplexArbitrary, current_iteration: usize, maximum_iteration: usize, data_storage_interval: usize, glitch_tolerance: f64, zoom: FloatExtended) -> Reference {
+    pub fn new(_z: ComplexArbitrary, c: ComplexArbitrary, _current_iteration: usize, maximum_iteration: usize, data_storage_interval: usize, glitch_tolerance: f64, zoom: FloatExtended) -> Reference {
         let zero = ComplexArbitrary::with_val(
             c.prec().0 as u32,
             ComplexArbitrary::parse("(0.0,0.0)").expect("provided location not valid"));
