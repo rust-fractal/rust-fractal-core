@@ -33,8 +33,8 @@ impl Reference {
             ComplexArbitrary::parse("(0.0,0.0)").expect("provided location not valid"));
 
         Reference {
-            start_iteration: current_iteration,
-            current_iteration,
+            start_iteration: 0,
+            current_iteration: 0,
             maximum_iteration,
             z: zero,
             c,
