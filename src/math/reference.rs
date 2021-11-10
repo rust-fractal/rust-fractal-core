@@ -130,7 +130,7 @@ impl Reference {
 
         reference_maximum_iteration_counter.store(self.current_iteration, Ordering::SeqCst);
 
-        println!("{:?}", self.extended_iterations);
+        // println!("{:?}", self.extended_iterations);
     }
 
     // This gets a reference that stores the high precision data every iteration
