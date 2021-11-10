@@ -432,10 +432,10 @@ impl FractalRenderer {
                 PixelData {
                     index: *index,
                     iteration: chosen_iteration,
+                    reference_iteration: chosen_iteration,
                     delta_reference: point_delta,
                     delta_current: point_delta,
                     jacobian_current: jacobian_default,
-                    glitched: false,
                     z_norm: 0.0,
                     stripe_storage: [ComplexFixed::new(0.0, 0.0); 4],
                     stripe_iteration: 0,
@@ -647,7 +647,7 @@ impl FractalRenderer {
 
                 pixel_data.par_iter_mut()
                     .for_each(|pixel| {
-                        pixel.glitched = false;
+                        // pixel.glitched = false;
                         pixel.delta_current -= glitch_reference_pixel.delta_current;
                         pixel.delta_reference -= glitch_reference_pixel.delta_reference;
                 });
@@ -673,9 +673,9 @@ impl FractalRenderer {
                     }
                 }
 
-                pixel_data.retain(|packet| {
-                    packet.glitched
-                });
+                // pixel_data.retain(|packet| {
+                //     // packet.glitched
+                // });
 
                 if pixel_data.len() > 0 {
                     self.resolve_glitches(pixel_data, stop_flag, frame_time, delta_pixel_extended, Some(glitch_reference))
@@ -871,6 +871,8 @@ impl FractalRenderer {
         let glitch_tolerance = settings.get_float("glitch_tolerance").unwrap_or(1.4e-6) as f64;
         let data_storage_interval = settings.get_int("data_storage_interval").unwrap_or(10) as usize;
         
+        self.fractal_type = get_fractal_type_from_settings(&settings);
+
         let coloring_type = match settings.get("coloring_type").unwrap_or_else(|_| String::from("smooth_iteration")).to_ascii_uppercase().as_ref() {
             "SMOOTH_ITERATION" | "SMOOTH" => ColoringType::SmoothIteration,
             "STEP_ITERATION" | "STEP" => ColoringType::StepIteration,

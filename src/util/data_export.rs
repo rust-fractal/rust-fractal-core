@@ -76,7 +76,7 @@ pub struct DataExport {
     pub stripe: Vec<f32>,
     pub distance_x: Vec<f32>,
     pub distance_y: Vec<f32>,
-    pub glitched: Vec<bool>,
+    // pub glitched: Vec<bool>,
     pub palette_buffer: Vec<Color>,
     pub palette_interpolated_buffer: Vec<Color>,
     pub palette_cyclic: bool,
@@ -124,7 +124,7 @@ impl DataExport {
             stripe: vec![0.0f32; image_width * image_height],
             distance_x: vec![0.0f32; image_width * image_height],
             distance_y: vec![0.0f32; image_width * image_height],
-            glitched: vec![false; image_width * image_height],
+            // glitched: vec![false; image_width * image_height],
             palette_buffer,
             palette_interpolated_buffer,
             palette_cyclic,
@@ -154,15 +154,15 @@ impl DataExport {
                 1
             };
 
-            self.glitched[pixel.index] = pixel.glitched;
+            // self.glitched[pixel.index] = pixel.glitched;
 
-            if pixel.glitched {
-                if self.display_glitches {
-                    self.set_with_scale::<DATA_TYPE>(pixel.index, [255, 0, 0], new_scale);
-                };
+            // if pixel.glitched {
+            //     if self.display_glitches {
+            //         self.set_with_scale::<DATA_TYPE>(pixel.index, [255, 0, 0], new_scale);
+            //     };
                 
-                continue;
-            }
+            //     continue;
+            // }
 
             self.iterations[pixel.index] = pixel.iteration as u32;
 
@@ -186,7 +186,7 @@ impl DataExport {
 
             if DATA_TYPE == 1 || DATA_TYPE == 3 {
                 // This calculates the distance in terms of pixels
-                let temp1 = reference.reference_data_extended[pixel.iteration - reference.start_iteration] + pixel.delta_current;
+                let temp1 = reference.reference_data_extended[pixel.reference_iteration] + pixel.delta_current;
                 let temp2 = temp1.norm();
                 let temp3 = 2.0f64.powi(temp1.exponent - temp2.exponent) / temp2.mantissa;
 
@@ -301,7 +301,7 @@ impl DataExport {
         self.stripe = vec![0.0f32; self.image_width * self.image_height];
         self.distance_x = vec![0.0f32; self.image_width * self.image_height];
         self.distance_y = vec![0.0f32; self.image_width * self.image_height];
-        self.glitched = vec![false; self.image_width * self.image_height];
+        // self.glitched = vec![false; self.image_width * self.image_height];
     }
 
     pub fn regenerate(&mut self) {
@@ -315,10 +315,10 @@ impl DataExport {
 
     pub fn regenerate_specific<const DATA_TYPE: usize>(&mut self) {
         for i in 0..self.iterations.len() {
-            if self.glitched[i] && self.display_glitches {
-                self.set_with_scale::<DATA_TYPE>(i, [255, 0, 0], 1);
-                continue;
-            }
+            // if self.glitched[i] && self.display_glitches {
+            //     self.set_with_scale::<DATA_TYPE>(i, [255, 0, 0], 1);
+            //     continue;
+            // }
 
             if self.iterations[i] >= self.maximum_iteration as u32 {
                 self.set_with_scale::<DATA_TYPE>(i, [0, 0, 0], 1);
@@ -533,7 +533,7 @@ impl DataExport {
 
                     self.iterations[scale_index] = self.iterations[index];
                     self.smooth[scale_index] = self.smooth[index];
-                    self.glitched[scale_index] = self.glitched[index];
+                    // self.glitched[scale_index] = self.glitched[index];
 
                     if DATA_TYPE == 1 || DATA_TYPE == 3 {
                         self.distance_x[scale_index] = self.distance_x[index];
