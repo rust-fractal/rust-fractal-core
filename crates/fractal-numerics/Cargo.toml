@@ -1,0 +1,17 @@
+[package]
+name = "fractal-numerics"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Portable numerical primitives and Malachite arbitrary-precision arithmetic."
+license = "MIT"
+
+[features]
+default = []
+malachite = ["dep:malachite"]
+
+[dependencies]
+malachite = { version = "0.10.0", default-features = false, features = ["std", "floats", "naturals_and_integers", "rationals"], optional = true }
+
+[dev-dependencies]
+proptest = "1.11.0"

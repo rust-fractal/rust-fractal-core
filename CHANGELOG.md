@@ -2,6 +2,15 @@
 
 Release notes for `rust-fractal-core` are listed below in descending version order.
 
+## Unreleased
+
+- Replaced the legacy native feature and root renderer entry point with a small workspace.
+- Added typed render domain settings, deterministic tile/frame computation, raw numerical channels, and regression fixtures.
+- Added separate native runtime, I/O, and numerical crates.
+- Updated the workspace to Rust 1.97.1 and current direct dependencies.
+- Replaced the native C-backed arbitrary-precision experiment with the Windows-compatible Malachite reference implementation.
+- Added arbitrary-precision reference benchmarks for finite and deep locations, including `flake`, `wfs`, and `e8000`.
+
 ## 0.14.0 - 2020-12-01
 
 - Added progress counters and support for stopping long-running renders.

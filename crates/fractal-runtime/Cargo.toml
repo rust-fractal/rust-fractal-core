@@ -1,0 +1,15 @@
+[package]
+name = "fractal-runtime"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Native scheduling and progressive delivery for fractal-core."
+license = "MIT"
+
+[features]
+default = ["native"]
+native = ["dep:rayon"]
+
+[dependencies]
+fractal-core = { path = "../fractal-core" }
+rayon = { version = "1.12.0", optional = true }

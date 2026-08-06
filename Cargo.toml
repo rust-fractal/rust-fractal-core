@@ -3,26 +3,46 @@ name = "rust_fractal"
 version = "0.14.0"
 authors = ["jackyarndley <34801340+jackyarndley@users.noreply.github.com>"]
 description = "Fast, efficient mandelbrot set renderer."
-edition = "2018"
+edition = "2024"
+rust-version = "1.97"
+autobins = false
+
+[workspace]
+members = [
+    "crates/fractal-core",
+    "crates/fractal-arbitrary",
+    "crates/fractal-io",
+    "crates/fractal-numerics",
+    "crates/fractal-runtime",
+]
+resolver = "3"
+
+[features]
+default = []
+malachite = ["fractal-numerics/malachite"]
 
 [dependencies]
-image = "^0.23.6"
-rand = "^0.8.3"
-rand_distr = "^0.4.0"
-num-complex = "^0.2.4"
-rayon = "^1.3.1"
-exr = "^0.8.0"
-smallvec = "^1.4.2"
-clap = "^3.0.0-beta.1"
-config = "^0.9"
-half = "^1.6.0"
-parking_lot = "0.12.1"
-colorgrad = "^0.5.0"
+fractal-core = { path = "crates/fractal-core" }
+fractal-numerics = { path = "crates/fractal-numerics" }
 
-[dependencies.rug]
-version = "1.11"
-default-features = false
-features = ["float", "complex"]
+[dev-dependencies]
+criterion = "0.8.2"
+fractal-arbitrary = { path = "crates/fractal-arbitrary" }
+fractal-io = { path = "crates/fractal-io" }
+toml = "1.1.4"
+
+[[bench]]
+name = "core_render"
+harness = false
+
+[[bench]]
+name = "numerics"
+harness = false
+
+[[bench]]
+name = "arbitrary_reference"
+harness = false
+required-features = ["malachite"]
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 [profile.release]

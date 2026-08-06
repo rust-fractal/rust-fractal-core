@@ -1,0 +1,36 @@
+[package]
+name = "rust-fractal-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4.13"
+fractal-core = { path = "../crates/fractal-core" }
+fractal-io = { path = "../crates/fractal-io" }
+
+[[bin]]
+name = "settings_json"
+path = "fuzz_targets/settings_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tiny_render"
+path = "fuzz_targets/tiny_render.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "palette_toml"
+path = "fuzz_targets/palette_toml.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

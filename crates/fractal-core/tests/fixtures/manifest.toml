@@ -1,0 +1,69 @@
+version = 1
+hash_algorithm = "fnv1a64 over canonical little-endian raw channels"
+
+[[fixture]]
+name = "interior_mandelbrot"
+center = [0.0, 0.0]
+zoom = 1.0
+rotation_radians = 0.0
+width = 4
+height = 4
+formula = "mandelbrot"
+power = 2
+iteration_limit = 32
+approximation = false
+expected_iterations = [1, 2, 2, 1, 3, 32, 5, 2, 3, 32, 5, 2, 1, 2, 2, 1]
+expected_raw_hash = 783574553016584100
+
+[[fixture]]
+name = "ordinary_exterior"
+center = [1.0, 0.0]
+zoom = 1.0
+rotation_radians = 0.0
+width = 4
+height = 4
+formula = "mandelbrot"
+power = 2
+iteration_limit = 32
+approximation = false
+expected_raw_hash = 10679723682796526820
+
+[[fixture]]
+name = "boundary_with_approximation"
+center = [-0.75, 0.0]
+zoom = 8.0
+rotation_radians = 0.0
+width = 16
+height = 12
+formula = "mandelbrot"
+power = 2
+iteration_limit = 128
+approximation = true
+approximation_order = 8
+expected_raw_hash = 12122791070784048088
+
+[[fixture]]
+name = "burning_ship"
+center = [-0.5, -0.5]
+zoom = 2.0
+rotation_radians = 0.25
+width = 16
+height = 12
+formula = "burning_ship"
+power = 2
+iteration_limit = 128
+approximation = false
+expected_raw_hash = 7244626984681493518
+
+[[fixture]]
+name = "power_three"
+center = [-0.1, 0.0]
+zoom = 4.0
+rotation_radians = 0.0
+width = 16
+height = 12
+formula = "mandelbrot"
+power = 3
+iteration_limit = 128
+approximation = false
+expected_raw_hash = 5506250641139191256

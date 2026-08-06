@@ -1,3 +1,3 @@
-pub mod renderer;
-pub mod util;
-pub mod math;
+//! Workspace facade for the UI-independent fractal core.
+
+pub use fractal_core::*;
