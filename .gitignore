@@ -10,3 +10,11 @@
 *.mp4
 segments.txt
 /benchmarks/output
+
+# Generated render/export artifacts
+/output*.png
+/output*.jpg
+/output*.exr
+/render.png
+/test.csv
+/rust-arbitrary.exe
