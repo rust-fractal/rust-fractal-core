@@ -7,6 +7,8 @@
   <a href="https://github.com/rust-fractal/rust-fractal-core/releases"><img src="https://img.shields.io/github/downloads/rust-fractal/rust-fractal-core/total?style=flat" alt="Github Release"></a>
 </p>
 
+See the [changelog](CHANGELOG.md) for version history.
+
 A mandelbrot fractal renderer implementing both perturbation and series approximation. A reference point is iterated at high-precision, arbitrary precision and differences from this are calculated in machine precision. This allows for a large reduction in computation required to render and image, especially at high zoom levels. This generator features:
 
 - Perturbation based iteration with glitch detection.
