@@ -118,12 +118,12 @@ pub fn request_from_legacy_toml(
 ) -> Result<RenderRequest, IoError> {
     let options: LegacyOptions = toml::from_str(options_toml).map_err(IoError::TomlDeserialize)?;
     let location = legacy_location_from_toml(location_toml)?;
-    let real = parse_legacy_float(&location.real)?;
-    let imag = parse_legacy_float(&location.imag)?;
-    let zoom = parse_legacy_float(&location.zoom)?;
+    let center = ComplexCoordinate::from_decimal(&location.real, &location.imag)
+        .map_err(IoError::InvalidRequest)?;
+    let zoom = Zoom::from_decimal(&location.zoom).map_err(IoError::InvalidRequest)?;
     let viewport = Viewport {
-        center: ComplexCoordinate::new(real, imag),
-        zoom: Zoom::new(zoom).map_err(IoError::InvalidRequest)?,
+        center,
+        zoom,
         rotation_radians: options.rotate.unwrap_or(0.0).to_radians(),
         width: options.image_width.unwrap_or(3840),
         height: options.image_height.unwrap_or(2160),
@@ -161,10 +161,6 @@ pub fn request_from_legacy_toml(
 /// compatibility request converter above remains intentionally `f64`-based.
 pub fn legacy_location_from_toml(location_toml: &str) -> Result<LegacyLocation, IoError> {
     toml::from_str(location_toml).map_err(IoError::TomlDeserialize)
-}
-
-fn parse_legacy_float(value: &str) -> Result<f64, IoError> {
-    value.parse::<f64>().map_err(|_| IoError::InvalidLegacyNumber(value.to_owned()))
 }
 
 #[derive(Debug, serde::Deserialize)]

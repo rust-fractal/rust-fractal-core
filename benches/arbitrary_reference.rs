@@ -1,5 +1,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
-use fractal_arbitrary::MalachiteReference;
+use fractal_core::{
+    ComplexCoordinate, FractalFormula, PrecisionPolicy, Zoom, generate_reference_exact,
+};
 use std::hint::black_box;
 
 struct LocationCase {
@@ -49,23 +51,31 @@ fn field<'a>(source: &'a str, name: &str) -> &'a str {
         .unwrap_or_else(|| panic!("location is missing {name}"))
 }
 
-fn arbitrary_reference(source: &str, iteration_cap: u32) -> (u32, u32) {
+fn production_reference(source: &str, iteration_cap: u32) -> (u32, u32, u32) {
     let zoom = field(source, "zoom");
-    let reference = MalachiteReference::generate_for_zoom(
-        field(source, "real"),
-        field(source, "imag"),
-        zoom,
+    let zoom = Zoom::from_decimal(zoom).unwrap();
+    let center =
+        ComplexCoordinate::from_decimal(field(source, "real"), field(source, "imag")).unwrap();
+    let precision_bits = PrecisionPolicy::default().required_bits(zoom).unwrap();
+    let reference = generate_reference_exact(
+        &center,
+        FractalFormula::Mandelbrot { power: 2 },
+        precision_bits,
         iteration_cap,
     )
     .unwrap();
-    (reference.statistics.precision_bits, reference.statistics.escaped_at.unwrap_or(0))
+    (
+        reference.statistics.precision_bits.unwrap_or(0),
+        reference.statistics.generated_iterations,
+        reference.statistics.escaped_at.unwrap_or(0),
+    )
 }
 
 fn benchmark_arbitrary_references(c: &mut Criterion) {
     let mut group = c.benchmark_group("arbitrary_reference_locations");
     for case in LOCATION_CASES {
         group.bench_function(case.name, |b| {
-            b.iter(|| black_box(arbitrary_reference(case.source, case.iteration_cap)))
+            b.iter(|| black_box(production_reference(case.source, case.iteration_cap)))
         });
     }
     group.finish();

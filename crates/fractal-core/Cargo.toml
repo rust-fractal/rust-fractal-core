@@ -15,7 +15,7 @@ default = []
 serde = ["dep:serde"]
 
 [dependencies]
-fractal-numerics = { path = "../fractal-numerics" }
+fractal-numerics = { path = "../fractal-numerics", features = ["malachite"] }
 serde = { version = "1.0.229", features = ["derive"], optional = true }
 
 [dev-dependencies]

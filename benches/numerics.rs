@@ -18,6 +18,30 @@ fn benchmark_numerics(c: &mut Criterion) {
         )
     });
 
+    for precision in [256_u32, 512, 1024, 2048, 4096, 8192] {
+        let constant = MalachiteComplex::from_f64(-0.75, 0.0, precision).unwrap();
+        c.bench_function(&format!("malachite_square_add_{precision}_bits"), |b| {
+            b.iter_batched(
+                || MalachiteComplex::from_f64(0.25, -0.5, precision).unwrap(),
+                |mut complex| {
+                    complex.square_add(&constant).unwrap();
+                    std::hint::black_box(complex.to_f64());
+                },
+                BatchSize::SmallInput,
+            )
+        });
+        c.bench_function(&format!("malachite_difference_of_squares_{precision}_bits"), |b| {
+            b.iter_batched(
+                || MalachiteComplex::from_f64(0.25, -0.5, precision).unwrap(),
+                |mut complex| {
+                    complex.difference_of_squares_add(&constant).unwrap();
+                    std::hint::black_box(complex.to_f64());
+                },
+                BatchSize::SmallInput,
+            )
+        });
+    }
+
     c.bench_function("malachite_reference_100_iterations", |b| {
         b.iter(|| MalachiteReference::generate("-0.75", "0", 256, 100).unwrap())
     });

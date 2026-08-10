@@ -1,7 +1,9 @@
+use crate::perturbation::{perturbate_extended_with_cancel, perturbate_with_series_cancel};
 use crate::{
     ComplexCoordinate, FractalFormula, GlitchDetector, ReferenceOrbit, RenderError, RenderRequest,
-    SeriesApproximation, generate_reference, generate_series, perturbate_with_series,
+    SeriesApproximation, generate_reference, generate_reference_exact, generate_series,
 };
+use fractal_numerics::{ComplexExtended, Extended};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Tile {
@@ -78,6 +80,187 @@ pub struct RawFrame {
 
 pub type RenderResult = RawFrame;
 
+/// A safe disjoint mutable view over a set of complete frame rows. Native
+/// schedulers can split this view between workers without tile allocations or
+/// tile-to-frame copies.
+pub struct RawFrameView<'a> {
+    width: u32,
+    height: u32,
+    iterations: &'a mut [u32],
+    smooth_iteration: Option<&'a mut [f64]>,
+    distance: Option<&'a mut [f64]>,
+    stripes: Option<&'a mut [f64]>,
+    validity: Option<&'a mut [u8]>,
+}
+
+impl RawFrame {
+    pub fn view_mut(&mut self) -> RawFrameView<'_> {
+        RawFrameView {
+            width: self.width,
+            height: self.height,
+            iterations: &mut self.iterations,
+            smooth_iteration: self.smooth_iteration.as_deref_mut(),
+            distance: self.distance.as_deref_mut(),
+            stripes: self.stripes.as_deref_mut(),
+            validity: self.validity.as_deref_mut(),
+        }
+    }
+}
+
+impl<'a> RawFrameView<'a> {
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    pub fn split_rows(self, rows: u32) -> Result<(Self, Self), RenderError> {
+        if rows == 0 || rows >= self.height {
+            return Err(RenderError::InvalidRawFrame);
+        }
+        let split_at = rows as usize * self.width as usize;
+        let (iterations_top, iterations_bottom) = self.iterations.split_at_mut(split_at);
+        let split_optional =
+            |values: Option<&'a mut [f64]>| values.map(|values| values.split_at_mut(split_at));
+        let (smooth_top, smooth_bottom) = split_optional(self.smooth_iteration)
+            .map_or((None, None), |(top, bottom)| (Some(top), Some(bottom)));
+        let (distance_top, distance_bottom) = split_optional(self.distance)
+            .map_or((None, None), |(top, bottom)| (Some(top), Some(bottom)));
+        let (stripes_top, stripes_bottom) = split_optional(self.stripes)
+            .map_or((None, None), |(top, bottom)| (Some(top), Some(bottom)));
+        let (validity_top, validity_bottom) = self
+            .validity
+            .map(|values| {
+                let (top, bottom) = values.split_at_mut(split_at);
+                (Some(top), Some(bottom))
+            })
+            .unwrap_or((None, None));
+        Ok((
+            Self {
+                width: self.width,
+                height: rows,
+                iterations: iterations_top,
+                smooth_iteration: smooth_top,
+                distance: distance_top,
+                stripes: stripes_top,
+                validity: validity_top,
+            },
+            Self {
+                width: self.width,
+                height: self.height - rows,
+                iterations: iterations_bottom,
+                smooth_iteration: smooth_bottom,
+                distance: distance_bottom,
+                stripes: stripes_bottom,
+                validity: validity_bottom,
+            },
+        ))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ShallowTransform {
+    top_left: ComplexCoordinate,
+    x_step: ComplexCoordinate,
+    y_step: ComplexCoordinate,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DeepTransform {
+    top_left: ComplexExtended,
+    x_step: ComplexExtended,
+    y_step: ComplexExtended,
+}
+
+#[derive(Clone, Debug)]
+enum ViewportTransform {
+    Shallow(ShallowTransform),
+    Deep(DeepTransform),
+}
+
+#[derive(Clone, Debug)]
+enum PixelLocation {
+    Shallow(ComplexCoordinate),
+    Deep(ComplexExtended),
+}
+
+impl ViewportTransform {
+    fn new(request: &RenderRequest, deep: bool) -> Result<Self, RenderError> {
+        let viewport = &request.viewport;
+        let aspect = f64::from(viewport.width) / f64::from(viewport.height);
+        let (sin, cos) = viewport.rotation_radians.sin_cos();
+        if !deep {
+            let scale = 4.0 / (f64::from(viewport.height) * viewport.zoom.scale());
+            let x_step = ComplexCoordinate::new(scale * aspect * cos, scale * aspect * sin);
+            let y_step = ComplexCoordinate::new(-scale * sin, scale * cos);
+            let x = -f64::from(viewport.width) / 2.0;
+            let y = -f64::from(viewport.height) / 2.0;
+            let top_left = ComplexCoordinate::new(
+                viewport.center.real + x * x_step.real + y * y_step.real,
+                viewport.center.imag + x * x_step.imag + y * y_step.imag,
+            );
+            return Ok(Self::Shallow(ShallowTransform { top_left, x_step, y_step }));
+        }
+
+        let zoom = if let Some(decimal) = viewport.zoom.decimal() {
+            Extended::from_decimal(decimal).map_err(|_| RenderError::InvalidDecimalZoom)?
+        } else {
+            Extended::from_f64(viewport.zoom.scale())
+                .ok_or(RenderError::InvalidZoom { scale: viewport.zoom.scale() })?
+        };
+        let base_scale = Extended::from_f64(4.0 / f64::from(viewport.height))
+            .ok_or(RenderError::NumericOverflow)?
+            .checked_div(zoom)
+            .ok_or(RenderError::NumericOverflow)?;
+        let horizontal_scale = base_scale
+            .checked_mul(Extended::from_f64(aspect).ok_or(RenderError::NumericOverflow)?)
+            .ok_or(RenderError::NumericOverflow)?;
+        let x_step = ComplexExtended::from_components(
+            horizontal_scale
+                .checked_mul(Extended::from_f64(cos).ok_or(RenderError::NumericOverflow)?)
+                .ok_or(RenderError::NumericOverflow)?,
+            horizontal_scale
+                .checked_mul(Extended::from_f64(sin).ok_or(RenderError::NumericOverflow)?)
+                .ok_or(RenderError::NumericOverflow)?,
+        );
+        let y_step = ComplexExtended::from_components(
+            base_scale
+                .checked_mul(Extended::from_f64(-sin).ok_or(RenderError::NumericOverflow)?)
+                .ok_or(RenderError::NumericOverflow)?,
+            base_scale
+                .checked_mul(Extended::from_f64(cos).ok_or(RenderError::NumericOverflow)?)
+                .ok_or(RenderError::NumericOverflow)?,
+        );
+        let top_left = x_step
+            .scale(-f64::from(viewport.width) / 2.0)
+            .ok_or(RenderError::NumericOverflow)?
+            .add(
+                y_step
+                    .scale(-f64::from(viewport.height) / 2.0)
+                    .ok_or(RenderError::NumericOverflow)?,
+            )
+            .ok_or(RenderError::NumericOverflow)?;
+        Ok(Self::Deep(DeepTransform { top_left, x_step, y_step }))
+    }
+
+    fn location(&self, x: f64, y: f64) -> Result<PixelLocation, RenderError> {
+        match self {
+            Self::Shallow(transform) => Ok(PixelLocation::Shallow(ComplexCoordinate::new(
+                transform.top_left.real + x * transform.x_step.real + y * transform.y_step.real,
+                transform.top_left.imag + x * transform.x_step.imag + y * transform.y_step.imag,
+            ))),
+            Self::Deep(transform) => {
+                let first = transform
+                    .top_left
+                    .add(transform.x_step.scale(x).ok_or(RenderError::NumericOverflow)?)
+                    .ok_or(RenderError::NumericOverflow)?;
+                let value = first
+                    .add(transform.y_step.scale(y).ok_or(RenderError::NumericOverflow)?)
+                    .ok_or(RenderError::NumericOverflow)?;
+                Ok(PixelLocation::Deep(value))
+            }
+        }
+    }
+}
+
 /// Immutable deterministic state shared by all tiles in one render.
 ///
 /// Reference and series generation happen once when the session is created,
@@ -88,6 +271,7 @@ pub struct RenderSession {
     reference: Option<ReferenceOrbit>,
     series: Option<SeriesApproximation>,
     glitch_detector: Option<GlitchDetector>,
+    transform: ViewportTransform,
     wants_smooth: bool,
     wants_distance: bool,
 }
@@ -95,8 +279,16 @@ pub struct RenderSession {
 impl RenderSession {
     pub fn new(request: RenderRequest) -> Result<Self, RenderError> {
         request.validate()?;
-        let reference = approximation_reference(&request);
-        let series = reference.as_ref().and_then(approximation_series);
+        let deep = requires_deep_precision(&request);
+        let reference = approximation_reference(&request, deep)?;
+        let series = request
+            .settings
+            .approximation
+            .enabled
+            .then(|| reference.as_ref().map(|reference| approximation_series(&request, reference)))
+            .flatten()
+            .transpose()?;
+        let transform = ViewportTransform::new(&request, deep)?;
         let glitch_detector = request
             .settings
             .glitch
@@ -104,10 +296,11 @@ impl RenderSession {
             .then(|| GlitchDetector::new(request.settings.glitch.tolerance).ok())
             .flatten();
         Ok(Self {
-            request,
+            request: request.clone(),
             reference,
             series,
             glitch_detector,
+            transform,
             wants_smooth: request.settings.output.smooth_iteration
                 || request.settings.output.stripes,
             wants_distance: request.settings.output.distance,
@@ -116,6 +309,20 @@ impl RenderSession {
 
     pub const fn request(&self) -> &RenderRequest {
         &self.request
+    }
+
+    /// Returns the pixel displacement from the exact reference center. Deep
+    /// callers can inspect this value without converting it to an absolute
+    /// f64 coordinate.
+    pub fn pixel_offset(&self, x: f64, y: f64) -> Result<ComplexExtended, RenderError> {
+        match self.transform.location(x, y)? {
+            PixelLocation::Deep(offset) => Ok(offset),
+            PixelLocation::Shallow(coordinate) => ComplexExtended::from_f64(
+                coordinate.real - self.request.viewport.center.real,
+                coordinate.imag - self.request.viewport.center.imag,
+            )
+            .ok_or(RenderError::NumericOverflow),
+        }
     }
 
     pub fn compute_frame(&self) -> Result<RenderResult, RenderError> {
@@ -141,6 +348,51 @@ impl RenderSession {
 
     pub fn compute_tile(&self, tile: Tile) -> Result<RenderTile, RenderError> {
         self.compute_tile_with_cancel(tile, || false)
+    }
+
+    /// Fills a disjoint set of frame rows directly. The caller owns the view,
+    /// so parallel callers cannot alias output channels.
+    pub fn compute_view_with_cancel<F>(
+        &self,
+        view: &mut RawFrameView<'_>,
+        first_row: u32,
+        mut cancelled: F,
+    ) -> Result<(), RenderError>
+    where
+        F: FnMut() -> bool,
+    {
+        let sample_context = SampleContext {
+            request: &self.request,
+            reference: self.reference.as_ref(),
+            series: self.series.as_ref(),
+            glitch_detector: self.glitch_detector,
+            transform: &self.transform,
+            want_smooth: self.wants_smooth,
+            want_distance: self.wants_distance,
+        };
+        for local_y in 0..view.height {
+            for x in 0..view.width {
+                if cancelled() {
+                    return Err(RenderError::Cancelled);
+                }
+                let sample = sample_pixel(&sample_context, x, first_row + local_y, &mut cancelled)?;
+                let index = (local_y * view.width + x) as usize;
+                view.iterations[index] = sample.iterations;
+                if let Some(channel) = &mut view.smooth_iteration {
+                    channel[index] = sample.smooth_iteration;
+                }
+                if let Some(channel) = &mut view.distance {
+                    channel[index] = sample.distance;
+                }
+                if let Some(channel) = &mut view.stripes {
+                    channel[index] = sample.stripes;
+                }
+                if let Some(channel) = &mut view.validity {
+                    channel[index] = u8::from(sample.valid);
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Computes one tile while allowing the owning executor to stop between pixels.
@@ -169,6 +421,7 @@ impl RenderSession {
             reference: self.reference.as_ref(),
             series: self.series.as_ref(),
             glitch_detector: self.glitch_detector,
+            transform: &self.transform,
             want_smooth: self.wants_smooth,
             want_distance: self.wants_distance,
         };
@@ -177,7 +430,7 @@ impl RenderSession {
                 if cancelled() {
                     return Err(RenderError::Cancelled);
                 }
-                let sample = sample_pixel(&sample_context, x, y);
+                let sample = sample_pixel(&sample_context, x, y, &mut cancelled)?;
                 iterations.push(sample.iterations);
                 if let Some(channel) = &mut smooth_iteration {
                     channel.push(sample.smooth_iteration);
@@ -275,29 +528,60 @@ pub enum RenderEvent {
 }
 
 pub fn compute_frame(request: &RenderRequest) -> Result<RenderResult, RenderError> {
-    RenderSession::new(*request)?.compute_frame()
+    RenderSession::new(request.clone())?.compute_frame()
 }
 
 pub fn compute_tile(request: &RenderRequest, tile: Tile) -> Result<RenderTile, RenderError> {
-    RenderSession::new(*request)?.compute_tile(tile)
+    RenderSession::new(request.clone())?.compute_tile(tile)
 }
 
-fn approximation_reference(request: &RenderRequest) -> Option<ReferenceOrbit> {
-    if !request.settings.approximation.enabled {
-        return None;
+fn requires_deep_precision(request: &RenderRequest) -> bool {
+    request
+        .settings
+        .precision
+        .required_bits(request.viewport.zoom.clone())
+        .is_ok_and(|bits| bits > 128)
+}
+
+fn approximation_reference(
+    request: &RenderRequest,
+    deep: bool,
+) -> Result<Option<ReferenceOrbit>, RenderError> {
+    if !deep && !request.settings.approximation.enabled {
+        return Ok(None);
     }
-    let reference = generate_reference(
-        request.viewport.center,
-        request.settings.fractal,
-        request.settings.iteration_limit,
-    )
-    .ok()?;
-    (reference.statistics.generated_iterations == request.settings.iteration_limit)
-        .then_some(reference)
+    let reference = if deep {
+        let precision = request.settings.precision.required_bits(request.viewport.zoom.clone())?;
+        generate_reference_exact(
+            &request.viewport.center,
+            request.settings.fractal,
+            precision,
+            request.settings.iteration_limit,
+        )?
+    } else {
+        let reference = generate_reference(
+            request.viewport.center.clone(),
+            request.settings.fractal,
+            request.settings.iteration_limit,
+        )?;
+        if reference.statistics.generated_iterations != request.settings.iteration_limit {
+            return Ok(None);
+        }
+        reference
+    };
+    if deep && reference.statistics.generated_iterations != request.settings.iteration_limit {
+        return Err(RenderError::ReferenceGeneration(
+            "deep reference escaped before the requested iteration limit".to_owned(),
+        ));
+    }
+    Ok(Some(reference))
 }
 
-fn approximation_series(reference: &ReferenceOrbit) -> Option<SeriesApproximation> {
-    generate_series(reference, reference.statistics.requested_iterations.min(64)).ok()
+fn approximation_series(
+    request: &RenderRequest,
+    reference: &ReferenceOrbit,
+) -> Result<SeriesApproximation, RenderError> {
+    generate_series(reference, request.settings.approximation.order)
 }
 
 struct SampleContext<'a> {
@@ -305,28 +589,24 @@ struct SampleContext<'a> {
     reference: Option<&'a ReferenceOrbit>,
     series: Option<&'a SeriesApproximation>,
     glitch_detector: Option<GlitchDetector>,
+    transform: &'a ViewportTransform,
     want_smooth: bool,
     want_distance: bool,
 }
 
-fn sample_pixel(context: &SampleContext<'_>, x: u32, y: u32) -> EscapeSample {
+fn sample_pixel<F>(
+    context: &SampleContext<'_>,
+    x: u32,
+    y: u32,
+    cancelled: &mut F,
+) -> Result<EscapeSample, RenderError>
+where
+    F: FnMut() -> bool,
+{
     let request = context.request;
-    let reference = context.reference;
-    let series = context.series;
-    let glitch_detector = context.glitch_detector;
-    let want_smooth = context.want_smooth;
-    let want_distance = context.want_distance;
     let samples = request.settings.sampling.samples_per_pixel;
     if samples == 1 {
-        return approximated_sample(
-            request,
-            pixel_coordinate(request, x, y),
-            reference,
-            series,
-            glitch_detector,
-            want_smooth,
-            want_distance,
-        );
+        return approximated_sample(context, f64::from(x) + 0.5, f64::from(y) + 0.5, cancelled);
     }
 
     let grid = (f64::from(samples).sqrt().ceil() as u32).max(1);
@@ -341,20 +621,9 @@ fn sample_pixel(context: &SampleContext<'_>, x: u32, y: u32) -> EscapeSample {
     for sample in 0..samples {
         let sample_x = sample % grid;
         let sample_y = sample / grid;
-        let coordinate = pixel_coordinate_at(
-            request,
-            f64::from(x) + (f64::from(sample_x) + 0.5) / f64::from(grid),
-            f64::from(y) + (f64::from(sample_y) + 0.5) / f64::from(grid),
-        );
-        let value = approximated_sample(
-            request,
-            coordinate,
-            reference,
-            series,
-            glitch_detector,
-            want_smooth,
-            want_distance,
-        );
+        let coordinate_x = f64::from(x) + (f64::from(sample_x) + 0.5) / f64::from(grid);
+        let coordinate_y = f64::from(y) + (f64::from(sample_y) + 0.5) / f64::from(grid);
+        let value = approximated_sample(context, coordinate_x, coordinate_y, cancelled)?;
         iteration_sum += f64::from(value.iterations);
         total.smooth_iteration += value.smooth_iteration;
         total.distance += value.distance;
@@ -366,39 +635,79 @@ fn sample_pixel(context: &SampleContext<'_>, x: u32, y: u32) -> EscapeSample {
     total.smooth_iteration /= divisor;
     total.distance /= divisor;
     total.stripes /= divisor;
-    total
+    Ok(total)
 }
 
-fn approximated_sample(
-    request: &RenderRequest,
-    coordinate: ComplexCoordinate,
-    reference: Option<&ReferenceOrbit>,
-    series: Option<&SeriesApproximation>,
-    glitch_detector: Option<GlitchDetector>,
-    want_smooth: bool,
-    want_distance: bool,
-) -> EscapeSample {
-    if let Some(reference) = reference
-        && let Ok(result) = perturbate_with_series(
+fn approximated_sample<F>(
+    context: &SampleContext<'_>,
+    x: f64,
+    y: f64,
+    cancelled: &mut F,
+) -> Result<EscapeSample, RenderError>
+where
+    F: FnMut() -> bool,
+{
+    let request = context.request;
+    let reference = context.reference;
+    let series = context.series;
+    let glitch_detector = context.glitch_detector;
+    let want_smooth = context.want_smooth;
+    let want_distance = context.want_distance;
+    let location = context.transform.location(x, y)?;
+    if let PixelLocation::Deep(delta_c) = location {
+        let reference = reference.ok_or_else(|| {
+            RenderError::ReferenceGeneration("deep render has no reference orbit".to_owned())
+        })?;
+        let result = perturbate_extended_with_cancel(
             reference,
-            coordinate,
+            delta_c,
+            request.settings.iteration_limit,
+            glitch_detector,
+            context.series,
+            &mut *cancelled,
+        )?;
+        return Ok(EscapeSample {
+            iterations: result.iterations,
+            smooth_iteration: if want_smooth {
+                result.smooth_iteration
+            } else {
+                result.iterations as f64
+            },
+            distance: if want_distance { result.distance } else { 0.0 },
+            stripes: if want_smooth {
+                0.5 + 0.5 * (result.smooth_iteration * core::f64::consts::TAU).sin()
+            } else {
+                0.0
+            },
+            valid: !result.glitch.detected || result.glitch.corrected,
+        });
+    }
+    let PixelLocation::Shallow(coordinate) = location else {
+        return Err(RenderError::NumericOverflow);
+    };
+    if let Some(reference) = reference
+        && let Ok(result) = perturbate_with_series_cancel(
+            reference,
+            coordinate.clone(),
             request.settings.iteration_limit,
             glitch_detector,
             series,
+            &mut *cancelled,
         )
     {
         if result.glitch.detected {
-            let mut fallback = escape_sample(
+            let mut fallback = escape_sample_with_cancel(
                 coordinate,
                 request.settings.fractal,
                 request.settings.iteration_limit,
                 want_smooth,
                 want_distance,
-            );
+                &mut *cancelled,
+            )?;
             fallback.valid = false;
-            return fallback;
+            return Ok(fallback);
         }
-        return EscapeSample {
+        return Ok(EscapeSample {
             iterations: result.iterations,
             smooth_iteration: if want_smooth {
                 result.smooth_iteration
@@ -412,14 +721,15 @@ fn approximated_sample(
                 0.0
             },
             valid: true,
-        };
+        });
     }
-    escape_sample(
+    escape_sample_with_cancel(
         coordinate,
         request.settings.fractal,
         request.settings.iteration_limit,
         want_smooth,
         want_distance,
+        &mut *cancelled,
     )
 }
 
@@ -428,7 +738,7 @@ pub fn pixel_coordinate(request: &RenderRequest, x: u32, y: u32) -> ComplexCoord
 }
 
 fn pixel_coordinate_at(request: &RenderRequest, x: f64, y: f64) -> ComplexCoordinate {
-    let viewport = request.viewport;
+    let viewport = &request.viewport;
     let aspect = viewport.width as f64 / viewport.height as f64;
     let scale = 4.0 / (viewport.height as f64 * viewport.zoom.scale());
     let real = (x - viewport.width as f64 / 2.0) * scale * aspect;
@@ -450,13 +760,17 @@ struct EscapeSample {
     valid: bool,
 }
 
-fn escape_sample(
+fn escape_sample_with_cancel<F>(
     coordinate: ComplexCoordinate,
     formula: FractalFormula,
     limit: u32,
     want_smooth_iteration: bool,
     want_distance: bool,
-) -> EscapeSample {
+    mut cancelled: F,
+) -> Result<EscapeSample, RenderError>
+where
+    F: FnMut() -> bool,
+{
     let mut z = ComplexCoordinate::new(0.0, 0.0);
     let mut derivative = ComplexCoordinate::new(0.0, 0.0);
     let power = match formula {
@@ -464,6 +778,9 @@ fn escape_sample(
     };
     let mut iteration = 0;
     while iteration < limit && z.real * z.real + z.imag * z.imag <= 4.0 {
+        if iteration.is_multiple_of(128) && cancelled() {
+            return Err(RenderError::Cancelled);
+        }
         let (mut real, mut imag) = (z.real, z.imag);
         if matches!(formula, FractalFormula::BurningShip { .. }) {
             real = real.abs();
@@ -501,13 +818,13 @@ fn escape_sample(
         0.0
     };
 
-    EscapeSample {
+    Ok(EscapeSample {
         iterations: iteration,
         smooth_iteration,
         distance,
         stripes,
         valid: magnitude.is_finite() && z.real.is_finite() && z.imag.is_finite(),
-    }
+    })
 }
 
 fn want_distance_iteration(formula: FractalFormula, want_distance: bool) -> bool {
@@ -621,5 +938,78 @@ mod tests {
             session.compute_tile_with_cancel(Tile { x: 0, y: 0, width: 4, height: 4 }, || true,),
             Err(RenderError::Cancelled)
         );
+    }
+
+    #[test]
+    fn deep_requests_keep_adjacent_pixel_offsets_distinct() {
+        let request = RenderRequest {
+            generation: 1,
+            viewport: Viewport {
+                center: ComplexCoordinate::from_decimal("-0.743643887037151", "0.13182590420533")
+                    .unwrap(),
+                zoom: Zoom::from_decimal("1E8000").unwrap(),
+                rotation_radians: 0.0,
+                width: 3,
+                height: 1,
+            },
+            settings: RenderSettings {
+                iteration_limit: 32,
+                output: OutputChannels { validity: true, ..OutputChannels::default() },
+                ..RenderSettings::default()
+            },
+        };
+        let session = RenderSession::new(request).unwrap();
+        let first = session.pixel_offset(0.5, 0.5).unwrap();
+        let second = session.pixel_offset(1.5, 0.5).unwrap();
+        assert_ne!(first, second);
+        let frame = session.compute_frame().unwrap();
+        assert_eq!(frame.iterations.len(), 3);
+        assert!(frame.validity.as_ref().unwrap().iter().all(|&valid| valid == 1));
+    }
+
+    #[test]
+    fn exact_moderate_zoom_matches_the_shallow_reference() {
+        let mut exact = request();
+        exact.viewport.center = ComplexCoordinate::from_decimal("-0.75", "0").unwrap();
+        exact.viewport.zoom = Zoom::from_decimal("1E2").unwrap();
+        exact.viewport.width = 8;
+        exact.viewport.height = 6;
+        exact.settings.iteration_limit = 80;
+        let shallow = RenderRequest {
+            viewport: Viewport {
+                center: ComplexCoordinate::new(-0.75, 0.0),
+                zoom: Zoom::new(100.0).unwrap(),
+                ..exact.viewport.clone()
+            },
+            ..exact.clone()
+        };
+        let exact_frame = compute_frame(&exact).unwrap();
+        let shallow_frame = compute_frame(&shallow).unwrap();
+        assert_eq!(exact_frame.iterations, shallow_frame.iterations);
+    }
+
+    #[test]
+    fn deep_specialized_formulas_produce_frames() {
+        for formula in
+            [FractalFormula::Mandelbrot { power: 3 }, FractalFormula::BurningShip { power: 2 }]
+        {
+            let request = RenderRequest {
+                generation: 1,
+                viewport: Viewport {
+                    center: ComplexCoordinate::from_decimal("0", "0").unwrap(),
+                    zoom: Zoom::from_decimal("1E50").unwrap(),
+                    rotation_radians: 0.0,
+                    width: 3,
+                    height: 2,
+                },
+                settings: RenderSettings {
+                    fractal: formula,
+                    iteration_limit: 24,
+                    ..RenderSettings::default()
+                },
+            };
+            let frame = compute_frame(&request).unwrap();
+            assert_eq!(frame.iterations.len(), 6);
+        }
     }
 }

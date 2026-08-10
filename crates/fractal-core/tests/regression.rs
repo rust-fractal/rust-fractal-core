@@ -72,7 +72,7 @@ fn approximation_path_matches_direct_path_for_a_moderate_zoom() {
         },
         settings: RenderSettings { iteration_limit: 128, ..RenderSettings::default() },
     };
-    let mut approximated = direct;
+    let mut approximated = direct.clone();
     approximated.settings.approximation.enabled = true;
     approximated.settings.approximation.order = 8;
     let direct = compute_frame(&direct).unwrap();

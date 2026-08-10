@@ -17,14 +17,18 @@ pub use domain::{
     ApproximationSettings, ComplexCoordinate, FractalFormula, GlitchSettings, OutputChannels,
     PrecisionPolicy, RenderError, RenderRequest, RenderSettings, SamplingSettings, Viewport, Zoom,
 };
-pub use fractal_numerics::Extended;
+pub use fractal_numerics::{ComplexExtended, Extended};
 pub use perturbation::{
-    GlitchDetector, GlitchResult, PerturbationResult, perturbate, perturbate_with_series,
+    GlitchDetector, GlitchResult, PerturbationResult, perturbate, perturbate_extended,
+    perturbate_with_series,
 };
-pub use reference::{ReferenceOrbit, ReferenceStatistics, generate_reference};
+pub use reference::{
+    ReferenceCheckpoint, ReferenceOrbit, ReferenceStatistics, generate_reference,
+    generate_reference_exact,
+};
 pub use render::{
-    PixelRect, RawFrame, RawTile, RenderEvent, RenderProgress, RenderResult, RenderSession,
-    RenderStarted, RenderTile, Tile, compute_frame, compute_tile, pixel_coordinate,
+    PixelRect, RawFrame, RawFrameView, RawTile, RenderEvent, RenderProgress, RenderResult,
+    RenderSession, RenderStarted, RenderTile, Tile, compute_frame, compute_tile, pixel_coordinate,
 };
 pub use root::{RootError, RootResult, find_nucleus, period_residual};
 pub use series::{SeriesApproximation, SeriesCoefficients, generate_series};

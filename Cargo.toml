@@ -29,6 +29,7 @@ fractal-numerics = { path = "crates/fractal-numerics" }
 criterion = "0.8.2"
 fractal-arbitrary = { path = "crates/fractal-arbitrary" }
 fractal-io = { path = "crates/fractal-io" }
+fractal-runtime = { path = "crates/fractal-runtime" }
 toml = "1.1.4"
 
 [[bench]]
@@ -43,6 +44,14 @@ harness = false
 name = "arbitrary_reference"
 harness = false
 required-features = ["malachite"]
+
+[[bench]]
+name = "runtime_scaling"
+harness = false
+
+[[bench]]
+name = "reference_allocations"
+harness = false
 
 #Additional commands that can improve performance (maybe by around 5-10%)
 [profile.release]

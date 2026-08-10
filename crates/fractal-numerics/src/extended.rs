@@ -13,6 +13,7 @@ pub struct Extended {
 
 impl Extended {
     pub const ZERO: Self = Self { mantissa: 0.0, exponent: 0 };
+    pub const FOUR: Self = Self { mantissa: 0.5, exponent: 3 };
 
     pub fn from_f64(value: f64) -> Option<Self> {
         if !value.is_finite() {
@@ -126,6 +127,52 @@ impl Extended {
     pub fn abs(self) -> Self {
         Self { mantissa: self.mantissa.abs(), exponent: self.exponent }
     }
+
+    /// Converts a finite decimal/scientific value into the compact binary
+    /// representation. Only the mantissa is rounded to f64; the exponent is
+    /// retained separately, so values such as `1E8000` do not underflow.
+    pub fn from_decimal(value: &str) -> Result<Self, &'static str> {
+        let value = value.trim();
+        let (significand, exponent) =
+            value.split_once(['e', 'E']).map_or((value, 0_i64), |(mantissa, exponent)| {
+                (mantissa, exponent.parse::<i64>().unwrap_or(i64::MIN))
+            });
+        if exponent == i64::MIN {
+            return Err("invalid decimal exponent");
+        }
+        let negative = significand.starts_with('-');
+        let unsigned = significand.trim_start_matches(['+', '-']);
+        let fractional_digits = unsigned.split_once('.').map_or(0, |(_, fraction)| fraction.len());
+        let digits = unsigned.replace('.', "");
+        let digits = digits.trim_start_matches('0');
+        if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err("invalid decimal significand");
+        }
+        let prefix_length = digits.len().min(17);
+        let prefix =
+            digits[..prefix_length].parse::<f64>().map_err(|_| "invalid decimal significand")?;
+        let remaining_digits = digits.len() - prefix_length;
+        let decimal_exponent = exponent
+            .checked_sub(i64::try_from(fractional_digits).map_err(|_| "decimal too long")?)
+            .and_then(|exponent| exponent.checked_sub(i64::try_from(remaining_digits).ok()?))
+            .and_then(|exponent| exponent.checked_add(i64::try_from(prefix_length).ok()? - 1))
+            .ok_or("decimal exponent overflow")?;
+        let logarithm = prefix.log2() + (decimal_exponent as f64) * 10_f64.log2();
+        if !logarithm.is_finite() {
+            return Err("decimal exponent is outside the extended range");
+        }
+        let exponent = logarithm.floor();
+        let exponent = i32::try_from(exponent as i64).map_err(|_| "extended exponent overflow")?;
+        let mut mantissa = 2_f64.powf(logarithm - f64::from(exponent));
+        if negative {
+            mantissa = -mantissa;
+        }
+        Self::from_parts(
+            mantissa * 0.5,
+            exponent.checked_add(1).ok_or("extended exponent overflow")?,
+        )
+        .ok_or("decimal value is not finite")
+    }
 }
 
 fn normalize(mantissa: f64, exponent: i32) -> Option<Extended> {
@@ -148,6 +195,82 @@ fn normalize(mantissa: f64, exponent: i32) -> Option<Extended> {
     let scale = exponent_bits - 1022;
     let normalized = mantissa * 2_f64.powi(-scale);
     Some(Extended { mantissa: normalized, exponent: exponent.checked_add(scale)? })
+}
+
+/// A complex value whose real and imaginary components retain independent
+/// binary exponents. This is the compact representation used by perturbation;
+/// it never combines a deep pixel offset with its absolute reference center.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ComplexExtended {
+    real: Extended,
+    imag: Extended,
+}
+
+impl ComplexExtended {
+    pub const ZERO: Self = Self { real: Extended::ZERO, imag: Extended::ZERO };
+
+    pub const fn from_components(real: Extended, imag: Extended) -> Self {
+        Self { real, imag }
+    }
+
+    pub fn from_f64(real: f64, imag: f64) -> Option<Self> {
+        Some(Self { real: Extended::from_f64(real)?, imag: Extended::from_f64(imag)? })
+    }
+
+    pub fn from_decimal(real: &str, imag: &str) -> Result<Self, &'static str> {
+        Ok(Self { real: Extended::from_decimal(real)?, imag: Extended::from_decimal(imag)? })
+    }
+
+    pub const fn real(self) -> Extended {
+        self.real
+    }
+
+    pub const fn imag(self) -> Extended {
+        self.imag
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn add(self, other: Self) -> Option<Self> {
+        Some(Self {
+            real: self.real.checked_add(other.real)?,
+            imag: self.imag.checked_add(other.imag)?,
+        })
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    pub fn sub(self, other: Self) -> Option<Self> {
+        Some(Self {
+            real: self.real.checked_sub(other.real)?,
+            imag: self.imag.checked_sub(other.imag)?,
+        })
+    }
+
+    pub fn multiply(self, other: Self) -> Option<Self> {
+        let real =
+            self.real.checked_mul(other.real)?.checked_sub(self.imag.checked_mul(other.imag)?)?;
+        let imag =
+            self.real.checked_mul(other.imag)?.checked_add(self.imag.checked_mul(other.real)?)?;
+        Some(Self { real, imag })
+    }
+
+    pub fn scale(self, factor: f64) -> Option<Self> {
+        Some(Self {
+            real: self.real.checked_mul(Extended::from_f64(factor)?)?,
+            imag: self.imag.checked_mul(Extended::from_f64(factor)?)?,
+        })
+    }
+
+    pub fn norm_squared(self) -> Option<Extended> {
+        self.real.checked_mul(self.real)?.checked_add(self.imag.checked_mul(self.imag)?)
+    }
+
+    pub fn abs_components(self) -> Self {
+        Self { real: self.real.abs(), imag: self.imag.abs() }
+    }
+
+    pub fn to_f64(self) -> (f64, f64) {
+        (self.real.to_f64(), self.imag.to_f64())
+    }
 }
 
 impl fmt::Display for Extended {

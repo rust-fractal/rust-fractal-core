@@ -4,13 +4,14 @@
 //! tile partitioning, cancellation, and progressive event delivery.
 
 use fractal_core::{
-    RenderError, RenderEvent, RenderProgress, RenderRequest, RenderResult, RenderSession,
-    RenderStarted, RenderTile, Tile,
+    RawFrameView, RenderError, RenderEvent, RenderProgress, RenderRequest, RenderResult,
+    RenderSession, RenderStarted, RenderTile, Tile,
 };
+use std::collections::BTreeMap;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicU64, Ordering},
-    mpsc::{Receiver, sync_channel},
+    mpsc::{Receiver, SyncSender, sync_channel},
 };
 use std::thread;
 
@@ -30,11 +31,11 @@ impl CancellationToken {
     }
 
     pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Release);
+        self.cancelled.store(true, Ordering::Relaxed);
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Acquire)
+        self.cancelled.load(Ordering::Relaxed)
     }
 }
 
@@ -92,67 +93,15 @@ impl RenderExecutor {
         request: &RenderRequest,
         cancellation: &CancellationToken,
     ) -> Vec<RenderEvent> {
-        if let Err(error) = request.validate() {
-            return vec![RenderEvent::Failed(error)];
-        }
-        if self.tile_width == 0 || self.tile_height == 0 {
-            return vec![RenderEvent::Failed(RenderError::InvalidTile)];
-        }
-        if cancellation.is_cancelled() || cancellation.generation() != request.generation {
-            return vec![RenderEvent::Cancelled { generation: request.generation }];
-        }
-
-        let session = match RenderSession::new(*request) {
-            Ok(session) => session,
-            Err(error) => return vec![RenderEvent::Failed(error)],
-        };
-        let tiles = tiles_for(request, self.tile_width, self.tile_height);
-        let mut events = vec![RenderEvent::Started(RenderStarted {
-            generation: request.generation,
-            width: request.viewport.width,
-            height: request.viewport.height,
-        })];
-
-        let tile_results = self.compute_tiles(&session, &tiles, cancellation);
-        let mut result = empty_result(request);
-        let total_pixels = u64::from(request.viewport.width) * u64::from(request.viewport.height);
-        let mut completed_pixels = 0;
-
-        for tile_result in tile_results {
-            if cancellation.is_cancelled() {
-                events.push(RenderEvent::Cancelled { generation: request.generation });
-                return events;
-            }
-
-            let tile = match tile_result {
-                Ok(tile) => tile,
-                Err(RenderError::Cancelled) => {
-                    events.push(RenderEvent::Cancelled { generation: request.generation });
-                    return events;
-                }
-                Err(error) => {
-                    events.push(RenderEvent::Failed(error));
-                    return events;
-                }
-            };
-            merge_tile(&mut result, &tile);
-            completed_pixels += u64::from(tile.tile.width) * u64::from(tile.tile.height);
-            events.push(RenderEvent::TileReady(tile));
-            let tile_number =
-                events.iter().filter(|event| matches!(event, RenderEvent::TileReady(_)));
-            if tile_number.count().is_multiple_of(self.progress_every_tiles)
-                || completed_pixels == total_pixels
-            {
-                events.push(RenderEvent::Progress(RenderProgress {
-                    generation: request.generation,
-                    completed_pixels,
-                    total_pixels,
-                }));
-            }
-        }
-
-        events.push(RenderEvent::Finished(result));
-        events
+        let capacity = tiles_for(request, self.tile_width.max(1), self.tile_height.max(1))
+            .len()
+            .saturating_mul(3)
+            .saturating_add(4)
+            .max(1);
+        let (sender, receiver) = sync_channel(capacity);
+        self.render_to_sender(request.clone(), cancellation.clone(), capacity, true, &sender);
+        drop(sender);
+        receiver.into_iter().collect()
     }
 
     pub fn render_bounded(
@@ -167,45 +116,200 @@ impl RenderExecutor {
         let (sender, receiver) = sync_channel(capacity);
         let executor = self.clone();
         thread::spawn(move || {
-            for event in executor.render(&request, &cancellation) {
-                if sender.send(event).is_err() {
-                    break;
-                }
-            }
+            executor.render_to_sender(request, cancellation, capacity, false, &sender);
         });
         Ok(RenderEventStream { receiver })
     }
 
+    /// Computes a complete frame into one preallocated set of channels. Row
+    /// views are split safely and filled in parallel, avoiding owned tiles and
+    /// the progressive merge copy.
     #[cfg(feature = "native")]
-    fn compute_tiles(
+    pub fn compute_frame_full(
         &self,
-        session: &RenderSession,
-        tiles: &[Tile],
+        request: &RenderRequest,
         cancellation: &CancellationToken,
-    ) -> Vec<Result<RenderTile, RenderError>> {
-        use rayon::prelude::*;
-        let compute = || {
-            tiles
-                .par_iter()
-                .map(|&tile| session.compute_tile_with_cancel(tile, || cancellation.is_cancelled()))
-                .collect()
-        };
-        self.pool.as_ref().map_or_else(compute, |pool| pool.install(compute))
+    ) -> Result<RenderResult, RenderError> {
+        request.validate()?;
+        if self.tile_width == 0 || self.tile_height == 0 {
+            return Err(RenderError::InvalidTile);
+        }
+        if cancellation.is_cancelled() || cancellation.generation() != request.generation {
+            return Err(RenderError::Cancelled);
+        }
+        let session = Arc::new(RenderSession::new(request.clone())?);
+        let mut result = empty_result(request);
+        let view = result.view_mut();
+        let compute = || compute_frame_view(&session, view, 0, cancellation);
+        if let Some(pool) = &self.pool {
+            pool.install(compute)?;
+        } else {
+            compute()?;
+        }
+        Ok(result)
     }
 
-    #[cfg(not(feature = "native"))]
-    fn compute_tiles(
+    fn render_to_sender(
         &self,
-        session: &RenderSession,
-        tiles: &[Tile],
-        cancellation: &CancellationToken,
-    ) -> Vec<Result<RenderTile, RenderError>> {
-        tiles
-            .iter()
-            .copied()
-            .map(|tile| session.compute_tile_with_cancel(tile, || cancellation.is_cancelled()))
-            .collect()
+        request: RenderRequest,
+        cancellation: CancellationToken,
+        capacity: usize,
+        ordered: bool,
+        sender: &SyncSender<RenderEvent>,
+    ) {
+        if let Err(error) = request.validate() {
+            let _ = sender.send(RenderEvent::Failed(error));
+            return;
+        }
+        if self.tile_width == 0 || self.tile_height == 0 {
+            let _ = sender.send(RenderEvent::Failed(RenderError::InvalidTile));
+            return;
+        }
+        if cancellation.is_cancelled() || cancellation.generation() != request.generation {
+            let _ = sender.send(RenderEvent::Cancelled { generation: request.generation });
+            return;
+        }
+        let session = match RenderSession::new(request.clone()) {
+            Ok(session) => Arc::new(session),
+            Err(error) => {
+                let _ = sender.send(RenderEvent::Failed(error));
+                return;
+            }
+        };
+        let tiles = tiles_for(&request, self.tile_width, self.tile_height);
+        let _ = sender.send(RenderEvent::Started(RenderStarted {
+            generation: request.generation,
+            width: request.viewport.width,
+            height: request.viewport.height,
+        }));
+        let total_pixels = u64::from(request.viewport.width) * u64::from(request.viewport.height);
+        let (tile_sender, tile_receiver) =
+            sync_channel::<(usize, Result<RenderTile, RenderError>)>(capacity);
+        let producer_session = session;
+        let producer_cancel = cancellation.clone();
+        #[cfg(feature = "native")]
+        let producer_pool = self.pool.clone();
+        let producer = thread::spawn(move || {
+            #[cfg(feature = "native")]
+            {
+                use rayon::prelude::*;
+                let compute = || {
+                    tiles.into_par_iter().enumerate().for_each_with(
+                        tile_sender,
+                        |sender, (index, tile)| {
+                            let result = producer_session
+                                .compute_tile_with_cancel(tile, || producer_cancel.is_cancelled());
+                            let _ = sender.send((index, result));
+                        },
+                    );
+                };
+                if let Some(pool) = producer_pool {
+                    pool.install(compute);
+                } else {
+                    compute();
+                }
+            }
+            #[cfg(not(feature = "native"))]
+            {
+                for (index, tile) in tiles.into_iter().enumerate() {
+                    let result = producer_session
+                        .compute_tile_with_cancel(tile, || producer_cancel.is_cancelled());
+                    if tile_sender.send((index, result)).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+
+        let mut result = empty_result(&request);
+        let mut completed_pixels = 0;
+        let mut completed_tiles = 0;
+        let mut next_index = 0;
+        let mut pending = BTreeMap::new();
+        let mut stopped = false;
+        let mut terminal_sent = false;
+        while let Ok((index, tile_result)) = tile_receiver.recv() {
+            if ordered {
+                pending.insert(index, tile_result);
+                while let Some(tile_result) = pending.remove(&next_index) {
+                    match deliver_tile(
+                        sender,
+                        &mut result,
+                        tile_result,
+                        request.generation,
+                        total_pixels,
+                        &mut completed_pixels,
+                        &mut completed_tiles,
+                        self.progress_every_tiles,
+                    ) {
+                        Delivery::Continue => {}
+                        Delivery::Terminal => {
+                            stopped = true;
+                            terminal_sent = true;
+                            break;
+                        }
+                        Delivery::Closed => {
+                            stopped = true;
+                            break;
+                        }
+                    }
+                    next_index += 1;
+                }
+            } else {
+                match deliver_tile(
+                    sender,
+                    &mut result,
+                    tile_result,
+                    request.generation,
+                    total_pixels,
+                    &mut completed_pixels,
+                    &mut completed_tiles,
+                    self.progress_every_tiles,
+                ) {
+                    Delivery::Continue => {}
+                    Delivery::Terminal => {
+                        stopped = true;
+                        terminal_sent = true;
+                    }
+                    Delivery::Closed => stopped = true,
+                }
+            }
+            if stopped {
+                break;
+            }
+        }
+        drop(tile_receiver);
+        let _ = producer.join();
+        if !terminal_sent && (stopped || cancellation.is_cancelled()) {
+            let _ = sender.send(RenderEvent::Cancelled { generation: request.generation });
+        } else if completed_pixels == total_pixels {
+            let _ = sender.send(RenderEvent::Finished(result));
+        }
     }
+}
+
+#[cfg(feature = "native")]
+fn compute_frame_view(
+    session: &RenderSession,
+    view: RawFrameView<'_>,
+    first_row: u32,
+    cancellation: &CancellationToken,
+) -> Result<(), RenderError> {
+    if cancellation.is_cancelled() {
+        return Err(RenderError::Cancelled);
+    }
+    if view.height() <= 32 {
+        let mut view = view;
+        return session
+            .compute_view_with_cancel(&mut view, first_row, || cancellation.is_cancelled());
+    }
+    let split = view.height() / 2;
+    let (top, bottom) = view.split_rows(split)?;
+    let (top_result, bottom_result) = rayon::join(
+        || compute_frame_view(session, top, first_row, cancellation),
+        || compute_frame_view(session, bottom, first_row + split, cancellation),
+    );
+    top_result.and(bottom_result)
 }
 
 impl Default for RenderExecutor {
@@ -244,6 +348,60 @@ impl std::fmt::Display for RuntimeError {
 }
 
 impl std::error::Error for RuntimeError {}
+
+enum Delivery {
+    Continue,
+    Terminal,
+    Closed,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn deliver_tile(
+    sender: &SyncSender<RenderEvent>,
+    result: &mut RenderResult,
+    tile_result: Result<RenderTile, RenderError>,
+    generation: u64,
+    total_pixels: u64,
+    completed_pixels: &mut u64,
+    completed_tiles: &mut usize,
+    progress_every_tiles: usize,
+) -> Delivery {
+    let tile = match tile_result {
+        Ok(tile) => tile,
+        Err(RenderError::Cancelled) => {
+            return if sender.send(RenderEvent::Cancelled { generation }).is_ok() {
+                Delivery::Terminal
+            } else {
+                Delivery::Closed
+            };
+        }
+        Err(error) => {
+            return if sender.send(RenderEvent::Failed(error)).is_ok() {
+                Delivery::Terminal
+            } else {
+                Delivery::Closed
+            };
+        }
+    };
+    merge_tile(result, &tile);
+    *completed_pixels += u64::from(tile.tile.width) * u64::from(tile.tile.height);
+    *completed_tiles += 1;
+    if sender.send(RenderEvent::TileReady(tile)).is_err() {
+        return Delivery::Closed;
+    }
+    if (completed_tiles.is_multiple_of(progress_every_tiles) || *completed_pixels == total_pixels)
+        && sender
+            .send(RenderEvent::Progress(RenderProgress {
+                generation,
+                completed_pixels: *completed_pixels,
+                total_pixels,
+            }))
+            .is_err()
+    {
+        return Delivery::Closed;
+    }
+    Delivery::Continue
+}
 
 pub struct RenderEventStream {
     receiver: Receiver<RenderEvent>,
@@ -420,5 +578,22 @@ mod tests {
         let events = stream.collect::<Vec<_>>();
         assert!(matches!(events.first(), Some(RenderEvent::Started(_))));
         assert!(matches!(events.last(), Some(RenderEvent::Finished(_))));
+    }
+
+    #[cfg(feature = "native")]
+    #[test]
+    fn full_frame_path_matches_progressive_result() {
+        let executor = RenderExecutor::with_workers(4, 4, 3).unwrap();
+        let token = CancellationToken::for_generation(7);
+        let full = executor.compute_frame_full(&request(), &token).unwrap();
+        let progressive = executor.render(&request(), &token);
+        let finished = progressive
+            .into_iter()
+            .find_map(|event| match event {
+                RenderEvent::Finished(result) => Some(result),
+                _ => None,
+            })
+            .unwrap();
+        assert_eq!(full, finished);
     }
 }

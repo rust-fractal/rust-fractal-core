@@ -23,7 +23,7 @@ impl core::fmt::Display for RootError {
 
 impl std::error::Error for RootError {}
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RootResult {
     pub center: ComplexCoordinate,
     pub period: u32,
@@ -71,8 +71,8 @@ pub fn find_nucleus(
     }
     let mut center = initial;
     for iteration in 1..=maximum_iterations {
-        let (residual, derivative) = period_residual(center, formula, period)?;
-        let residual_norm = residual.norm();
+        let (residual, derivative) = period_residual(center.clone(), formula, period)?;
+        let residual_norm = residual.clone().norm();
         if residual_norm <= tolerance {
             return Ok(RootResult {
                 center,

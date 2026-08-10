@@ -5,8 +5,11 @@ on:
   pull_request:
 
 jobs:
-  native-windows:
-    runs-on: windows-latest
+  native:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -16,10 +19,10 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Check workspace
-        run: cargo check --workspace --locked
+        run: cargo check --workspace --all-targets --locked
       - name: Test workspace and benchmarks
-        run: cargo test --workspace --all-targets --locked
+        run: cargo test --workspace --all-targets --all-features --locked
       - name: Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
-      - name: Test optional backends
-        run: cargo test --workspace --all-features --locked
+      - name: Check fuzz targets
+        run: cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked

@@ -11,6 +11,8 @@ default = []
 malachite = ["dep:malachite"]
 
 [dependencies]
+# Malachite 0.10 gates its public Float re-export on `rationals` as well as
+# `floats`; this is a registry-version requirement, not a rational API use.
 malachite = { version = "0.10.0", default-features = false, features = ["std", "floats", "naturals_and_integers", "rationals"], optional = true }
 
 [dev-dependencies]

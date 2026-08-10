@@ -11,7 +11,8 @@ checked reference location.
 | Backend | Current state | Decision |
 | --- | --- | --- |
 | `malachite` 0.10.x | `fractal-numerics/malachite` implementation | Use as the only arbitrary-precision arithmetic |
-| `fractal-arbitrary::MalachiteReference` | Fractal-specific recurrence and checkpoint wrapper | Keep as the reference-orbit API |
+| `fractal-core::generate_reference_exact` | Production exact-coordinate recurrence and compact orbit | Use for normal rendering |
+| `fractal-arbitrary::MalachiteReference` | Independent Malachite/root-finding oracle | Keep for differential tests and legacy experiments |
 
 No project-owned arbitrary/fixed-point backend is maintained. This is an
 explicit scope decision: Malachite provides the arbitrary-precision arithmetic,
@@ -23,21 +24,23 @@ backend-facing tests.
 - Malachite reference points are compared against an `f64` quadratic orbit for
   32 iterations at 256 bits; the current test requires a maximum component
   error below `1e-12`.
-- The fractal wrapper reserves checkpoint storage once and performs all orbit
-  arithmetic through Malachite `Float` values.
+- The production wrapper reserves compact reference storage once and performs
+  arbitrary arithmetic through Malachite `Float` values; sparse checkpoints
+  replace a Malachite clone for every iteration.
 - The wrapper is covered by unit tests and Criterion benchmarks for complex
   square-add and 100-iteration reference generation.
 - Every reference-location benchmark uses the raw decimal coordinates and the
-  Malachite reference wrapper. No reference-location calculation falls back to
-  `f64`.
+  production exact-reference wrapper. No reference-location calculation falls
+  back to `f64`.
 
 The finite render benchmark measures the real locations used by
 `benches/core_render.rs`. The benchmark keeps each case bounded at its declared
 pixel dimensions and iteration cap, while retaining the location's center,
-zoom, and rotation. The separate `arbitrary_reference` benchmark parses each
-location's decimal coordinates directly into Malachite `Float`s at a precision
-derived from its zoom, so `flake`, `wfs`, `e8000`, and the other deep locations
-are reference calculations rather than `f64` approximations.
+zoom, and rotation. The `arbitrary_reference` benchmark calls
+`fractal_core::generate_reference_exact`, parsing each location's decimal
+coordinates once at the production precision derived from its zoom, so
+`flake`, `wfs`, `e8000`, and the other deep locations use the same exact
+reference pipeline as rendering.
 
 | Case | Median range reported by Criterion |
 | --- | --- |
@@ -58,11 +61,9 @@ are reference calculations rather than `f64` approximations.
 | arbitrary `e1121` (3,979 bits, 256 iterations) | 1.789–1.795 ms |
 | arbitrary `e1000` (3,578 bits, 256 iterations) | 2.002–2.003 ms |
 
-These are Windows local baselines, not cross-backend comparisons or a claim of
-production speedup. The arbitrary-reference numbers increased after the
-benchmark was changed to exercise the complete `MalachiteReference` wrapper,
-including checkpoint storage, rather than a short direct arithmetic loop. The
-runs are repeatable with:
+These are historical Windows local baselines, not cross-backend comparisons or
+a claim of final production speedup. Final production timings and allocation
+measurements are in `PERFORMANCE.md`. The runs are repeatable with:
 
 ```text
 cargo bench --bench numerics --features malachite --locked -- --quick
@@ -79,16 +80,16 @@ to Windows. Malachite documents `Float` as implemented and tested but not yet
 feature-complete, so this backend is retained as a correctness/reference
 oracle rather than silently treating it as the production render backend.
 
-The backend remains behind a feature for normal non-reference builds. Its
-public reference wrapper parses raw decimal location coordinates at the
-selected precision and performs the complete quadratic recurrence with
-Malachite `Float`s; the benchmark does not use an `f64` escape check.
+The Malachite dependency remains feature-gated in `fractal-numerics`, while
+`fractal-core` enables it for the production exact-reference path. Both
+wrappers parse raw decimal coordinates at the selected precision; the
+benchmark does not use an `f64` escape check.
 
 ## Adoption decision
 
 Malachite is the selected arbitrary-precision implementation for the current
 scope. A project-owned custom backend is explicitly rejected: it would
 duplicate a general arbitrary-precision library and expand maintenance without
-evidence that it improves the real reference workloads. The remaining gates
-are precision/error fixtures, allocation measurements, and end-to-end render
-integration around this single backend.
+evidence that it improves the real reference workloads. Allocation measurements
+and end-to-end exact-render integration are complete; peak RSS and alternate
+backend comparisons remain outside the supported artifact.

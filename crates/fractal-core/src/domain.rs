@@ -1,41 +1,110 @@
 use core::fmt;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ComplexCoordinate {
     pub real: f64,
     pub imag: f64,
+    /// Original decimal values, when this coordinate came from an exact
+    /// location. The f64 fields remain useful as a cheap shallow hint; deep
+    /// rendering never reconstructs the reference from those hints.
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+    pub real_decimal: Option<Box<str>>,
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+    pub imag_decimal: Option<Box<str>>,
 }
 
 impl ComplexCoordinate {
     pub const fn new(real: f64, imag: f64) -> Self {
-        Self { real, imag }
+        Self { real, imag, real_decimal: None, imag_decimal: None }
     }
 
-    pub(crate) fn is_finite(self) -> bool {
+    /// Creates a coordinate without converting its decimal components through
+    /// f64. Conversion is retained only as a shallow-path hint.
+    pub fn from_decimal(real: &str, imag: &str) -> Result<Self, RenderError> {
+        let real = real.trim();
+        let imag = imag.trim();
+        let real_hint =
+            decimal_f64_hint(real).ok_or(RenderError::InvalidDecimalCoordinate { axis: "real" })?;
+        let imag_hint =
+            decimal_f64_hint(imag).ok_or(RenderError::InvalidDecimalCoordinate { axis: "imag" })?;
+        Ok(Self {
+            real: real_hint,
+            imag: imag_hint,
+            real_decimal: Some(real.into()),
+            imag_decimal: Some(imag.into()),
+        })
+    }
+
+    pub fn decimal_components(&self) -> Option<(&str, &str)> {
+        Some((self.real_decimal.as_deref()?, self.imag_decimal.as_deref()?))
+    }
+
+    pub fn has_exact_components(&self) -> bool {
+        self.decimal_components().is_some()
+    }
+
+    pub(crate) fn is_finite(&self) -> bool {
         self.real.is_finite() && self.imag.is_finite()
     }
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct Zoom(f64);
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+pub struct Zoom {
+    scale: f64,
+    #[cfg_attr(feature = "serde", serde(default, skip_serializing_if = "Option::is_none"))]
+    decimal: Option<Box<str>>,
+}
 
 impl Zoom {
     pub fn new(scale: f64) -> Result<Self, RenderError> {
         if scale.is_finite() && scale > 0.0 {
-            Ok(Self(scale))
+            Ok(Self { scale, decimal: None })
         } else {
             Err(RenderError::InvalidZoom { scale })
         }
     }
 
-    pub const fn unit() -> Self {
-        Self(1.0)
+    /// Creates a zoom from an exact decimal/scientific value. Values such as
+    /// `1E8000` are intentionally not parsed as f64.
+    pub fn from_decimal(value: &str) -> Result<Self, RenderError> {
+        let value = value.trim();
+        let scale = decimal_f64_hint(value)
+            .filter(|scale| *scale > 0.0)
+            .unwrap_or_else(|| if decimal_is_positive(value) { f64::MAX } else { f64::NAN });
+        if !decimal_is_positive(value) {
+            return Err(RenderError::InvalidDecimalZoom);
+        }
+        Ok(Self { scale, decimal: Some(value.into()) })
     }
 
-    pub const fn scale(self) -> f64 {
-        self.0
+    pub const fn unit() -> Self {
+        Self { scale: 1.0, decimal: None }
+    }
+
+    pub fn scale(&self) -> f64 {
+        self.scale
+    }
+
+    pub fn decimal(&self) -> Option<&str> {
+        self.decimal.as_deref()
+    }
+
+    pub fn has_exact_scale(&self) -> bool {
+        self.decimal.is_some()
+    }
+
+    pub(crate) fn binary_scale_bits(&self) -> Result<u32, RenderError> {
+        let logarithm = if let Some(decimal) = self.decimal() {
+            decimal_log2(decimal).ok_or(RenderError::InvalidDecimalZoom)?
+        } else {
+            self.scale.log2()
+        };
+        if !logarithm.is_finite() || logarithm > f64::from(u32::MAX) {
+            return Err(RenderError::InvalidZoom { scale: self.scale });
+        }
+        Ok(logarithm.ceil().max(0.0) as u32)
     }
 }
 
@@ -46,7 +115,7 @@ impl Default for Zoom {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Viewport {
     pub center: ComplexCoordinate,
     pub zoom: Zoom,
@@ -56,8 +125,8 @@ pub struct Viewport {
 }
 
 impl Viewport {
-    pub fn validate(self) -> Result<(), RenderError> {
-        if !self.center.is_finite() {
+    pub fn validate(&self) -> Result<(), RenderError> {
+        if !self.center.is_finite() && !self.center.has_exact_components() {
             return Err(RenderError::NonFiniteCoordinate {
                 real: self.center.real,
                 imag: self.center.imag,
@@ -175,7 +244,7 @@ impl PrecisionPolicy {
             return Err(RenderError::InvalidPrecisionPolicy);
         }
 
-        let zoom_bits = zoom.scale().log2().ceil().max(0.0) as u32;
+        let zoom_bits = zoom.binary_scale_bits()?;
         let required_bits = self
             .minimum_bits
             .checked_add(self.guard_bits)
@@ -243,7 +312,7 @@ impl RenderSettings {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RenderRequest {
     pub generation: u64,
     pub viewport: Viewport,
@@ -251,15 +320,15 @@ pub struct RenderRequest {
 }
 
 impl RenderRequest {
-    pub fn validate(self) -> Result<(), RenderError> {
+    pub fn validate(&self) -> Result<(), RenderError> {
         self.viewport.validate()?;
         self.settings.validate()?;
-        self.settings.precision.required_bits(self.viewport.zoom)?;
+        self.settings.precision.required_bits(self.viewport.zoom.clone())?;
         Ok(())
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum RenderError {
     InvalidDimensions { width: u32, height: u32 },
     InvalidZoom { scale: f64 },
@@ -274,6 +343,10 @@ pub enum RenderError {
     InvalidRawFrame,
     Cancelled,
     NonFiniteCoordinate { real: f64, imag: f64 },
+    InvalidDecimalCoordinate { axis: &'static str },
+    InvalidDecimalZoom,
+    ReferenceGeneration(String),
+    NumericOverflow,
     NonFiniteRotation { rotation_radians: f64 },
     InvalidTile,
 }
@@ -309,12 +382,65 @@ impl fmt::Display for RenderError {
             Self::NonFiniteCoordinate { real, imag } => {
                 write!(f, "viewport center is not finite: ({real}, {imag})")
             }
+            Self::InvalidDecimalCoordinate { axis } => {
+                write!(f, "decimal coordinate component is invalid: {axis}")
+            }
+            Self::InvalidDecimalZoom => f.write_str("decimal zoom is invalid or non-positive"),
+            Self::ReferenceGeneration(error) => write!(f, "reference generation failed: {error}"),
+            Self::NumericOverflow => f.write_str("extended numerical value overflowed"),
             Self::NonFiniteRotation { rotation_radians } => {
                 write!(f, "viewport rotation is not finite: {rotation_radians}")
             }
             Self::InvalidTile => write!(f, "tile lies outside the viewport"),
         }
     }
+}
+
+fn decimal_is_positive(value: &str) -> bool {
+    decimal_log2(value).is_some_and(|logarithm| logarithm.is_finite())
+}
+
+fn decimal_f64_hint(value: &str) -> Option<f64> {
+    let value = value.trim();
+    if value.is_empty()
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'+' | b'-' | b'.' | b'e' | b'E'))
+        || !value.bytes().any(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let parsed = value.parse::<f64>().ok()?;
+    if parsed.is_nan() {
+        return None;
+    }
+    if parsed.is_finite() {
+        Some(parsed)
+    } else if parsed.is_sign_positive() {
+        Some(f64::MAX)
+    } else {
+        Some(-f64::MAX)
+    }
+}
+
+fn decimal_log2(value: &str) -> Option<f64> {
+    let value = value.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let (significand, exponent) =
+        value.split_once(['e', 'E']).map_or((value, 0_i64), |(mantissa, exponent)| {
+            (mantissa, exponent.parse::<i64>().unwrap_or(i64::MIN))
+        });
+    if exponent == i64::MIN {
+        return None;
+    }
+    let mantissa = significand.parse::<f64>().ok()?;
+    if !mantissa.is_finite() || mantissa == 0.0 {
+        return if mantissa == 0.0 { None } else { Some(f64::INFINITY) };
+    }
+    let magnitude = mantissa.abs().log2() + (exponent as f64) * 10_f64.log2();
+    (mantissa.is_sign_positive() && magnitude.is_finite()).then_some(magnitude)
 }
 
 #[cfg(test)]
@@ -363,5 +489,15 @@ mod tests {
             policy.required_bits(Zoom::new(1_000_000.0).unwrap()),
             Err(RenderError::PrecisionLimitExceeded { required_bits: 116, max_bits: 100 })
         );
+    }
+
+    #[test]
+    fn decimal_inputs_reject_special_float_strings_but_keep_deep_values() {
+        assert_eq!(
+            ComplexCoordinate::from_decimal("NaN", "0"),
+            Err(RenderError::InvalidDecimalCoordinate { axis: "real" })
+        );
+        assert_eq!(Zoom::from_decimal("inf"), Err(RenderError::InvalidDecimalZoom));
+        assert!(Zoom::from_decimal("1E8000").unwrap().has_exact_scale());
     }
 }

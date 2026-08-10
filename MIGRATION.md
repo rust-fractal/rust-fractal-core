@@ -12,8 +12,8 @@ separates those responsibilities.
 | palette and RGBA mapping | `fractal_core::ColourPipeline` |
 | Rayon, cancellation, and progress | `fractal_runtime::RenderExecutor` |
 | PNG/EXR/filesystem output | `fractal_io` |
-| high-precision reference baseline | `fractal_numerics::malachite` |
-| arbitrary-precision reference orbits | `fractal_arbitrary::MalachiteReference` |
+| high-precision production reference baseline | `fractal_core::generate_reference_exact` |
+| independent arbitrary-precision oracle/root helpers | `fractal_arbitrary::MalachiteReference` |
 
 Minimal synchronous rendering now looks like:
 

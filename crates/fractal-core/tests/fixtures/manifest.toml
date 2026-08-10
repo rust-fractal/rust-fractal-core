@@ -53,7 +53,7 @@ formula = "burning_ship"
 power = 2
 iteration_limit = 128
 approximation = false
-expected_raw_hash = 7244626984681493518
+expected_raw_hash = 18284389255230683370
 
 [[fixture]]
 name = "power_three"
