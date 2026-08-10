@@ -1,0 +1,19 @@
+[package]
+name = "fractal-numerics"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Portable numerical primitives and Malachite arbitrary-precision arithmetic."
+license = "MIT"
+
+[features]
+default = []
+malachite = ["dep:malachite"]
+
+[dependencies]
+# Malachite 0.10 gates its public Float re-export on `rationals` as well as
+# `floats`; this is a registry-version requirement, not a rational API use.
+malachite = { version = "0.10.0", default-features = false, features = ["std", "floats", "naturals_and_integers", "rationals"], optional = true }
+
+[dev-dependencies]
+proptest = "1.11.0"

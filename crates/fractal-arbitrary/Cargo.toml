@@ -1,0 +1,10 @@
+[package]
+name = "fractal-arbitrary"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Malachite-backed arbitrary-precision fractal reference calculations."
+license = "MIT"
+
+[dependencies]
+fractal-numerics = { path = "../fractal-numerics", features = ["malachite"] }

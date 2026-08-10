@@ -1,4 +1,5 @@
 /target
+/fuzz/target
 **/*.rs.bk
 .idea
 *.kfr

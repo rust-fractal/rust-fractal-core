@@ -1,0 +1,24 @@
+[package]
+name = "fractal-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+description = "Deterministic, UI-independent fractal computation primitives."
+license = "MIT"
+
+[lib]
+name = "fractal_core"
+path = "src/lib.rs"
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+fractal-numerics = { path = "../fractal-numerics", features = ["malachite"] }
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+
+[dev-dependencies]
+proptest = "1.11.0"
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.4"
